@@ -1,0 +1,23 @@
+{
+  "_commit": "9c12e1f67eb29990774c7e8f55a18315a8047ca1",
+  "_copy_without_render": [
+    "*.rst_t"
+  ],
+  "_jinja2_env_vars": {
+    "lstrip_blocks": true,
+    "trim_blocks": true
+  },
+  "_template": "https://github.com/arnesor/uv-template.git",
+  "author": "Arne Sørli",
+  "code_quality_level": "Medium",
+  "copyright_owner": "Arne Sørli",
+  "copyright_year": "2026",
+  "email": "arne.sorli@kongsberg.frisurf.no",
+  "friendly_name": "Otest",
+  "github_organization": "arnesor",
+  "license": "MIT",
+  "package_name": "otest",
+  "project_name": "otest",
+  "script_support": "project-local",
+  "version": "0.0.0"
+}

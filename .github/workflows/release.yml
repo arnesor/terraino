@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  workflow_run:
+    workflows:
+      - Tests
+    types:
+      - completed
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: release-${{ github.event.workflow_run.head_branch }}
+
+jobs:
+  release:
+    name: Release
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the tested commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Check whether the tested commit is current
+        id: branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          current_sha=$(gh api "repos/$GITHUB_REPOSITORY/branches/$HEAD_BRANCH" --jq .commit.sha)
+          if [ "$current_sha" = "$HEAD_SHA" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping stale tested commit $HEAD_SHA; $HEAD_BRANCH is now at $current_sha."
+          fi
+
+      - name: Detect version change
+        id: version
+        if: steps.branch.outputs.current == 'true'
+        shell: python
+        run: |
+          import os
+          import subprocess
+          import tomllib
+          from pathlib import Path
+
+          current = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+          tag = f"v{current}"
+          released = subprocess.run(
+              ["git", "show-ref", "--verify", "--quiet", f"refs/tags/{tag}"],
+              check=False,
+          ).returncode == 0
+
+          changed = not released
+          if changed:
+              root = subprocess.run(
+                  ["git", "rev-list", "--max-parents=0", "HEAD"],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              ).stdout.splitlines()[0]
+              initial_file = subprocess.run(
+                  ["git", "show", f"{root}:pyproject.toml"],
+                  check=False,
+                  capture_output=True,
+                  text=True,
+              )
+              initial = current
+              if initial_file.returncode == 0:
+                  initial = tomllib.loads(initial_file.stdout)["project"]["version"]
+              changed = current != initial
+
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"changed={str(changed).lower()}\n")
+              output.write(f"version={current}\n")
+
+      - name: Update release draft
+        if: steps.branch.outputs.current == 'true' && steps.version.outputs.changed != 'true'
+        uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9  # v7
+        with:
+          commitish: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Publish GitHub release
+        if: steps.branch.outputs.current == 'true' && steps.version.outputs.changed == 'true'
+        uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9  # v7
+        with:
+          commitish: ${{ github.event.workflow_run.head_sha }}
+          name: v${{ steps.version.outputs.version }}
+          publish: true
+          tag: v${{ steps.version.outputs.version }}
+          version: ${{ steps.version.outputs.version }}

@@ -1,0 +1,31 @@
+{
+  "template": "https://github.com/arnesor/uv-template.git",
+  "commit": "9c12e1f67eb29990774c7e8f55a18315a8047ca1",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "project_name": "otest",
+      "package_name": "otest",
+      "friendly_name": "Otest",
+      "copyright_owner": "Arne Sørli",
+      "copyright_year": "2026",
+      "author": "Arne Sørli",
+      "email": "arne.sorli@kongsberg.frisurf.no",
+      "github_organization": "arnesor",
+      "version": "0.0.0",
+      "script_support": "project-local",
+      "license": "MIT",
+      "code_quality_level": "Medium",
+      "_copy_without_render": [
+        "*.rst_t"
+      ],
+      "_jinja2_env_vars": {
+        "lstrip_blocks": true,
+        "trim_blocks": true
+      },
+      "_template": "https://github.com/arnesor/uv-template.git",
+      "_commit": "9c12e1f67eb29990774c7e8f55a18315a8047ca1"
+    }
+  },
+  "directory": null
+}
