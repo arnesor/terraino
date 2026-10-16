@@ -1,0 +1,17 @@
+{
+  "name": "ocad-export",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Export OCAD maps to GeoJSON, SVG and PNG for the otest pipeline",
+  "type": "module",
+  "bin": "export.mjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "2.6.2",
+    "ocad2geojson": "2.1.23",
+    "xmldom": "0.6.0"
+  },
+  "license": "AGPL-3.0-only"
+}
