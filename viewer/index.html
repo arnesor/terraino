@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>otest – orienteering in 3D</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="hud"></div>
+    <div id="overlay">
+      <div class="panel">
+        <h1>otest</h1>
+        <label>World <select id="world-select"></select></label>
+        <pre id="status">Starting …</pre>
+        <button id="start" hidden>Click to start</button>
+        <table class="keys">
+          <tr><td>W A S D</td><td>move</td></tr>
+          <tr><td>Mouse</td><td>look around</td></tr>
+          <tr><td>Shift</td><td>run (fly fast)</td></tr>
+          <tr><td>Space</td><td>jump (fly up)</td></tr>
+          <tr><td>F</td><td>fly on/off · C: fly down</td></tr>
+          <tr><td>M</td><td>map · +/− zoom · P position · E set a course</td></tr>
+          <tr><td>T</td><td>go to the start · R restart the run</td></tr>
+          <tr><td>O</td><td>orienteering map on the ground on/off</td></tr>
+          <tr><td>G</td><td>graphics quality (shadows)</td></tr>
+          <tr><td>Esc</td><td>pause</td></tr>
+        </table>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

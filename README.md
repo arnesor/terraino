@@ -13,17 +13,143 @@
 [sonarquality]: https://sonarcloud.io/summary/overall?id=arnesor_otest
 [pre-commit]: https://github.com/pre-commit/pre-commit
 
+Build a walkable 3D world from a Norwegian orienteering map,
+and run through it in the browser like in a first-person game.
+
 ## Features
 
-- TODO
+- Reads OCAD maps (version 10–2018, ISOM 2000 and ISOM 2017) with their georeferencing,
+  and image maps (JPG/PNG with a world file, KMZ overlays, GeoTIFF).
+- Real terrain heights from Kartverket's national 1 m terrain model,
+  instead of heights interpolated from contour lines.
+- Individual trees from the laser surface model, with species from NIBIO SR16,
+  thinned on open land and made denser where the map shows green.
+- Ground from the map (forest floor, open land, marsh, fields, paths, roads, water),
+  and from NIBIO AR5 land cover outside the map.
+- Buildings from OpenStreetMap and the map, with heights and gable roofs
+  measured from the laser data.
+- Boulders, cliffs, stone walls, fences, power lines and towers from the map.
+- Browser viewer (Three.js): walk, run and fly, with shadows, runnability,
+  a compass, the orienteering map with your position, and courses with timing.
 
 ## Requirements
 
-- TODO
+- [uv](https://docs.astral.sh/uv/) (Python 3.12 or newer is installed by uv)
+- [Node.js](https://nodejs.org/) 20 or newer
+- An internet connection when building a world (data is cached in `data-cache/`)
+
+## Installation
+
+```console
+uv sync
+npm ci --prefix tools/ocad-export
+npm ci --prefix viewer
+uv run pre-commit install
+```
 
 ## Usage
 
+Build a world from a map, then start the viewer:
+
+```console
+uv run otest build path/to/map.ocd
+npm run dev --prefix viewer
+```
+
+Open <http://localhost:5173/> and click to start.
+The world is written to `worlds/<map name>/`; use `--out` to choose another folder.
+A build of a 5 x 5 km map takes about a minute once the data is downloaded.
+
+Image maps need their georeferencing: a KMZ overlay or GeoTIFF has it,
+a JPG or PNG needs a world file (`.jgw`/`.pgw`) next to it
+and the coordinate system given with `--epsg`:
+
+```console
+uv run otest build map.jpg --epsg 25832
+```
+
+Image maps are read by their colours, which works well for areas
+(forest, open land, green, water, marsh, fields)
+but cannot find boulders, cliffs and other point features.
+
+Useful build options (see `uv run otest build --help`):
+
+- `--offset DX DY` shifts the map east/north if its georeferencing is off.
+- `--margin` sets how much terrain to include around the map (default 300 m).
+- `--sr16-dir` points to SR16 GeoTIFFs downloaded from Geonorge (or set `OTEST_SR16_DIR`);
+  they add the number of trees per hectare to the species from the SR16 web map.
+- `--symbols` sets the symbol standard of an OCAD map if the guess is wrong.
+- `--no-forest` builds the terrain only.
+
+Maps must be georeferenced in UTM zone 32, 33 or 35 (ETRS89 or WGS 84).
+
+### In the viewer
+
+| Key         | Action                                            |
+| ----------- | ------------------------------------------------- |
+| W A S D     | Move                                              |
+| Mouse       | Look around                                       |
+| Shift       | Run (fly fast)                                    |
+| Space       | Jump (fly up)                                     |
+| F           | Fly on/off, C flies down                          |
+| M           | Map; + and − zoom, P shows/hides your position     |
+| E           | With the map open: set a course by clicking       |
+| L           | Copy a link to the course                         |
+| T           | Go to the start; R restarts the run               |
+| O           | Orienteering map on the ground on/off             |
+| G           | Graphics quality (shadows)                        |
+| Esc         | Pause                                             |
+
+To run a course, open the map (M), press E and click the start, the controls and the finish.
+The clock starts when you leave the start triangle,
+and each control is punched when you get within 2.5 m of the flag.
+
+The URL can hold a viewpoint and a course,
+for example `?world=langvatnet&at=665560,6644900,150&look=0,-20`: `at` is easting,
+northing and an optional height above ground
+(which turns on flying),
+`look` is the compass heading and pitch in degrees,
+and `course` is a list of `easting,northing` pairs separated by `;`.
+
+## Development
+
 Please see the [Contributor Guide] for details on running development tasks.
+Run the same checks as CI with:
+
+```console
+uv run pre-commit run --all-files
+uv run mypy src tests
+uv run deptry .
+uv run pytest
+npm run typecheck --prefix viewer
+```
+
+`uv run pytest -m network` also runs an end-to-end build that downloads data.
+It and the OCAD tests use the map in `OTEST_TEST_MAP` and are skipped if that file does not exist.
+
+Git hooks run outside the uv environment unless it is active,
+so commit with `uv run git commit` or activate `.venv` first.
+
+How the map symbols become 3D is set in `src/otest/symbols/*.toml`, one table per symbol standard.
+
+## Data sources and licences
+
+| Data                          | Source                                         | Licence     |
+| ----------------------------- | ---------------------------------------------- | ----------- |
+| Terrain and surface (1 m)     | Kartverket, Nasjonal høydemodell (WCS)          | CC BY 4.0   |
+| Tree species and tree count   | NIBIO, SR16 skogressurskart (WMS or GeoTIFF)   | NLOD 2.0    |
+| Land cover outside the map    | NIBIO, AR5 arealressurskart (WMS)              | NLOD 2.0    |
+| Buildings, roads, water       | OpenStreetMap (Overpass API)                   | ODbL        |
+| Orienteering map              | Your map file                                  | Map owner's |
+
+The OCAD reader in `tools/ocad-export` uses [ocad2geojson], which is licensed under AGPL-3.0,
+and so is that tool.
+The Python package runs it as a separate program.
+
+Not used yet: laser point clouds from hoydedata.no
+(must be ordered by hand) and road widths from NVDB.
+
+[ocad2geojson]: https://github.com/perliedman/ocad2geojson
 
 ## Contributing
 
