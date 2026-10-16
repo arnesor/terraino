@@ -175,3 +175,9 @@ __marimo__/
 /docs/_build/
 *.rej
 *.orig
+
+# otest: generated worlds, downloaded data and Node packages
+/worlds/
+/data-cache/
+node_modules/
+/viewer/dist/
