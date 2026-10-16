@@ -1,0 +1,94 @@
+# What ISOM 2000 symbols mean for the 3D world.
+#
+# Keys (all optional):
+#   ground  ground class: forest open rough marsh rock field paved gravel path water
+#           lawn stony sand building (see otest.process.symbols.Ground)
+#   trees   "keep" (use the laser canopy), "none" or "scattered" (at most a few per ha)
+#   young   young trees added per 100 m², making the forest denser
+#   shrubs  undergrowth density, 0..1
+#   speed   running speed factor, 1 = easy forest floor, 0 = impassable
+#   width   real-world width in metres of a line symbol, painted with its ground class
+#   clear   width in metres of a tree-free strip along a line symbol
+#   order   drawing order; higher values are painted on top
+#   feature 3D object placed for the symbol: boulder, boulder_cluster, boulder_field,
+#           stones, cliff, rock_face, stone_wall, ruined_wall, fence, ruined_fence,
+#           power_line, pylon_line, tower, cairn, fodder_rack, ruin, footbridge
+#   size    size of the feature in metres (boulder height, tower height, wall height)
+#
+# A symbol "406.1" uses the entry "406.1" if there is one, otherwise "406".
+# The white map background is forest with easy running.
+
+name = "ISOM 2000"
+
+[symbols]
+# Rock and stones
+"201" = { feature = "cliff", speed = 0 }
+"202" = { ground = "rock", trees = "none", speed = 0, order = 32, feature = "boulder_cluster", size = 3 }
+"203" = { feature = "rock_face" }
+"206" = { feature = "boulder", size = 1.3 }
+"207" = { feature = "boulder", size = 2.6 }
+"208" = { ground = "stony", speed = 0.6, order = 30, feature = "boulder_field" }
+"209" = { feature = "boulder_cluster", size = 1.2 }
+"210" = { ground = "stony", speed = 0.8, order = 30, feature = "stones" }
+"211" = { ground = "sand", trees = "none", speed = 0.8, order = 30 }
+"212" = { ground = "rock", trees = "none", speed = 0.95, order = 31 }
+
+# Water and marsh
+"301" = { ground = "water", trees = "none", speed = 0, order = 60 }
+"302" = { ground = "water", trees = "none", speed = 0, order = 60 }
+"304" = { ground = "water", trees = "none", speed = 0, width = 6, clear = 8, order = 61 }
+"305" = { ground = "water", speed = 0.5, width = 2, clear = 3, order = 61 }
+"306" = { ground = "water", speed = 0.7, width = 0.8, clear = 1.5, order = 61 }
+"307" = { ground = "marsh", speed = 0.8, width = 0.6, clear = 1, order = 41 }
+"308" = { ground = "marsh", speed = 0.7, width = 2, order = 41 }
+"309" = { ground = "marsh", trees = "none", speed = 0.15, order = 42 }
+"310" = { ground = "marsh", speed = 0.6, order = 40 }
+"311" = { ground = "marsh", speed = 0.85, order = 39 }
+
+# Vegetation
+"401" = { ground = "open", trees = "none", speed = 1.0, order = 10 }
+"402" = { ground = "open", trees = "scattered", speed = 1.0, order = 10 }
+"403" = { ground = "rough", trees = "none", speed = 0.85, order = 11 }
+"404" = { ground = "rough", trees = "scattered", speed = 0.85, order = 11 }
+"405" = { ground = "forest", speed = 1.0, order = 12 }
+"406" = { ground = "forest", young = 3, speed = 0.75, order = 20 }
+"407" = { ground = "forest", shrubs = 0.45, speed = 0.75, order = 20 }
+"408" = { ground = "forest", young = 8, speed = 0.5, order = 21 }
+"409" = { ground = "forest", shrubs = 0.8, speed = 0.5, order = 21 }
+"410" = { ground = "forest", young = 15, speed = 0.25, order = 22 }
+"411" = { ground = "forest", young = 20, speed = 0.05, order = 23 }
+"412" = { ground = "lawn", trees = "scattered", speed = 0.9, order = 15 }
+"413" = { ground = "field", trees = "none", speed = 0.7, order = 15 }
+"415" = { ground = "field", trees = "none", speed = 0.6, order = 15 }
+
+# Roads, paths and other man-made features
+"501" = { ground = "paved", trees = "none", width = 12, clear = 20, order = 82 }
+"502" = { ground = "paved", trees = "none", width = 8, clear = 14, order = 82 }
+"503" = { ground = "paved", trees = "none", width = 5.5, clear = 9, order = 81 }
+"504" = { ground = "gravel", trees = "none", width = 4, clear = 7, order = 80 }
+"505" = { ground = "gravel", width = 2.5, clear = 4, order = 79 }
+"506" = { ground = "path", width = 1.0, clear = 2, order = 78 }
+"507" = { ground = "path", width = 0.6, clear = 1.5, order = 77 }
+"508" = { ground = "path", width = 0.4, clear = 1, order = 76 }
+"509" = { ground = "rough", width = 3, clear = 4, order = 75 }
+"509.2" = { ground = "gravel", width = 4, clear = 6, order = 80 }
+"512" = { feature = "footbridge" }
+"513" = { ground = "gravel", trees = "none", width = 5, clear = 12, order = 81 }
+"515" = { clear = 12, feature = "power_line" }
+"516" = { clear = 12, feature = "power_line" }
+"517" = { clear = 30, feature = "pylon_line" }
+"519" = { feature = "stone_wall", size = 0.9 }
+"520" = { feature = "ruined_wall", size = 0.5 }
+"521" = { feature = "stone_wall", size = 1.8 }
+"522" = { feature = "fence", size = 1.2 }
+"523" = { feature = "ruined_fence", size = 1.0 }
+"524" = { feature = "fence", size = 2.2 }
+"526" = { ground = "building", trees = "none", speed = 0, order = 90 }
+"527" = { ground = "lawn", trees = "scattered", speed = 0.9, order = 50 }
+"528" = { ground = "lawn", trees = "scattered", speed = 0.9, order = 50 }
+"529" = { ground = "paved", trees = "none", speed = 1.0, order = 85 }
+"530" = { feature = "ruin", size = 0.6 }
+"535" = { feature = "tower", size = 10 }
+"536" = { feature = "tower", size = 4 }
+"537" = { feature = "cairn", size = 1.2 }
+"538" = { feature = "fodder_rack", size = 2 }

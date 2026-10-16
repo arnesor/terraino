@@ -1,0 +1,74 @@
+# What ISOM 2017-2 symbols mean for the 3D world. See isom2000.toml for the keys.
+
+name = "ISOM 2017-2"
+
+[symbols]
+# Rock and stones
+"201" = { feature = "cliff", speed = 0 }
+"202" = { feature = "rock_face" }
+"204" = { feature = "boulder", size = 1.3 }
+"205" = { feature = "boulder", size = 2.6 }
+"206" = { ground = "rock", trees = "none", speed = 0, order = 32, feature = "boulder_cluster", size = 3 }
+"207" = { feature = "boulder_cluster", size = 1.2 }
+"208" = { ground = "stony", speed = 0.6, order = 30, feature = "boulder_field" }
+"209" = { ground = "stony", speed = 0.8, order = 30, feature = "boulder_field" }
+"210" = { ground = "stony", speed = 0.8, order = 30, feature = "stones" }
+"211" = { ground = "stony", speed = 0.6, order = 30 }
+"212" = { ground = "stony", speed = 0.4, order = 30 }
+"213" = { ground = "sand", trees = "none", speed = 0.8, order = 30 }
+"214" = { ground = "rock", trees = "none", speed = 0.95, order = 31 }
+
+# Water and marsh
+"301" = { ground = "water", trees = "none", speed = 0, order = 60 }
+"302" = { ground = "water", trees = "none", speed = 0, order = 60 }
+"303" = { ground = "water", trees = "none", speed = 0.3, order = 60 }
+"304" = { ground = "water", speed = 0.5, width = 2, clear = 3, order = 61 }
+"305" = { ground = "water", speed = 0.7, width = 0.8, clear = 1.5, order = 61 }
+"306" = { ground = "marsh", speed = 0.8, width = 0.6, clear = 1, order = 41 }
+"307" = { ground = "marsh", trees = "none", speed = 0.15, order = 42 }
+"308" = { ground = "marsh", speed = 0.6, order = 40 }
+"309" = { ground = "marsh", speed = 0.7, width = 2, order = 41 }
+"310" = { ground = "marsh", speed = 0.85, order = 39 }
+
+# Vegetation
+"401" = { ground = "open", trees = "none", speed = 1.0, order = 10 }
+"402" = { ground = "open", trees = "scattered", speed = 1.0, order = 10 }
+"403" = { ground = "rough", trees = "none", speed = 0.85, order = 11 }
+"404" = { ground = "rough", trees = "scattered", speed = 0.85, order = 11 }
+"405" = { ground = "forest", speed = 1.0, order = 12 }
+"406" = { ground = "forest", young = 3, speed = 0.75, order = 20 }
+"407" = { ground = "forest", shrubs = 0.45, speed = 0.75, order = 20 }
+"408" = { ground = "forest", young = 8, speed = 0.5, order = 21 }
+"409" = { ground = "forest", shrubs = 0.8, speed = 0.5, order = 21 }
+"410" = { ground = "forest", young = 15, speed = 0.25, order = 22 }
+"411" = { ground = "forest", young = 20, speed = 0.05, order = 23 }
+"412" = { ground = "field", trees = "none", speed = 0.6, order = 15 }
+"413" = { ground = "lawn", trees = "scattered", speed = 0.9, order = 15 }
+"414" = { ground = "field", trees = "none", speed = 0.7, order = 15 }
+
+# Roads, paths and other man-made features
+"501" = { ground = "paved", trees = "none", speed = 1.0, order = 85 }
+"502" = { ground = "paved", trees = "none", width = 8, clear = 14, order = 82 }
+"503" = { ground = "gravel", trees = "none", width = 4, clear = 7, order = 80 }
+"504" = { ground = "gravel", width = 2.5, clear = 4, order = 79 }
+"505" = { ground = "path", width = 1.0, clear = 2, order = 78 }
+"506" = { ground = "path", width = 0.6, clear = 1.5, order = 77 }
+"507" = { ground = "path", width = 0.4, clear = 1, order = 76 }
+"508" = { ground = "rough", width = 3, clear = 4, order = 75 }
+"509" = { ground = "gravel", trees = "none", width = 5, clear = 12, order = 81 }
+"510" = { clear = 12, feature = "power_line" }
+"511" = { clear = 30, feature = "pylon_line" }
+"512" = { feature = "footbridge" }
+"513" = { feature = "stone_wall", size = 0.9 }
+"514" = { feature = "ruined_wall", size = 0.5 }
+"515" = { feature = "stone_wall", size = 1.8 }
+"516" = { feature = "fence", size = 1.2 }
+"517" = { feature = "ruined_fence", size = 1.0 }
+"518" = { feature = "fence", size = 2.2 }
+"520" = { ground = "lawn", trees = "scattered", speed = 0.9, order = 50 }
+"521" = { ground = "building", trees = "none", speed = 0, order = 90 }
+"523" = { feature = "ruin", size = 0.6 }
+"524" = { feature = "tower", size = 10 }
+"525" = { feature = "tower", size = 4 }
+"526" = { feature = "cairn", size = 1.2 }
+"527" = { feature = "fodder_rack", size = 2 }
