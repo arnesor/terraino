@@ -12,6 +12,7 @@ from otest.fetch.ar5 import decode_land_cover
 from otest.fetch.cache import DownloadError
 from otest.fetch.matrikkel import BuildingPoint
 from otest.fetch.osm import OsmFeature, parse_overpass
+from otest.fetch.topo_buildings import TopoBuilding
 from otest.ingest.georef import Extent
 from otest.process.buildings import (
     building_kind,
@@ -184,7 +185,10 @@ def test_measure_without_laser_heights_uses_defaults() -> None:
     (shed,) = measure_buildings(
         [(box(10, 10, 14, 13), "shed", "map", "map/3")], dtm, canopy, EXTENT
     )
-    assert (shed.wall, shed.roof) == (2.3, 0.9)
+    # The kind's wall height, and a gable along the long side at its pitch (22°).
+    assert shed.wall == 2.3
+    assert shed.roof == pytest.approx(math.tan(math.radians(22)) * 1.5, abs=0.01)
+    assert shed.roof_type == "gable"
     assert shed.base == 50.0
 
 
@@ -296,3 +300,42 @@ def test_fetch_building_points_without_service(
 
     monkeypatch.setattr(matrikkel, "cached_download", fail)
     assert matrikkel.fetch_building_points(25832, EXTENT, tmp_path) == []
+
+
+def test_laser_surface_of_trees_is_not_a_roof() -> None:
+    # A garage built after the laser scan: the surface over it is trees, 8-20 m high.
+    dtm = np.full(EXTENT.raster_shape(1), 100.0, dtype=np.float32)
+    fine = 2
+    rng = np.random.default_rng(3)
+    surface = rng.uniform(8, 20, (100 * fine, 100 * fine)).astype(np.float32)
+    footprint = box(40, 40, 49, 47)
+    (garage,) = measure_buildings(
+        [(footprint, "garage", "osm", "osm/9")],
+        dtm,
+        np.zeros_like(dtm),
+        EXTENT,
+        surface=surface,
+        fine=fine,
+        roof_lines={"osm/9": [(40.5, 43.5, 48.5, 43.5)]},
+    )
+    assert garage.wall == pytest.approx(2.6)  # the garage default, one floor
+    assert garage.floors == 1
+    assert garage.roof < 2.5
+    assert abs(math.sin(garage.ridge)) < 0.05  # the map's ridge, east-west
+
+
+def test_kartverket_outlines_come_first() -> None:
+    topo = [
+        TopoBuilding(box(10, 10, 20, 18), ()),
+        TopoBuilding(box(40, 40, 46, 45), ()),
+    ]
+    osm = [
+        OsmFeature(box(10.5, 10.5, 19.5, 17.5), {"building": "garage"}, "way/1"),
+        OsmFeature(box(60, 60, 70, 70), {"building": "house"}, "way/2"),
+    ]
+    found = collect_footprints(osm, [], SymbolSet.load("isom2017"), topo)
+    assert [(source, kind) for _, kind, source, _ in found] == [
+        ("kartverket", "garage"),  # OSM gave its kind
+        ("kartverket", "other"),
+        ("osm", "house"),  # only in OSM
+    ]

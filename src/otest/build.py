@@ -18,7 +18,7 @@ from shapely import LineString, Polygon
 from shapely.geometry import mapping
 
 from otest.export import WorldData, write_world
-from otest.fetch import ar5, kartverket, matrikkel, nibio, osm
+from otest.fetch import ar5, kartverket, matrikkel, nibio, osm, topo_buildings
 from otest.ingest.georef import Extent
 from otest.ingest.image import ImageMap, read_image_map
 from otest.ingest.lidar import ATTRIBUTION as LIDAR_ATTRIBUTION
@@ -329,13 +329,32 @@ def _add_nature_and_buildings(
         world.attribution = [*world.attribution, ar5.ATTRIBUTION]
     osm_features = osm.fetch_osm(source.epsg, extent, cache)
     map_buildings = source.omap + _as_map_buildings(source.buildings, source.symbols)
-    footprints = collect_footprints(osm_features, map_buildings, source.symbols)
+    topo = topo_buildings.fetch_topo_buildings(source.epsg, extent, cache)
+    if topo:
+        world.attribution = [*world.attribution, topo_buildings.ATTRIBUTION]
+    footprints = collect_footprints(osm_features, map_buildings, source.symbols, topo)
+    log.info(
+        "Building outlines: %s",
+        ", ".join(
+            f"{n} from {s}" for s, n in Counter(fp[2] for fp in footprints).items()
+        ),
+    )
+    roof_lines = {
+        f"kartverket/{i}": [(r.x0, r.y0, r.x1, r.y1) for r in b.lines]
+        for i, b in enumerate(topo)
+    }
     apply_osm(layers, osm_features, [fp[0] for fp in footprints], extent)
     registry = matrikkel.fetch_building_points(source.epsg, extent, cache)
     if registry:
         world.attribution = [*world.attribution, matrikkel.ATTRIBUTION]
     buildings = measure_buildings(
-        footprints, dtm, chm, extent, surface=surface, registry=registry
+        footprints,
+        dtm,
+        chm,
+        extent,
+        surface=surface,
+        registry=registry,
+        roof_lines=roof_lines,
     )
     log.info(
         "%d of %d buildings have a type from Matrikkelen",

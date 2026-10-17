@@ -28,6 +28,9 @@ and run through it in the browser like in a first-person game.
   size and how far down its live branches reach, undergrowth where the laser hits it,
   and roofs split into their planes, giving wings with gable, hipped, shed and flat
   roofs (cross gables, L- and T-shaped houses) and their eave and ridge heights.
+- Building outlines and roof lines traced from Kartverket's topographic map
+  (the same buildings as on norgeskart.no), with OSM and the orienteering map where it has none.
+  Roofs come from the laser where it saw a roof, otherwise from the map's roof lines.
 - Buildings with textured walls (cladding with windows, boards, logs) and roof tiles,
   their kind, colours and floors from the building type registered in Matrikkelen
   (white farmhouses, red barns, dark cabins, garages matching the house they belong to).
@@ -178,6 +181,7 @@ How the map symbols become 3D is set in `src/otest/symbols/*.toml`, one table pe
 | Buildings, roads, water       | OpenStreetMap (Overpass API)                   | ODbL        |
 | Laser point clouds (optional) | Kartverket, hoydedata.no (downloaded by hand)  | CC BY 4.0   |
 | Building types                | Kartverket, Matrikkelen bygningspunkt (WFS)    | CC BY 4.0   |
+| Building outlines, roof lines | Kartverket, Topografisk Norgeskart (WMS)       | CC BY 4.0   |
 | Orienteering map              | Your map file                                  | Map owner's |
 
 The OCAD reader in `tools/ocad-export` uses [ocad2geojson], which is licensed under AGPL-3.0,

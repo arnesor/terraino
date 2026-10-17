@@ -8,7 +8,9 @@ a single flat, shed, gable or hip roof is fitted to the whole footprint.
 
 from __future__ import annotations
 
+import logging
 import math
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
@@ -22,6 +24,7 @@ from shapely.geometry.base import BaseGeometry
 
 from otest.fetch.matrikkel import BuildingPoint
 from otest.fetch.osm import OsmFeature
+from otest.fetch.topo_buildings import TopoBuilding
 from otest.ingest.georef import Extent
 from otest.process.building_types import (
     STYLES,
@@ -31,10 +34,16 @@ from otest.process.building_types import (
     type_rank,
 )
 from otest.process.geometry import to_geometry
-from otest.process.roofs import RoofPart, robust_fit, segment_roof
+from otest.process.roofs import RoofPart, parts_from_lines, robust_fit, segment_roof
 from otest.process.symbols import Ground, SymbolSet
 
+log = logging.getLogger(__name__)
+
 MIN_AREA_M2 = 4.0
+# The laser saw a roof only where a roof fits it this well (RMS, metres) and, for the 1 m
+# surface model, where its heights vary less than this (trees vary much more).
+MAX_FIT_RMS_M = 0.35
+MAX_SURFACE_SPREAD_M = 6.0
 # A registered building's point may lie this far outside its footprint.
 REGISTRY_DISTANCE_M = 5.0
 # Kinds of building people live in; garages on their property take their colours.
@@ -373,21 +382,54 @@ def _roof_patch(
     ]
 
 
+def _covered(
+    poly: Polygon, others: Sequence[Polygon], tree: STRtree | None
+) -> int | None:
+    """Index of the polygon in ``others`` that is the same building as ``poly``, if any."""
+    if tree is None:
+        return None
+    best, share = None, 0.0
+    for i in tree.query(poly, predicate="intersects"):
+        overlap = poly.intersection(others[i]).area / max(
+            min(poly.area, others[i].area), 1e-9
+        )
+        if overlap > share:
+            best, share = int(i), overlap
+    return best if share > SAME_BUILDING_OVERLAP else None
+
+
 def collect_footprints(
     osm: Iterable[OsmFeature],
     omap_features: Iterable[Mapping[str, Any]],
     symbols: SymbolSet,
+    topo: Sequence[TopoBuilding] = (),
 ) -> list[tuple[Polygon, str, str, str]]:
-    """Return ``(footprint, kind, source, id)`` for OSM buildings and map-only buildings."""
-    footprints: list[tuple[Polygon, str, str, str]] = []
+    """Return ``(footprint, kind, source, id)`` for every building.
+
+    Kartverket's map outlines come first (ids ``kartverket/<index in topo>``); an OSM
+    building on one of them only gives its kind. OSM buildings, then the orienteering
+    map's, fill in where the earlier sources have none.
+    """
+    footprints: list[tuple[Polygon, str, str, str]] = [
+        (b.footprint, "other", "kartverket", f"kartverket/{i}")
+        for i, b in enumerate(topo)
+    ]
+    kartverket = [b.footprint for b in topo]
+    k_tree = STRtree(kartverket) if kartverket else None
     for f in osm:
         if "building" not in f.tags:
             continue
         for poly in _polygons(f.geometry):
-            footprints.append((poly, building_kind(f.tags), "osm", f.osm_id))
+            kind = building_kind(f.tags)
+            same = _covered(poly, kartverket, k_tree)
+            if same is None:
+                footprints.append((poly, kind, "osm", f.osm_id))
+            elif kind != "other" and footprints[same][1] == "other":
+                fp, _, source, ident = footprints[same]
+                footprints[same] = (fp, kind, source, ident)
 
-    osm_polys = [p for p, _, _, _ in footprints]
-    tree = STRtree(osm_polys) if osm_polys else None
+    known = [p for p, _, _, _ in footprints]
+    tree = STRtree(known) if known else None
     for feature in omap_features:
         rule = symbols.rule(feature["properties"]["sym"])
         if rule is None or rule.ground is not Ground.BUILDING:
@@ -396,11 +438,8 @@ def collect_footprints(
         if geometry is None:
             continue
         for poly in _polygons(geometry):
-            if tree is not None:
-                hits = tree.query(poly, predicate="intersects")
-                overlap = sum(poly.intersection(osm_polys[i]).area for i in hits)
-                if overlap > SAME_BUILDING_OVERLAP * poly.area:
-                    continue
+            if _covered(poly, known, tree) is not None:
+                continue
             oid = feature["properties"]["oid"]
             footprints.append((poly, "other", "map", f"map/{oid}"))
     return [fp for fp in footprints if fp[0].area >= MIN_AREA_M2]
@@ -424,6 +463,7 @@ def measure_buildings(
     surface: npt.NDArray[np.float32] | None = None,
     fine: int = 2,
     registry: Sequence[BuildingPoint] = (),
+    roof_lines: Mapping[str, Sequence[tuple[float, float, float, float]]] | None = None,
 ) -> list[Building]:
     """Measure base, wall and roof heights of each footprint.
 
@@ -437,6 +477,8 @@ def measure_buildings(
         fine: Fine cells per metre of ``surface``.
         registry: Buildings registered in Matrikkelen; their types decide the kind,
             colours and default size of the footprints they fall in.
+        roof_lines: Roof lines (x0, y0, x1, y1) from Kartverket's map by footprint id;
+            they shape the roofs the laser does not measure.
     """
     if not footprints:
         return []
@@ -455,36 +497,54 @@ def measure_buildings(
     bounds = np.searchsorted(ids, np.arange(1, len(footprints) + 2))
 
     registered = match_registry([fp[0] for fp in footprints], registry)
+    roof_source: Counter[str] = Counter()
     buildings = []
     for i, (poly, osm_kind, source, ident) in enumerate(footprints):
         own = cells[bounds[i] : bounds[i + 1]]
         point = registered[i]
         kind = (kind_for_type(point.type_code) if point else None) or osm_kind
         style = STYLES.get(kind, STYLES["other"])
-        default_wall, default_roof = style.wall, style.roof
-        measured = True
         if len(own) >= 3:
             heights = canopy.ravel()[own]
             base = float(dtm.ravel()[own].min())
             top = float(np.percentile(heights, 95))
             eave = float(np.percentile(heights, 25))
+            spread = float(np.percentile(heights, 90) - np.percentile(heights, 10))
         else:
             centre = poly.representative_point()
             row = int(np.clip(extent.y1 - centre.y, 0, dtm.shape[0] - 1))
             col = int(np.clip(centre.x - extent.x0, 0, dtm.shape[1] - 1))
             base = float(dtm[row, col])
-            top = eave = 0.0
+            top = eave = spread = 0.0
 
         angle, fill = _ridge_angle(poly)
+        lines = (roof_lines or {}).get(ident, ())
+
+        def plausible(wall: float, roof: float) -> bool:
+            # Taller than the kind can be: the laser saw trees, or the site before
+            # the building was built.
+            return wall <= style.max_wall and roof <= style.max_roof  # noqa: B023
+
         parts: list[RoofPart] | None = None
         fit = None
         if surface is not None:
             parts = _roof_patch(poly, surface, dtm, extent, fine, base)
+            if parts and not plausible(
+                min(p.eave for p in parts),
+                max(p.ridge for p in parts) - min(p.eave for p in parts),
+            ):
+                parts = None
             if not parts:
                 x, y, z = _roof_samples(poly, surface, dtm, extent, fine)
                 keep = z - base >= MIN_ROOF_HEIGHT_M
                 fit = fit_roof(x[keep], y[keep], z[keep], poly)
+                if fit is not None and (
+                    fit.rms > MAX_FIT_RMS_M
+                    or not plausible(fit.eave - base, fit.ridge - fit.eave)
+                ):
+                    fit = None
         roof_type = "flat"
+        measured = True
         if parts:
             # Wings measured in the point cloud; the walls reach the lowest eaves.
             main = max(parts, key=lambda p: p.area)
@@ -494,26 +554,50 @@ def measure_buildings(
             roof_type = main.roof_type
             if roof_type == "gable" and all(main.hips):
                 roof_type = "hip"
+            roof_source["laser"] += 1
         elif fit is not None and fit.ridge - base >= 2.0:
             # Pitched roofs over irregular outlines are drawn flat, at half the rise.
             wall = float(np.clip(fit.eave - base, 2.0, 25.0))
             roof = float(np.clip(fit.ridge - base - wall, 0.0, 9.0))
             if fit.roof_type != "flat" and fill >= RECTANGULAR:
                 roof_type, angle = fit.roof_type, fit.angle
+                angle = _map_direction(poly, lines, angle, wall, style.pitch)
             else:
                 wall, roof = max(wall + roof * 0.5, 2.2), 0.0
-        else:
-            if top < 2.0:
-                wall, roof = default_wall, default_roof
-                measured = False
-            else:
-                top = min(top, 25.0)
-                wall = float(np.clip(eave, 2.2, top))
-                roof = top - wall
+            roof_source["laser"] += 1
+        elif (
+            surface is None
+            and top >= 2.0
+            and spread <= MAX_SURFACE_SPREAD_M
+            and plausible(eave, top - eave)
+        ):
+            # Only the 1 m surface model: walls and a roof from its heights.
+            top = min(top, 25.0)
+            wall = float(np.clip(eave, 2.2, top))
+            roof = top - wall
             if fill >= RECTANGULAR and roof >= MIN_RIDGE_M:
                 roof_type = "gable"
             else:
                 wall, roof = max(wall + roof * 0.5, 2.2), 0.0
+            roof_source["surface model"] += 1
+        else:
+            # Not measured: the kind's height, the roof from the map's roof lines (or a
+            # gable along the long side) at the kind's pitch.
+            measured = False
+            wall = style.wall
+            flat = kind == "industry" or (not lines and fill < RECTANGULAR)
+            parts = parts_from_lines(
+                poly, lines, wall, math.radians(style.pitch), flat=flat
+            )
+            roof = 0.0
+            if parts:
+                biggest = max(parts, key=lambda p: p.area)
+                roof = biggest.ridge - wall
+                angle = biggest.angle
+                roof_type = biggest.roof_type
+                if roof_type == "gable" and all(biggest.hips):
+                    roof_type = "hip"
+            roof_source["map roof lines" if lines else "defaults"] += 1
         # Farm buildings on one property share their colours; other buildings vary.
         farm = kind in ("barn", "farm_auxiliary")
         seed = (
@@ -541,7 +625,29 @@ def measure_buildings(
                 floors=floors_for(kind, wall if measured else None),
             )
         )
+    log.info(
+        "Roofs: %s",
+        ", ".join(f"{n} from {source}" for source, n in roof_source.most_common()),
+    )
     return _match_property_colours(buildings, registered)
+
+
+def _map_direction(
+    footprint: Polygon,
+    lines: Sequence[tuple[float, float, float, float]],
+    angle: float,
+    wall: float,
+    pitch: float,
+) -> float:
+    """The ridge direction of the map's roof lines where it differs from ``angle``."""
+    if not lines:
+        return angle
+    parts = parts_from_lines(footprint, lines, wall, math.radians(pitch))
+    if not parts:
+        return angle
+    mapped = max(parts, key=lambda p: p.area).angle
+    turn = abs(mapped - angle) % math.pi
+    return mapped if min(turn, math.pi - turn) > math.radians(30) else angle
 
 
 def _match_property_colours(

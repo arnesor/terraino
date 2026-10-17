@@ -12,12 +12,13 @@ crossing and adjoining wings give cross gables and L- and T-shaped houses.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
 import numpy.typing as npt
 from scipy import ndimage
-from shapely import Polygon, box
+from shapely import LineString, Point, Polygon, box
 
 # Slopes below this (rise per metre) are level.
 FLAT_SLOPE = 0.15
@@ -41,6 +42,13 @@ PITCH_RANGE = (0.1, 1.5)
 # The parts must explain this share of the roof, each with at most MAX_PART_RMS_M.
 MIN_EXPLAINED = 0.6
 MAX_PART_RMS_M = 0.4
+# Roof lines from a map: pieces of one ridge lie this close; a ridge is within this share
+# of the width from the middle; a ridge end this far (in half widths) short of the
+# outline's end makes a hip.
+LINE_MERGE_M = 0.5
+MIN_RIDGE_M = 2.0
+RIDGE_MIDDLE_SHARE = 0.2
+HIP_SHARE = 0.5
 
 
 @dataclass(frozen=True)
@@ -474,3 +482,184 @@ def _drop_hidden(parts: list[RoofPart]) -> list[RoofPart]:
         for p in parts
         if p.roof_type != "flat" or not any(_inside(p, q) for q in pitched)
     ]
+
+
+def parts_from_lines(
+    footprint: Polygon,
+    lines: Sequence[tuple[float, float, float, float]],
+    wall: float,
+    pitch: float,
+    flat: bool = False,
+) -> list[RoofPart]:
+    """Roof wings from a map's roof lines, with heights from a wall height and a pitch.
+
+    A ridge is a roof line along one of the footprint's axes, in the middle of the
+    footprint's width there (lines off the middle are edges of roof sections). Each
+    ridge is a gable wing across the footprint; where the ridge stops well short of the
+    footprint's end, that end is hipped. Without a ridge the roof is a gable along the
+    long side (or flat).
+
+    Args:
+        footprint: The outline, projected coordinates.
+        lines: Roof lines as (x0, y0, x1, y1).
+        wall: Height of the eaves above the base.
+        pitch: Roof pitch in radians.
+        flat: Make a roof without ridges flat instead of a gable.
+
+    Examples:
+        >>> from shapely import box
+        >>> (p,) = parts_from_lines(box(0, 0, 10, 6), [(0.5, 3, 9.5, 3)], 2.5, math.radians(30))
+        >>> p.roof_type, round(math.degrees(p.angle)) % 180, p.hips, round(p.ridge, 2)
+        ('gable', 0, (False, False), 4.23)
+        >>> (p,) = parts_from_lines(box(0, 0, 10, 6), [(3, 3, 7, 3)], 2.5, math.radians(30))
+        >>> p.hips
+        (True, True)
+    """
+    rect = footprint.minimum_rotated_rectangle
+    if not isinstance(rect, Polygon) or footprint.area <= 0:
+        return []
+    corners = list(rect.exterior.coords)
+    edges = [
+        (corners[i + 1][0] - corners[i][0], corners[i + 1][1] - corners[i][1])
+        for i in range(2)
+    ]
+    long_edge = max(edges, key=lambda e: math.hypot(*e))
+    axis = math.atan2(long_edge[1], long_edge[0])
+    centre = rect.centroid
+    rise = math.tan(pitch)
+    found: list[tuple[float, float, float, float]] = []  # angle, offset, s0, s1
+    for x0, y0, x1, y1 in lines:
+        angle = math.atan2(y1 - y0, x1 - x0) % math.pi
+        for a in (axis % math.pi, (axis + math.pi / 2) % math.pi):
+            turn = abs(angle - a)
+            if min(turn, math.pi - turn) > math.radians(10):
+                continue
+            s, t = _frame(
+                np.array([x0 - centre.x, x1 - centre.x]),
+                np.array([y0 - centre.y, y1 - centre.y]),
+                a,
+            )
+            found.append((a, float(t.mean()), float(s.min()), float(s.max())))
+    ridges: list[tuple[float, float, float, float]] = []
+    for a, offset, s0, s1 in sorted(found, key=lambda f: f[3] - f[2], reverse=True):
+        same = [
+            i
+            for i, r in enumerate(ridges)
+            if abs(r[0] - a) < 1e-6 and abs(r[1] - offset) < LINE_MERGE_M
+        ]
+        if same:
+            r = ridges[same[0]]
+            ridges[same[0]] = (a, r[1], min(r[2], s0), max(r[3], s1))
+        else:
+            ridges.append((a, offset, s0, s1))
+
+    ox, oy = np.asarray(footprint.exterior.coords).T
+    short_half = min(math.hypot(*e) for e in edges) / 2
+    candidates: list[tuple[float, RoofPart]] = []
+    for a, offset, s0, s1 in ridges:
+        if s1 - s0 < MIN_RIDGE_M:
+            continue
+        outline = Polygon(
+            np.column_stack(_frame(ox - centre.x, oy - centre.y, a))
+        ).buffer(0)
+        band = _narrowest_band(outline, offset, s0, s1)
+        if band is None:
+            continue
+        t0, t1 = band
+        if abs(offset - (t0 + t1) / 2) > RIDGE_MIDDLE_SHARE * (t1 - t0):
+            continue  # an edge between roof sections, not a ridge
+        half_width = max(offset - t0, t1 - offset)
+        if half_width > short_half * 1.15:
+            continue  # wider than the building: a line on a roof, not a wing's ridge
+        along = outline.intersection(
+            box(-1e4, offset - half_width / 2, 1e4, offset + half_width / 2)
+        )
+        if along.is_empty:
+            continue
+        e0, _, e1, _ = along.bounds
+        hips = (
+            bool(s0 - e0 > HIP_SHARE * half_width),
+            bool(e1 - s1 > HIP_SHARE * half_width),
+        )
+        part = RoofPart(
+            "gable",
+            _offset(_point((e0 + e1) / 2, offset, a), centre),
+            a,
+            (e1 - e0) / 2,
+            half_width,
+            wall,
+            wall + rise * half_width,
+            hips,
+        )
+        candidates.append((abs(offset - (t0 + t1) / 2) / (t1 - t0), part))
+    # Of parallel ridges over the same stretch, the one nearest the middle is the ridge.
+    parts: list[RoofPart] = []
+    for _, part in sorted(candidates, key=lambda c: c[0]):
+        if not any(_overlapping(part, other) for other in parts):
+            parts.append(part)
+    if parts:
+        return parts
+    long_half = max(math.hypot(*e) for e in edges) / 2
+    if flat:
+        return [
+            RoofPart(
+                "flat", (centre.x, centre.y), axis, long_half, short_half, wall, wall
+            )
+        ]
+    return [
+        RoofPart(
+            "gable",
+            (centre.x, centre.y),
+            axis,
+            long_half,
+            short_half,
+            wall,
+            wall + rise * short_half,
+        )
+    ]
+
+
+def _narrowest_band(
+    outline: Polygon, offset: float, s0: float, s1: float
+) -> tuple[float, float] | None:
+    """Across-range (t0, t1) of the outline where it is narrowest along a ridge.
+
+    At several points along the ridge, the outline's extent across it is measured on
+    the piece holding the ridge; a wing crossing a wider block is as wide as its own
+    narrowest part.
+    """
+    best: tuple[float, float] | None = None
+    for f in np.linspace(0.1, 0.9, 7):
+        s = s0 + (s1 - s0) * float(f)
+        cut = outline.intersection(LineString([(s, -1e4), (s, 1e4)]))
+        for piece in getattr(cut, "geoms", [cut]):
+            if piece.is_empty or piece.geom_type != "LineString":
+                continue
+            _, t0, _, t1 = piece.bounds
+            if t0 - 0.2 <= offset <= t1 + 0.2 and (
+                best is None or t1 - t0 < best[1] - best[0]
+            ):
+                best = (t0, t1)
+    return best
+
+
+def _overlapping(p: RoofPart, q: RoofPart) -> bool:
+    """True if two parallel wings cover much of the same ground."""
+    turn = abs(p.angle - q.angle) % math.pi
+    if min(turn, math.pi - turn) > 1e-3:
+        return False
+    s, t = _frame(
+        np.array([p.centre[0] - q.centre[0]]),
+        np.array([p.centre[1] - q.centre[1]]),
+        q.angle,
+    )
+    overlap_s = min(p.half_length, q.half_length) - max(
+        abs(float(s[0])) - max(p.half_length, q.half_length), 0
+    )
+    return abs(float(t[0])) < max(p.half_width, q.half_width) and overlap_s > 0.5 * min(
+        p.half_length, q.half_length
+    )
+
+
+def _offset(point: tuple[float, float], centre: Point) -> tuple[float, float]:
+    return point[0] + centre.x, point[1] + centre.y

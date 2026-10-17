@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 # A floor of a house, and the plinth below the first floor, in metres.
 FLOOR_M = 2.7
@@ -32,6 +32,10 @@ class Style:
         wall: Wall height in metres, when no laser data gives it.
         roof: Roof height above the walls, when no laser data gives it.
         turf: Share of old buildings of this kind with a turf roof.
+        pitch: Typical roof pitch in degrees, for roofs not measured by the laser.
+        max_wall: Highest plausible wall; a laser measurement above it saw something
+            else (trees, or the site before the building was built).
+        max_roof: Highest plausible roof above the walls, likewise.
     """
 
     walls: Sequence[tuple[str, int]]
@@ -42,6 +46,9 @@ class Style:
     wall: float = 4.0
     roof: float = 2.0
     turf: float = 0.0
+    pitch: float = 30.0
+    max_wall: float = 15.0
+    max_roof: float = 6.0
 
 
 _DARK_ROOFS = [("#2c2c2e", 6), ("#3d3f42", 3), ("#55524e", 1)]
@@ -139,6 +146,32 @@ STYLES: dict[str, Style] = {
         wall=4.0,
         roof=2.0,
     ),
+}
+
+
+# Typical pitch (degrees) and the plausible wall and roof heights (metres) by kind.
+_SHAPES = {
+    "house": (35, 9.0, 6.0),
+    "farmhouse": (35, 9.0, 6.0),
+    "cabin": (30, 4.5, 4.0),
+    "summer_farm": (30, 4.5, 4.0),
+    "garage": (22, 3.2, 2.5),
+    "shed": (22, 3.2, 2.5),
+    "boathouse": (30, 3.2, 3.0),
+    "barn": (38, 9.0, 8.0),
+    "farm_auxiliary": (30, 6.0, 5.0),
+    "industry": (10, 15.0, 6.0),
+    "church": (45, 15.0, 12.0),
+    "other": (25, 15.0, 6.0),
+}
+STYLES = {
+    kind: replace(
+        style,
+        pitch=_SHAPES[kind][0],
+        max_wall=_SHAPES[kind][1],
+        max_roof=_SHAPES[kind][2],
+    )
+    for kind, style in STYLES.items()
 }
 
 
