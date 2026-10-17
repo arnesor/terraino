@@ -54,6 +54,7 @@ FEATURES = frozenset(
     {
         "boulder",
         "boulder_cluster",
+        "waterhole",
         "boulder_field",
         "stones",
         "cliff",

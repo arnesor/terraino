@@ -18,6 +18,8 @@ const WOOD = new THREE.Color(0x7d6f5c)
 const DARK_WOOD = new THREE.Color(0x4f4336)
 const STONE_WALL = new THREE.Color(0x85827a)
 const POLE = new THREE.Color(0x5a4a38)
+// Boulders sink this far below the lowest ground around them.
+const BOULDER_SINK_M = 0.25
 const STEEL = new THREE.Color(0x8c9196)
 const COLLISION_CELL = 16
 
@@ -77,6 +79,28 @@ function alongLine(pts: THREE.Vector3[], spacing: number): THREE.Vector3[] {
     travelled += length
   }
   return out
+}
+
+/** Still, dark forest water that reflects the sky, more so at grazing angles. */
+function waterMaterial(): THREE.MeshLambertMaterial {
+  const material = new THREE.MeshLambertMaterial({ color: new THREE.Color(0x0c0d08) })
+  material.onBeforeCompile = shader => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWaterPos;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvWaterPos = (modelMatrix * vec4(transformed, 1.0)).xyz;')
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWaterPos;')
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        vec3 viewDir = normalize(cameraPosition - vWaterPos);
+        float fresnel = 0.04 + 0.96 * pow(1.0 - max(viewDir.y, 0.0), 5.0);
+        vec3 sky = mix(vec3(0.38, 0.5, 0.62), vec3(0.16, 0.27, 0.48), clamp(viewDir.y * 3.0, 0.0, 1.0));
+        totalEmissiveRadiance += sky * (0.03 + 0.97 * fresnel);`,
+      )
+  }
+  material.customProgramCacheKey = () => 'otest-waterhole'
+  return material
 }
 
 /** Rocks, cliffs, walls, fences, power lines and small structures from the map. */
@@ -148,16 +172,41 @@ export class MapFeatures {
     rockShapes.forEach((shape, s) => {
       const mine = rocks.filter((_, i) => i % rockShapes.length === s)
       const mesh = new THREE.InstancedMesh(shape, material, Math.max(mine.length, 1))
-      mine.forEach(([, x, z, size, angle], i) => {
-        const half = size / 2
-        // The models are about 2 wide and 1 high, with a flat bottom a quarter below 0.
-        pos.set(x, ground(x, z) + half * 0.1, z)
+      shape.computeBoundingBox()
+      const bb = shape.boundingBox!
+      const size3 = bb.getSize(new THREE.Vector3())
+      mine.forEach(([k, x, z, size, angle], i) => {
         quat.setFromAxisAngle(up, angle)
-        scale.set(half * (1.0 + 0.3 * rand(x, z, 1)), half * 1.3, half * (0.85 + 0.3 * rand(x, z, 2)))
+        if (data.kinds[k] === 'boulder') {
+          // `size` is the boulder's least height above the ground around it: the top
+          // stands that high above the highest ground under it, and the bottom sinks
+          // below the lowest.
+          const width = size * (1.3 + 0.4 * rand(x, z, 1))
+          const depth = size * (1.1 + 0.4 * rand(x, z, 2))
+          let lo = Infinity
+          let hi = -Infinity
+          for (let a = 0; a < 8; a++) {
+            for (const f of [0, 0.5, 1]) {
+              const r = (f * Math.max(width, depth)) / 2
+              const h = ground(x + Math.cos((a * Math.PI) / 4) * r, z + Math.sin((a * Math.PI) / 4) * r)
+              lo = Math.min(lo, h)
+              hi = Math.max(hi, h)
+            }
+          }
+          const bottom = lo - BOULDER_SINK_M
+          const sy = (hi + size - bottom) / size3.y
+          pos.set(x, bottom - bb.min.y * sy, z)
+          scale.set(width / size3.x, sy, depth / size3.z)
+          this.addObstacle(x, z, Math.max(width, depth) * 0.45)
+        } else {
+          // Small stones: `size` is their size; half buried.
+          const half = size / 2
+          pos.set(x, ground(x, z) + half * 0.1, z)
+          scale.set(half * (1.0 + 0.3 * rand(x, z, 1)), half * 1.3, half * (0.85 + 0.3 * rand(x, z, 2)))
+        }
         mesh.setMatrixAt(i, matrix.compose(pos, quat, scale))
         const t = 0.85 + 0.3 * rand(x, z, 4)
         mesh.setColorAt(i, new THREE.Color(t, t, t))
-        if (size > 0.6) this.addObstacle(x, z, half * 1.1)
       })
       mesh.count = mine.length
       mesh.castShadow = true
@@ -165,6 +214,9 @@ export class MapFeatures {
       mesh.computeBoundingSphere()
       this.group.add(mesh)
     })
+
+    const ponds = data.points.filter(p => data.kinds[p[0]] === 'waterhole')
+    if (ponds.length) this.group.add(this.waterholes(ponds, ground))
 
     for (const [k, x, z, size, angle] of data.points) {
       const kind = data.kinds[k]
@@ -364,6 +416,40 @@ export class MapFeatures {
    * column is a profile: a rounded rock edge from the line out to the face, then a
    * near-vertical, uneven drop that ends below the ground. The ends are closed.
    */
+  /** Water surfaces in the waterholes' pits, just below the lowest point of the rim. */
+  private waterholes(ponds: FeatureFile['points'], ground: (x: number, z: number) => number): THREE.Mesh {
+    const positions: number[] = []
+    const indices: number[] = []
+    const sides = 20
+    for (const [, x, z, size] of ponds) {
+      const radius = size / 2
+      let rim = Infinity
+      for (let a = 0; a < 12; a++) {
+        const t = (a / 12) * Math.PI * 2
+        rim = Math.min(rim, ground(x + Math.cos(t) * (radius + 0.4), z + Math.sin(t) * (radius + 0.4)))
+      }
+      const level = rim - 0.06
+      const centre = positions.length / 3
+      positions.push(x, level, z)
+      for (let a = 0; a < sides; a++) {
+        const t = (a / sides) * Math.PI * 2
+        // An uneven shore; the ground hides what lies under the banks.
+        const r = radius * (0.9 + 0.25 * rand(x + a, z, 31))
+        positions.push(x + Math.cos(t) * r, level, z + Math.sin(t) * r)
+      }
+      for (let a = 0; a < sides; a++) indices.push(centre, centre + 1 + ((a + 1) % sides), centre + 1 + a)
+    }
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    geometry.setIndex(indices)
+    geometry.computeVertexNormals()
+    geometry.computeBoundingSphere()
+    const mesh = new THREE.Mesh(geometry, waterMaterial())
+    mesh.receiveShadow = true
+    mesh.name = 'waterholes'
+    return mesh
+  }
+
   private cliff(top: [number, number, number][], bottom: [number, number, number][]): THREE.BufferGeometry {
     const maxDrop = Math.max(...top.map((t, i) => t[1] - bottom[i]![1]), 0.5)
     // Profile rows: `out` along the face direction (in face widths) and either `lift`

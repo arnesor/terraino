@@ -14,7 +14,7 @@
 #   clear   width in metres of a tree-free strip along a line symbol
 #   order   drawing order; higher values are painted on top
 #   feature 3D object placed for the symbol: boulder, boulder_cluster, boulder_field,
-#           stones, cliff, rock_face, stone_wall, ruined_wall, fence, ruined_fence,
+#           stones, waterhole, cliff, rock_face, stone_wall, ruined_wall, fence, ruined_fence,
 #           power_line, pylon_line, tower, cairn, fodder_rack, ruin, footbridge
 #   size    size of the feature in metres (boulder height, tower height, wall height)
 #   track   roads and paths drawn as their own strip on the terrain, with sharp edges:
@@ -33,10 +33,11 @@ name = "ISOM 2000"
 "201" = { feature = "cliff", speed = 0 }
 "202" = { ground = "rock", trees = "none", speed = 0, order = 32, feature = "boulder_cluster", size = 3 }
 "203" = { feature = "rock_face" }
-"206" = { feature = "boulder", size = 1.3 }
-"207" = { feature = "boulder", size = 2.6 }
+# Boulder sizes are their least height: a boulder at least 1 m, a large one 2 m.
+"206" = { feature = "boulder", size = 1.0 }
+"207" = { feature = "boulder", size = 2.0 }
 "208" = { ground = "stony", speed = 0.6, order = 30, feature = "boulder_field" }
-"209" = { feature = "boulder_cluster", size = 1.2 }
+"209" = { feature = "boulder_cluster", size = 1.0 }
 "210" = { ground = "stony", speed = 0.8, order = 30, feature = "stones" }
 "211" = { ground = "sand", trees = "none", speed = 0.8, order = 30 }
 "212" = { ground = "rock", trees = "none", speed = 0.95, order = 31 }
@@ -44,6 +45,8 @@ name = "ISOM 2000"
 # Water and marsh
 "301" = { ground = "water", trees = "none", speed = 0, order = 60 }
 "302" = { ground = "water", trees = "none", speed = 0, order = 60 }
+# Waterhole: a small pond (point symbol); size is its diameter.
+"303" = { ground = "water", trees = "none", speed = 0.3, order = 60, feature = "waterhole", size = 4 }
 "304" = { ground = "water", trees = "none", speed = 0, width = 6, clear = 8, order = 61 }
 "305" = { ground = "water", speed = 0.5, width = 2, clear = 3, order = 61, track = "stream" }
 "306" = { ground = "water", speed = 0.7, width = 0.8, clear = 1.5, order = 61, track = "small_stream" }

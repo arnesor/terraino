@@ -158,3 +158,31 @@ def test_poles_on_registered_masts() -> None:
     # and an end pole 90 m past the last mast.
     assert xs == [10, 75, 134, 192, 251, 310, 400]
     assert other.poles == ()
+
+
+@pytest.mark.parametrize(
+    ("key", "boulder", "large", "cluster", "waterhole"),
+    [
+        ("isom2000", "206", "207", "209", "303"),
+        ("isom2017", "204", "205", "207", "303"),
+    ],
+)
+def test_boulders_are_high_enough_and_waterholes_hold_water(
+    key: str, boulder: str, large: str, cluster: str, waterhole: str
+) -> None:
+    symbols = SymbolSet.load(key)
+    found, _ = collect_features(
+        [
+            feature(i, f"{sym}.0", point(10 + 10 * i, 50))
+            for i, sym in enumerate([boulder, large, cluster, waterhole])
+        ],
+        symbols,
+    )
+    by_kind: dict[str, list[float]] = {}
+    for p in found.points:
+        by_kind.setdefault(p.kind, []).append(p.size)
+    boulders = sorted(by_kind["boulder"])
+    assert len(boulders) == 1 + 1 + 4  # the cluster has several
+    assert min(boulders) >= 1.0
+    assert max(boulders) >= 2.0  # the large boulder
+    assert by_kind["waterhole"] == [4.0]

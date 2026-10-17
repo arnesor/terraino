@@ -32,6 +32,7 @@ from otest.process.features import (
     Features,
     PointFeature,
     carve_cliffs,
+    carve_waterholes,
     collect_features,
     measure_cliffs,
     paint_cliffs,
@@ -390,6 +391,7 @@ def _add_nature_and_buildings(
             if masts and topo_buildings.ATTRIBUTION not in world.attribution:
                 world.attribution = [*world.attribution, topo_buildings.ATTRIBUTION]
         carve_cliffs(dtm, objects.cliffs, extent)
+        carve_waterholes(dtm, layers, objects.points, extent)
         paint_cliffs(layers, objects.cliffs, extent)
         world.features = objects
         log.info(
