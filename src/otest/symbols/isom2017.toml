@@ -35,7 +35,9 @@ name = "ISOM 2017-2"
 "401" = { ground = "open", trees = "lidar", speed = 1.0, order = 10 }
 # Scattered trees, as 404.
 "402" = { ground = "open", trees = "scattered", speed = 1.0, order = 10 }
-"403" = { ground = "rough", trees = "none", speed = 0.85, order = 11 }
+# Rough open land has no trees, but narrow strips of it (verges, field edges) keep
+# the laser's trees: often a row of trees the mapper drew as part of the verge.
+"403" = { ground = "rough", trees = "none", narrow_trees = "lidar", speed = 0.85, order = 11 }
 # Scattered trees: often a cut with seed trees left, newer than the laser data.
 "404" = { ground = "rough", trees = "scattered", speed = 0.85, order = 11 }
 "405" = { ground = "forest", speed = 1.0, order = 12 }
@@ -51,9 +53,9 @@ name = "ISOM 2017-2"
 
 # Roads, paths and other man-made features
 "501" = { ground = "paved", trees = "none", speed = 1.0, order = 85 }
-"502" = { ground = "paved", trees = "none", width = 8, clear = 14, order = 82, speed = 1.0, track = "paved" }
-"503" = { ground = "gravel", trees = "none", width = 4, clear = 7, order = 80, speed = 1.0, track = "gravel" }
-"504" = { ground = "gravel", width = 2.5, clear = 4, order = 79, speed = 1.0, track = "vehicle_track" }
+"502" = { ground = "paved", trees = "none", width = 8, clear = 9, order = 82, speed = 1.0, track = "paved" }
+"503" = { ground = "gravel", trees = "none", width = 4, clear = 5, order = 80, speed = 1.0, track = "gravel" }
+"504" = { ground = "gravel", width = 2.5, clear = 3.5, order = 79, speed = 1.0, track = "vehicle_track" }
 "505" = { ground = "path", width = 1.0, clear = 2, order = 78, speed = 1.0, track = "path" }
 "506" = { ground = "path", width = 0.6, clear = 1.5, order = 77, speed = 1.0, track = "small_path" }
 "507" = { ground = "path", width = 0.4, clear = 1, order = 76, speed = 1.0, track = "faint_path" }

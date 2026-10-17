@@ -248,6 +248,8 @@ def test_measure_buildings_with_laser_surface() -> None:
         fine=fine,
     )
     assert house.roof_type == "hip"
+    assert len(house.parts) == 1  # measured as one wing, hipped at both ends
+    assert house.parts[0].hips == (True, True)
     assert house.wall == pytest.approx(3.5, abs=0.3)
     assert house.wall + house.roof == pytest.approx(6.0, abs=0.3)
     assert abs(math.sin(house.ridge)) < 0.05  # ridge east-west

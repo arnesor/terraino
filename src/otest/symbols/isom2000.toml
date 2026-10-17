@@ -6,6 +6,7 @@
 #   trees   "keep" (laser canopy trees, plus smaller trees below the canopy up to the
 #           SR16 count), "lidar" (only the trees the laser finds), "scattered" (a few
 #           of the laser's trees, the tallest, far apart) or "none"
+#   narrow_trees  tree rule instead for long, narrow areas (verges, field edges)
 #   young   young trees added per 100 m², making the forest denser
 #   shrubs  undergrowth density, 0..1
 #   speed   running speed factor, 1 = easy forest floor, 0 = impassable
@@ -59,7 +60,9 @@ name = "ISOM 2000"
 "402" = { ground = "open", trees = "scattered", speed = 1.0, order = 10 }
 # Rough open land: felled areas, heath and new plantations, no trees above about 1 m
 # (scattered trees are mapped with 404).
-"403" = { ground = "rough", trees = "none", speed = 0.85, order = 11 }
+# Rough open land has no trees, but narrow strips of it (verges, field edges) keep
+# the laser's trees: often a row of trees the mapper drew as part of the verge.
+"403" = { ground = "rough", trees = "none", narrow_trees = "lidar", speed = 0.85, order = 11 }
 # Scattered trees: often a cut with seed trees left, newer than the laser data.
 "404" = { ground = "rough", trees = "scattered", speed = 0.85, order = 11 }
 "405" = { ground = "forest", speed = 1.0, order = 12 }
@@ -74,17 +77,17 @@ name = "ISOM 2000"
 "415" = { ground = "field", trees = "lidar", speed = 0.6, order = 15 }
 
 # Roads, paths and other man-made features
-"501" = { ground = "paved", trees = "none", width = 12, clear = 20, order = 82, speed = 1.0, track = "paved" }
-"502" = { ground = "paved", trees = "none", width = 8, clear = 14, order = 82, speed = 1.0, track = "paved" }
-"503" = { ground = "paved", trees = "none", width = 5.5, clear = 9, order = 81, speed = 1.0, track = "paved" }
-"504" = { ground = "gravel", trees = "none", width = 4, clear = 7, order = 80, speed = 1.0, track = "gravel" }
-"505" = { ground = "gravel", width = 2.5, clear = 4, order = 79, speed = 1.0, track = "vehicle_track" }
+"501" = { ground = "paved", trees = "none", width = 12, clear = 13, order = 82, speed = 1.0, track = "paved" }
+"502" = { ground = "paved", trees = "none", width = 8, clear = 9, order = 82, speed = 1.0, track = "paved" }
+"503" = { ground = "paved", trees = "none", width = 5.5, clear = 6.5, order = 81, speed = 1.0, track = "paved" }
+"504" = { ground = "gravel", trees = "none", width = 4, clear = 5, order = 80, speed = 1.0, track = "gravel" }
+"505" = { ground = "gravel", width = 2.5, clear = 3.5, order = 79, speed = 1.0, track = "vehicle_track" }
 "506" = { ground = "path", width = 1.0, clear = 2, order = 78, speed = 1.0, track = "path" }
 "507" = { ground = "path", width = 0.6, clear = 1.5, order = 77, speed = 1.0, track = "small_path" }
 "508" = { ground = "path", width = 0.4, clear = 1, order = 76, speed = 1.0, track = "faint_path" }
 # Narrow ride: drawn like a less distinct small path, in a 4 m tree-free corridor.
 "509" = { ground = "path", width = 1.0, clear = 4, order = 75, speed = 1.0, track = "faint_path" }
-"509.2" = { ground = "gravel", width = 4, clear = 6, order = 80, speed = 1.0, track = "gravel" }
+"509.2" = { ground = "gravel", width = 4, clear = 5, order = 80, speed = 1.0, track = "gravel" }
 "512" = { feature = "footbridge" }
 "513" = { ground = "gravel", trees = "none", width = 5, clear = 12, order = 81 }
 "515" = { clear = 12, feature = "power_line" }

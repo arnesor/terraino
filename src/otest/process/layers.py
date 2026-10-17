@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -21,6 +21,9 @@ log = logging.getLogger(__name__)
 
 # Lines narrower than this are widened so they stay connected on the 1 m grid.
 MIN_RASTER_WIDTH_M = 1.2
+# Areas narrower than this (on average) and elongated count as narrow strips.
+NARROW_STRIP_M = 8.0
+NARROW_ELONGATION = 18.0  # perimeter² / area; 18 is a 2:1 rectangle
 
 TREES_KEEP = 0
 TREES_NONE = 1
@@ -69,6 +72,22 @@ class _Shape:
     is_area: bool
 
 
+def is_narrow(polygon: Polygon) -> bool:
+    """True for a long, narrow area: under NARROW_STRIP_M wide on average, elongated.
+
+    Examples:
+        >>> from shapely import box
+        >>> is_narrow(box(0, 0, 60, 4)), is_narrow(box(0, 0, 15, 15))
+        (True, False)
+    """
+    if polygon.area <= 0:
+        return False
+    width = 2 * polygon.area / polygon.length
+    return (
+        width < NARROW_STRIP_M and polygon.length**2 / polygon.area > NARROW_ELONGATION
+    )
+
+
 def _shapes(
     features: Iterable[Mapping[str, Any]], symbols: SymbolSet
 ) -> tuple[list[_Shape], list[BaseGeometry], set[str]]:
@@ -87,7 +106,14 @@ def _shapes(
             continue
         if isinstance(geometry, Polygon | MultiPolygon):
             if rule.ground is not None or rule.overprint:
-                shapes.append(_Shape(geometry, rule, is_area=True))
+                if rule.narrow_trees is not None:
+                    parts = list(getattr(geometry, "geoms", [geometry]))
+                    narrow = replace(rule, trees=rule.narrow_trees)
+                    for part in parts:
+                        own = narrow if is_narrow(part) else rule
+                        shapes.append(_Shape(part, own, is_area=True))
+                else:
+                    shapes.append(_Shape(geometry, rule, is_area=True))
         elif isinstance(geometry, LineString | MultiLineString):
             if rule.ground is not None and rule.width is not None:
                 width = max(rule.width, MIN_RASTER_WIDTH_M)

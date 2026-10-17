@@ -289,6 +289,25 @@ def _write_buildings(
                 "wallColor": b.wall_color,
                 "roofColor": b.roof_color,
                 "kind": b.kind,
+                # Wings measured in a laser point cloud, each with its own roof.
+                "parts": [
+                    {
+                        "type": p.roof_type,
+                        "centre": [
+                            round(p.centre[0] - ox, 2),
+                            round(oz - p.centre[1], 2),
+                        ],
+                        "axis": [
+                            round(math.cos(p.angle), 4),
+                            round(-math.sin(p.angle), 4),
+                        ],
+                        "half": [round(p.half_length, 2), round(p.half_width, 2)],
+                        "eave": round(p.eave, 2),
+                        "ridge": round(p.ridge, 2),
+                        "hips": list(p.hips),
+                    }
+                    for p in b.parts
+                ],
             }
         )
     (out_dir / "buildings.json").write_text(json.dumps(records), encoding="utf-8")

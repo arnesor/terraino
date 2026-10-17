@@ -26,7 +26,9 @@ and run through it in the browser like in a first-person game.
   thinned on open land and made denser where the map shows green.
 - With a laser point cloud: sharper tree positions and true heights, each tree's crown
   size and how far down its live branches reach, undergrowth where the laser hits it,
-  and roof shapes (flat, shed, gable, hip) with eave and ridge heights.
+  and roofs split into their planes, giving wings with gable, hipped, shed and flat
+  roofs (cross gables, L- and T-shaped houses) and their eave and ridge heights.
+- Buildings with textured walls (cladding with windows, boards, logs) and roof tiles.
 - Ground from the map (forest floor, open land, marsh, fields, paths, roads, water),
   and from NIBIO AR5 land cover outside the map.
 - Buildings from OpenStreetMap and the map, with heights and gable roofs

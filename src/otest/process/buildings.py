@@ -1,8 +1,9 @@
 """Buildings with heights and roofs measured from the laser surface model.
 
-With a laser point cloud the roof shape is measured too: the fine surface heights inside
-each footprint are fitted with flat, shed, gable and hip roofs, and the best fit gives
-the roof type, the ridge direction and the eave and ridge heights.
+With a laser point cloud the roof shape is measured too: the fine surface inside each
+footprint is split into roof planes by the way it faces (otest.process.roofs), giving
+wings with gable, hipped, shed and flat roofs. Where that does not explain the surface,
+a single flat, shed, gable or hip roof is fitted to the whole footprint.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from shapely.geometry.base import BaseGeometry
 from otest.fetch.osm import OsmFeature
 from otest.ingest.georef import Extent
 from otest.process.geometry import to_geometry
+from otest.process.roofs import RoofPart, robust_fit, segment_roof
 from otest.process.symbols import Ground, SymbolSet
 
 MIN_AREA_M2 = 4.0
@@ -86,6 +88,8 @@ class Building:
         roof_color: Roof colour, sRGB hex.
         kind: house, garage, shed, barn, farm_auxiliary, cabin or other.
         source: ``"osm"`` or ``"map"``.
+        parts: The roof's wings, measured in a laser point cloud; when given, they
+            replace ``roof``, ``roof_type`` and ``ridge``, which describe the largest.
     """
 
     footprint: Polygon
@@ -98,6 +102,7 @@ class Building:
     roof_color: str
     kind: str
     source: str
+    parts: tuple[RoofPart, ...] = ()
 
 
 def building_kind(tags: Mapping[str, str]) -> str:
@@ -178,29 +183,6 @@ class RoofFit:
     rms: float
 
 
-def _robust_fit(
-    feature: npt.NDArray[np.float64] | None, z: npt.NDArray[np.float64]
-) -> tuple[float, float, float]:
-    """Fit ``z = a + b * feature`` (or ``z = a``), ignoring chimneys and overhanging trees.
-
-    Returns:
-        ``a``, ``b`` and the RMS of the residuals of the points kept.
-    """
-    ones = np.ones_like(z)
-    design = ones[:, None] if feature is None else np.column_stack([ones, feature])
-    keep = np.ones(len(z), dtype=bool)
-    coef = np.zeros(design.shape[1])
-    for _ in range(2):
-        coef = np.linalg.lstsq(design[keep], z[keep], rcond=None)[0]
-        residual = z - design @ coef
-        mad = float(np.median(np.abs(residual[keep])))
-        keep = np.abs(residual) <= max(3 * 1.4826 * mad, 0.25)
-        if keep.sum() < max(0.7 * len(z), 4):
-            return float(coef[0]), 0.0, math.inf
-    rms = float(np.sqrt(np.mean((z[keep] - design[keep] @ coef) ** 2)))
-    return float(coef[0]), float(coef[1]) if len(coef) > 1 else 0.0, rms
-
-
 def fit_roof(
     x: npt.NDArray[np.float64],
     y: npt.NDArray[np.float64],
@@ -249,13 +231,13 @@ def fit_roof(
     u = dx * cos + dy * sin  # along the long axis
     w = dx * sin - dy * cos  # across it: u turned clockwise
 
-    a, _, flat_rms = _robust_fit(None, z)
+    a, _, flat_rms = robust_fit(None, z)
     fits: list[RoofFit] = [RoofFit("flat", a, a, theta, flat_rms)]
 
     def ridge_fits(across: npt.NDArray[np.float64], half: float, angle: float) -> None:
         best: RoofFit | None = None
         for shift in (-0.2, -0.1, 0.0, 0.1, 0.2):
-            ridge, slope, rms = _robust_fit(-np.abs(across - shift * half), z)
+            ridge, slope, rms = robust_fit(-np.abs(across - shift * half), z)
             if slope >= MIN_PITCH and (best is None or rms < best.rms):
                 best = RoofFit("gable", ridge - slope * half, ridge, angle, rms)
         if best is not None:
@@ -263,11 +245,11 @@ def fit_roof(
 
     ridge_fits(w, hw, theta)  # ridge along the long axis
     ridge_fits(u, hu, theta + math.pi / 2)  # ridge across it
-    ridge, slope, rms = _robust_fit(-np.maximum(np.abs(w), np.abs(u) - (hu - hw)), z)
+    ridge, slope, rms = robust_fit(-np.maximum(np.abs(w), np.abs(u) - (hu - hw)), z)
     if slope >= MIN_PITCH:
         fits.append(RoofFit("hip", ridge - slope * hw, ridge, theta, rms))
     for along, half, high in ((w, hw, theta), (u, hu, theta + math.pi / 2)):
-        middle, slope, rms = _robust_fit(along, z)
+        middle, slope, rms = robust_fit(along, z)
         if abs(slope) >= MIN_PITCH:
             angle = high if slope > 0 else high + math.pi
             rise = abs(slope) * half
@@ -317,6 +299,67 @@ def _roof_samples(
     rows, cols = rows.ravel()[inside], cols.ravel()[inside]
     z = surface[rows, cols].astype(np.float64) + dtm[rows // fine, cols // fine]
     return x[inside], y[inside], z
+
+
+def _roof_patch(
+    footprint: Polygon,
+    surface: npt.NDArray[np.float32],
+    dtm: npt.NDArray[np.float32],
+    extent: Extent,
+    fine: int,
+    base: float,
+) -> list[RoofPart] | None:
+    """Roof parts from the fine surface inside the footprint (see segment_roof)."""
+    inner = footprint.buffer(-ROOF_INSET_M)
+    if inner.is_empty or inner.area < 4:
+        return None
+    x0, y0, x1, y1 = footprint.bounds
+    c0 = max(int((x0 - extent.x0) * fine) - 1, 0)
+    c1 = min(int(np.ceil((x1 - extent.x0) * fine)) + 1, surface.shape[1])
+    r0 = max(int((extent.y1 - y1) * fine) - 1, 0)
+    r1 = min(int(np.ceil((extent.y1 - y0) * fine)) + 1, surface.shape[0])
+    if r1 - r0 < 3 or c1 - c0 < 3:
+        return None
+    rows, cols = np.mgrid[r0:r1, c0:c1]
+    x = extent.x0 + (cols + 0.5) / fine
+    y = extent.y1 - (rows + 0.5) / fine
+    z = (
+        surface[r0:r1, c0:c1].astype(np.float64)
+        + dtm[rows // fine, cols // fine]
+        - base
+    )
+    valid = shapely.contains_xy(inner, x, y) & (z >= MIN_ROOF_HEIGHT_M)
+    if valid.sum() < MIN_ROOF_CELLS:
+        return None
+    rect = footprint.minimum_rotated_rectangle
+    centre = rect.centroid if isinstance(rect, Polygon) else footprint.centroid
+    axis, _ = _ridge_angle(footprint)
+    ox, oy = np.asarray(footprint.exterior.coords).T
+    parts = segment_roof(
+        z,
+        valid,
+        x - centre.x,
+        y - centre.y,
+        axis,
+        ox - centre.x,
+        oy - centre.y,
+        1.0 / fine,
+    )
+    if parts is None:
+        return None
+    return [
+        RoofPart(
+            p.roof_type,
+            (p.centre[0] + centre.x, p.centre[1] + centre.y),
+            p.angle,
+            p.half_length,
+            p.half_width,
+            p.eave,
+            p.ridge,
+            p.hips,
+        )
+        for p in parts
+    ]
 
 
 def collect_footprints(
@@ -414,18 +457,29 @@ def measure_buildings(
             top = eave = 0.0
 
         angle, fill = _ridge_angle(poly)
+        parts: list[RoofPart] | None = None
         fit = None
         if surface is not None:
-            x, y, z = _roof_samples(poly, surface, dtm, extent, fine)
-            keep = z - base >= MIN_ROOF_HEIGHT_M
-            fit = fit_roof(x[keep], y[keep], z[keep], poly)
+            parts = _roof_patch(poly, surface, dtm, extent, fine, base)
+            if not parts:
+                x, y, z = _roof_samples(poly, surface, dtm, extent, fine)
+                keep = z - base >= MIN_ROOF_HEIGHT_M
+                fit = fit_roof(x[keep], y[keep], z[keep], poly)
         roof_type = "flat"
-        if fit is not None and fit.ridge - base >= 2.0:
+        if parts:
+            # Wings measured in the point cloud; the walls reach the lowest eaves.
+            main = max(parts, key=lambda p: p.area)
+            wall = float(np.clip(min(p.eave for p in parts), 2.0, 25.0))
+            roof = float(np.clip(main.ridge - wall, 0.0, 9.0))
+            angle = main.angle
+            roof_type = main.roof_type
+            if roof_type == "gable" and all(main.hips):
+                roof_type = "hip"
+        elif fit is not None and fit.ridge - base >= 2.0:
             # Pitched roofs over irregular outlines are drawn flat, at half the rise.
-            pitched = fit.roof_type != "flat" and fill >= RECTANGULAR
             wall = float(np.clip(fit.eave - base, 2.0, 25.0))
             roof = float(np.clip(fit.ridge - base - wall, 0.0, 9.0))
-            if pitched:
+            if fit.roof_type != "flat" and fill >= RECTANGULAR:
                 roof_type, angle = fit.roof_type, fit.angle
             else:
                 wall, roof = max(wall + roof * 0.5, 2.2), 0.0
@@ -455,6 +509,7 @@ def measure_buildings(
                 roof_color=_pick(_ROOFS, ident + "roof"),
                 kind=kind,
                 source=source,
+                parts=tuple(parts or ()),
             )
         )
     return buildings

@@ -128,7 +128,7 @@ async function main() {
     : null
   if (undergrowth) undergrowth.tracks = tracks
   if (undergrowth) scene.add(undergrowth.group)
-  const buildings = await loadBuildings(world)
+  const buildings = await loadBuildings(world, gfx)
   if (buildings) scene.add(buildings)
   const features = await MapFeatures.load(world, heights, gfx)
   if (features && undergrowth) undergrowth.setStumps(features.stumps)

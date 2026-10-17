@@ -100,6 +100,9 @@ class SymbolRule:
     Attributes:
         ground: Ground class painted by the symbol, or None.
         trees: What happens to trees from the laser canopy under the symbol.
+        narrow_trees: Tree rule instead of ``trees`` for long, narrow areas (see
+            otest.process.layers.is_narrow), or None: mappers often draw a row of
+            trees along a road or field as a strip of the open land around it.
         young: Young trees added per 100 m².
         shrubs: Undergrowth density, 0..1.
         speed: Running speed factor, or None to leave it unchanged.
@@ -117,6 +120,7 @@ class SymbolRule:
 
     ground: Ground | None = None
     trees: TreeRule = "keep"
+    narrow_trees: TreeRule | None = None
     young: float = 0.0
     shrubs: float = 0.0
     speed: float | None = None
@@ -145,9 +149,10 @@ class SymbolRule:
         if values.get("feature") is not None and values["feature"] not in FEATURES:
             msg = f"Unknown feature {values['feature']!r}"
             raise ValueError(msg)
-        if values.get("trees", "keep") not in ("keep", "none", "lidar", "scattered"):
-            msg = f"Unknown trees rule {values['trees']!r}"
-            raise ValueError(msg)
+        for key in ("trees", "narrow_trees"):
+            if values.get(key, "keep") not in ("keep", "none", "lidar", "scattered"):
+                msg = f"Unknown trees rule {values[key]!r}"
+                raise ValueError(msg)
         return cls(**values)
 
 

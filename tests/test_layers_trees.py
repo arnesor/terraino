@@ -258,3 +258,14 @@ def test_scattered_trees_are_few_and_far_apart() -> None:
         layers.tree_rule[trees.row.astype(int), trees.col.astype(int)] == TREES_KEEP
     )
     assert outside.sum() > len(x) * 5
+
+
+def test_narrow_rough_open_land_keeps_laser_trees() -> None:
+    features = [
+        area(0, "403.0", box(20, 20, 80, 24)),  # a 4 m verge along a road
+        area(1, "403.0", box(20, 40, 60, 80)),  # a large clearing
+    ]
+    layers = rasterize_map(features, ISOM, EXTENT, MAP_AREA)
+    assert layers.tree_rule[cell(50, 22)] == TREES_LIDAR
+    assert layers.tree_rule[cell(40, 60)] == TREES_NONE
+    assert layers.ground[cell(50, 22)] == Ground.ROUGH
