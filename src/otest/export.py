@@ -9,6 +9,7 @@ Layout of a world folder::
     trees/{cx}_{cy}.bin         the trees standing in a chunk, TREE_DTYPE records
     buildings.json              building footprints, heights, roofs and colours
     features.json               rocks, cliffs, walls, fences and other map features
+    tracks.json                 roads and paths as lines with a style and width
     drape/{cx}_{cy}.jpg         orienteering map texture for one chunk
     drape_overview.jpg          low-resolution map texture of the whole world
     map.jpg                     the orienteering map, for the in-game map view
@@ -49,6 +50,7 @@ from otest.process.buildings import Building
 from otest.process.features import Features
 from otest.process.layers import GroundLayers
 from otest.process.symbols import Ground
+from otest.process.tracks import Track
 from otest.process.trees import Trees
 
 FORMAT_VERSION = 2
@@ -121,6 +123,7 @@ class WorldData:
         trees: Trees to plant, or None.
         buildings: Buildings to raise, or None.
         features: Rocks, cliffs, walls and other map features, or None.
+        tracks: Roads and paths, or None.
     """
 
     name: str
@@ -140,6 +143,7 @@ class WorldData:
     trees: Trees | None = None
     buildings: Sequence[Building] | None = None
     features: Features | None = None
+    tracks: Sequence[Track] | None = None
 
 
 def _chunk(grid: npt.NDArray[Any], cx: int, cy: int) -> npt.NDArray[Any]:
@@ -175,6 +179,7 @@ def encode_layers(
 
     Examples:
         >>> from otest.process.layers import GroundLayers
+    from otest.process.tracks import Track
         >>> one = np.ones((1, 1), dtype=np.float32)
         >>> layers = GroundLayers(
         ...     ground=np.full((1, 1), 4, np.uint8), speed=one * 0.6, young=one * 0,
@@ -315,6 +320,20 @@ def _write_features(out_dir: Path, features: Features, extent: Extent) -> None:
     (out_dir / "features.json").write_text(json.dumps(data), encoding="utf-8")
 
 
+def _write_tracks(out_dir: Path, tracks: Sequence[Track], extent: Extent) -> None:
+    ox = extent.x0 + HEIGHT_STEP_M / 2
+    oz = extent.y1 - HEIGHT_STEP_M / 2
+    data = [
+        {
+            "kind": t.kind,
+            "width": t.width,
+            "points": [[round(x - ox, 2), round(oz - y, 2)] for x, y in t.coords],
+        }
+        for t in tracks
+    ]
+    (out_dir / "tracks.json").write_text(json.dumps(data), encoding="utf-8")
+
+
 def _write_drape(
     out_dir: Path, drape_png: Path, px_per_m: float, chunks: tuple[int, int]
 ) -> int:
@@ -435,6 +454,9 @@ def write_world(out_dir: Path, world: WorldData) -> Path:
             "path": "buildings.json",
             "count": len(world.buildings),
         }
+    if world.tracks is not None:
+        _write_tracks(out_dir, world.tracks, extent)
+        manifest["tracks"] = {"path": "tracks.json", "count": len(world.tracks)}
     if world.features is not None:
         _write_features(out_dir, world.features, extent)
         manifest["features"] = {

@@ -29,6 +29,8 @@ and run through it in the browser like in a first-person game.
 - Buildings from OpenStreetMap and the map, with heights and gable roofs
   measured from the laser data.
 - Boulders, cliffs, stone walls, fences, power lines and towers from the map.
+- Roads and paths drawn as their own soft-edged strips on the terrain,
+  with distinct junctions joined and nothing growing on them.
 - Browser viewer (Three.js): walk, run and fly, with shadows, runnability,
   a compass, the orienteering map with your position, and courses with timing.
 

@@ -14,6 +14,42 @@ from importlib import resources
 from typing import Any, Literal
 
 TreeRule = Literal["keep", "none", "lidar"]
+TRACKS = frozenset(
+    {
+        "paved",
+        "gravel",
+        "vehicle_track",
+        "path",
+        "small_path",
+        "faint_path",
+        "stream",
+        "small_stream",
+        "water_channel",
+    }
+)
+# Words in a symbol's name (in the map file) that mark mapper's helper symbols, such as
+# construction lines; they are not part of the terrain.
+HELPER_WORDS = (
+    "hjelpelinje",
+    "hjelpe",
+    "helper",
+    "help line",
+    "construction",
+    "konstruksjon",
+)
+
+
+def is_helper_symbol(description: str) -> bool:
+    """True for a mapper's helper symbol, judged by its name in the map file.
+
+    Examples:
+        >>> is_helper_symbol("Hjelpelinje kurver"), is_helper_symbol("Minor water channel")
+        (True, False)
+    """
+    name = description.lower()
+    return any(word in name for word in HELPER_WORDS)
+
+
 FEATURES = frozenset(
     {
         "boulder",
@@ -74,6 +110,9 @@ class SymbolRule:
         size: Size of the feature in metres, or None for its default.
         overprint: The symbol is drawn on top of other areas (undergrowth patterns):
             it adds its shrubs and speed but keeps the ground and trees below.
+        track: Style of a road or path drawn as its own strip on the terrain (see
+            TRACKS), or None. Such lines set speed and clear trees, but do not paint
+            the ground layer.
     """
 
     ground: Ground | None = None
@@ -87,6 +126,7 @@ class SymbolRule:
     feature: str | None = None
     size: float | None = None
     overprint: bool = False
+    track: str | None = None
 
     @classmethod
     def from_table(cls, entry: Mapping[str, Any]) -> SymbolRule:
@@ -99,6 +139,9 @@ class SymbolRule:
         values = dict(entry)
         if "ground" in values:
             values["ground"] = Ground[str(values["ground"]).upper()]
+        if values.get("track") is not None and values["track"] not in TRACKS:
+            msg = f"Unknown track {values['track']!r}"
+            raise ValueError(msg)
         if values.get("feature") is not None and values["feature"] not in FEATURES:
             msg = f"Unknown feature {values['feature']!r}"
             raise ValueError(msg)
@@ -130,8 +173,8 @@ class SymbolSet:
 
         Examples:
             >>> isom = SymbolSet.load("isom2000")
-            >>> isom.rule("509.2").ground.name, isom.rule("509.1").ground.name
-            ('GRAVEL', 'ROUGH')
+            >>> isom.rule("509.2").track, isom.rule("509.1").track
+            ('gravel', 'faint_path')
             >>> isom.rule("801.3") is None
             True
         """

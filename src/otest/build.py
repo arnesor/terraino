@@ -38,7 +38,8 @@ from otest.process.fuse import (
 from otest.process.heights import fill_missing
 from otest.process.layers import GroundLayers, rasterize_map
 from otest.process.maparea import find_map_area
-from otest.process.symbols import Ground, SymbolSet, detect_symbol_set
+from otest.process.symbols import Ground, SymbolSet, detect_symbol_set, is_helper_symbol
+from otest.process.tracks import collect_tracks
 from otest.process.trees import (
     canopy_height,
     effective_canopy,
@@ -135,7 +136,14 @@ def _ocad_source(map_path: Path, work: Path, options: BuildOptions) -> MapSource
         drape_px_per_m=DRAPE_PX_PER_M,
     )
     keep = set(area.keep_ids)
-    omap = [f for f in objects if f["properties"]["oid"] in keep]
+    helpers = {n for n, s in final.symbols.items() if is_helper_symbol(s.description)}
+    if helpers:
+        log.info("Ignoring helper symbols: %s", ", ".join(sorted(helpers)))
+    omap = [
+        f
+        for f in objects
+        if f["properties"]["oid"] in keep and f["properties"]["sym"] not in helpers
+    ]
 
     area_symbols = {
         s.number.split(".")[0] for s in final.symbols.values() if s.type == AREA_SYMBOL
@@ -304,6 +312,10 @@ def _add_nature_and_buildings(
         sum(b.roof_type == "gable" for b in buildings),
     )
     world.buildings = buildings
+    world.tracks = collect_tracks(
+        source.omap, source.symbols, osm_features, source.map_area
+    )
+    log.info("Drew %d roads and paths", len(world.tracks))
     if osm_features:
         world.attribution = [*world.attribution, osm.ATTRIBUTION]
 

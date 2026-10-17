@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { HeightField } from './heightfield'
 import { Ground, type LayerStore } from './layers'
+import type { Tracks } from './tracks'
 import { bushGeometry, tuftGeometry } from './treeModels'
 
 const BUSH_RADIUS = 60
@@ -48,6 +49,9 @@ export class Undergrowth {
   private readonly bushes: THREE.InstancedMesh
   private readonly tufts: THREE.InstancedMesh
   private builtAt: THREE.Vector3 | null = null
+
+  /** Roads and paths: nothing grows on them. */
+  tracks: Tracks | null = null
 
   constructor(layers: LayerStore, heights: HeightField) {
     this.layers = layers
@@ -103,6 +107,7 @@ export class Undergrowth {
           const bx = x + cellRandom(x, z, 2)
           const bz = z + cellRandom(x, z, 3)
           const size = 0.45 + cellRandom(x, z, 4) * 0.9 + s.shrubs * 0.4
+          if (this.tracks?.near(bx, bz, size * 0.6 + 0.4)) continue
           pos.set(bx, this.heights.heightAt(bx, bz) - 0.05, bz)
           quat.setFromAxisAngle(up, cellRandom(x, z, 5) * Math.PI * 2)
           scale.set(size, size * (0.8 + cellRandom(x, z, 6) * 0.5), size)
@@ -120,6 +125,7 @@ export class Undergrowth {
           const tx = x + cellRandom(x, z, 10 + k)
           const tz = z + cellRandom(x, z, 20 + k)
           const h = 0.2 + cellRandom(x, z, 30 + k) * 0.45
+          if (this.tracks?.near(tx, tz, 0.35)) continue
           pos.set(tx, this.heights.heightAt(tx, tz) - 0.02, tz)
           quat.setFromAxisAngle(up, cellRandom(x, z, 40 + k) * Math.PI)
           scale.set(h * 1.2, h, h * 1.2)

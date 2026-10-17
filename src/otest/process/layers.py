@@ -139,7 +139,7 @@ def rasterize_map(
         + [
             (s.geometry, int(s.rule.ground))
             for s in shapes
-            if s.rule.ground is not None
+            if s.rule.ground is not None and s.rule.track is None
         ],
         extent,
         int(Ground.UNKNOWN),

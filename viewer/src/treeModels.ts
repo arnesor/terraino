@@ -89,21 +89,23 @@ function clump(cx: number, cy: number, cz: number, rx: number, ry: number, color
 }
 
 function spruce(lod: LodLevel): THREE.BufferGeometry {
-  if (lod === 2) return mergeGeometries([branchLayer(0.08, 1, 1, 4, 1)])
+  if (lod === 2) return mergeGeometries([branchLayer(0.12, 1, 0.72, 4, 1)])
   if (lod === 1) {
     return mergeGeometries([
       trunk(0.15, 0.05, 4, () => SPRUCE_BARK),
-      branchLayer(0.1, 0.62, 1, 7, 1),
-      branchLayer(0.45, 1, 0.6, 7, 2),
+      branchLayer(0.14, 0.62, 0.72, 7, 1),
+      branchLayer(0.45, 1, 0.48, 7, 2),
     ])
   }
   const parts = [trunk(0.35, 0.05, 6, () => SPRUCE_BARK)]
   const layers = 7
   for (let i = 0; i < layers; i++) {
     const f = i / layers
-    const base = 0.08 + f * 0.8
+    // The lowest branches start a bit up the trunk and are the most shortened, so
+    // the view under the trees stays open.
+    const base = 0.13 + f * 0.75
     const top = Math.min(1, base + 0.3 - f * 0.08)
-    parts.push(branchLayer(base, top, 1.0 - f * 0.85, 10, i + 1))
+    parts.push(branchLayer(base, top, 0.72 - f * 0.58, 10, i + 1))
   }
   return mergeGeometries(parts)
 }

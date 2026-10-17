@@ -15,6 +15,9 @@
 #           stones, cliff, rock_face, stone_wall, ruined_wall, fence, ruined_fence,
 #           power_line, pylon_line, tower, cairn, fodder_rack, ruin, footbridge
 #   size    size of the feature in metres (boulder height, tower height, wall height)
+#   track   roads and paths drawn as their own strip on the terrain, with sharp edges:
+#           paved, gravel, vehicle_track, path, small_path, faint_path, or for water
+#           lines stream, small_stream and water_channel
 #   overprint  true for a pattern drawn on top of other areas (undergrowth): it only adds
 #           its shrubs and speed, and keeps the ground and trees of the area below
 #
@@ -40,9 +43,10 @@ name = "ISOM 2000"
 "301" = { ground = "water", trees = "none", speed = 0, order = 60 }
 "302" = { ground = "water", trees = "none", speed = 0, order = 60 }
 "304" = { ground = "water", trees = "none", speed = 0, width = 6, clear = 8, order = 61 }
-"305" = { ground = "water", speed = 0.5, width = 2, clear = 3, order = 61 }
-"306" = { ground = "water", speed = 0.7, width = 0.8, clear = 1.5, order = 61 }
-"307" = { ground = "marsh", speed = 0.8, width = 0.6, clear = 1, order = 41 }
+"305" = { ground = "water", speed = 0.5, width = 2, clear = 3, order = 61, track = "stream" }
+"306" = { ground = "water", speed = 0.7, width = 0.8, clear = 1.5, order = 61, track = "small_stream" }
+# Minor/seasonal water channel: a ditch, wet or with a trickle of water.
+"307" = { ground = "water", speed = 0.8, width = 0.8, clear = 1.5, order = 61, track = "water_channel" }
 "308" = { ground = "marsh", speed = 0.7, width = 2, order = 41 }
 "309" = { ground = "marsh", trees = "none", speed = 0.15, order = 42 }
 "310" = { ground = "marsh", speed = 0.6, order = 40 }
@@ -67,16 +71,17 @@ name = "ISOM 2000"
 "415" = { ground = "field", trees = "lidar", speed = 0.6, order = 15 }
 
 # Roads, paths and other man-made features
-"501" = { ground = "paved", trees = "none", width = 12, clear = 20, order = 82 }
-"502" = { ground = "paved", trees = "none", width = 8, clear = 14, order = 82 }
-"503" = { ground = "paved", trees = "none", width = 5.5, clear = 9, order = 81 }
-"504" = { ground = "gravel", trees = "none", width = 4, clear = 7, order = 80 }
-"505" = { ground = "gravel", width = 2.5, clear = 4, order = 79 }
-"506" = { ground = "path", width = 1.0, clear = 2, order = 78 }
-"507" = { ground = "path", width = 0.6, clear = 1.5, order = 77 }
-"508" = { ground = "path", width = 0.4, clear = 1, order = 76 }
-"509" = { ground = "rough", width = 3, clear = 4, order = 75 }
-"509.2" = { ground = "gravel", width = 4, clear = 6, order = 80 }
+"501" = { ground = "paved", trees = "none", width = 12, clear = 20, order = 82, speed = 1.0, track = "paved" }
+"502" = { ground = "paved", trees = "none", width = 8, clear = 14, order = 82, speed = 1.0, track = "paved" }
+"503" = { ground = "paved", trees = "none", width = 5.5, clear = 9, order = 81, speed = 1.0, track = "paved" }
+"504" = { ground = "gravel", trees = "none", width = 4, clear = 7, order = 80, speed = 1.0, track = "gravel" }
+"505" = { ground = "gravel", width = 2.5, clear = 4, order = 79, speed = 1.0, track = "vehicle_track" }
+"506" = { ground = "path", width = 1.0, clear = 2, order = 78, speed = 1.0, track = "path" }
+"507" = { ground = "path", width = 0.6, clear = 1.5, order = 77, speed = 1.0, track = "small_path" }
+"508" = { ground = "path", width = 0.4, clear = 1, order = 76, speed = 1.0, track = "faint_path" }
+# Narrow ride: drawn like a less distinct small path, in a 4 m tree-free corridor.
+"509" = { ground = "path", width = 1.0, clear = 4, order = 75, speed = 1.0, track = "faint_path" }
+"509.2" = { ground = "gravel", width = 4, clear = 6, order = 80, speed = 1.0, track = "gravel" }
 "512" = { feature = "footbridge" }
 "513" = { ground = "gravel", trees = "none", width = 5, clear = 12, order = 81 }
 "515" = { clear = 12, feature = "power_line" }

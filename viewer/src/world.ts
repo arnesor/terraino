@@ -56,6 +56,7 @@ export interface Manifest {
   trees?: TreeInfo
   buildings?: { path: string; count: number }
   features?: { path: string; points: number; lines: number; cliffs: number }
+  tracks?: { path: string; count: number }
 }
 
 export const SUPPORTED_FORMATS = [1, 2]

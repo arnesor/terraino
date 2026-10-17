@@ -154,7 +154,7 @@ def apply_osm(
     footprints: Iterable[Polygon],
     extent: Extent,
 ) -> None:
-    """Paint OSM roads and water outside the map, and building footprints everywhere."""
+    """Clear trees along OSM roads and paint water outside the map, buildings everywhere."""
     roads: list[tuple[BaseGeometry, float]] = []
     water: list[tuple[BaseGeometry, float]] = []
     for f in features:
@@ -174,7 +174,8 @@ def apply_osm(
             water.append((geometry.buffer(width / 2), int(Ground.WATER)))
 
     outside = ~layers.in_map
-    _paint(layers.ground, water + roads, extent, outside)
+    # Roads are drawn as their own strips (otest.process.tracks), not as ground.
+    _paint(layers.ground, water, extent, outside)
     clear = np.zeros_like(layers.clear)
     _paint(clear, [(g, 1) for g, _ in water + roads], extent, outside)
     layers.clear |= clear

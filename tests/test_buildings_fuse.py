@@ -109,7 +109,7 @@ def test_osm_roads_outside_map_and_buildings_everywhere() -> None:
     houses = [box(10, 10, 20, 20), box(70, 10, 80, 20)]
     apply_osm(layers, [road], houses, EXTENT)
     assert layers.ground[cell(25, 50)] == Ground.UNKNOWN  # inside the map: map decides
-    assert layers.ground[cell(75, 50)] == Ground.PAVED
+    assert layers.ground[cell(75, 50)] == Ground.UNKNOWN  # drawn as a strip
     assert layers.clear[cell(75, 50)]
     for x in (15, 75):
         assert layers.ground[cell(x, 15)] == Ground.BUILDING

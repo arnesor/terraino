@@ -56,3 +56,42 @@ def test_rough_open_land_has_no_trees(key: str) -> None:
     assert scattered is not None
     assert rough.trees == "none"
     assert scattered.trees == "lidar"
+
+
+@pytest.mark.parametrize(("key", "number"), [("isom2000", "509"), ("isom2017", "508")])
+def test_narrow_ride_is_a_faint_path(key: str, number: str) -> None:
+    symbols = SymbolSet.load(key)
+    ride = symbols.rule(number)
+    faint = symbols.rule("508" if key == "isom2000" else "507")
+    assert ride is not None
+    assert faint is not None
+    assert ride.track == faint.track == "faint_path"
+    assert ride.speed == 1.0
+    assert ride.clear is not None
+    assert ride.clear >= 4
+
+
+@pytest.mark.parametrize(
+    ("key", "stream", "small", "channel"),
+    [("isom2000", "305", "306", "307"), ("isom2017", "304", "305", "306")],
+)
+def test_water_lines_are_drawn_as_water(
+    key: str, stream: str, small: str, channel: str
+) -> None:
+    symbols = SymbolSet.load(key)
+    tracks = [symbols.rule(n) for n in (stream, small, channel)]
+    assert [r.track for r in tracks if r is not None] == [
+        "stream",
+        "small_stream",
+        "water_channel",
+    ]
+    assert all(r is not None and r.ground is Ground.WATER for r in tracks)
+
+
+def test_helper_symbols_are_recognised() -> None:
+    from otest.process.symbols import is_helper_symbol
+
+    assert is_helper_symbol("Hjelpelinje")
+    assert is_helper_symbol("Construction line")
+    assert not is_helper_symbol("Crossable small watercourse")
+    assert not is_helper_symbol("Slep - EN strek")

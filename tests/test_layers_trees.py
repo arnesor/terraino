@@ -60,7 +60,9 @@ def test_ground_classes(layers: GroundLayers) -> None:
     assert layers.ground[cell(15, 85)] == Ground.FOREST
     assert layers.ground[cell(30, 30)] == Ground.OPEN
     assert layers.ground[cell(25, 65)] == Ground.WATER
-    assert layers.ground[cell(50, 45)] == Ground.PATH
+    # Paths are drawn as strips by the viewer; the ground below keeps its class.
+    assert layers.ground[cell(50, 45)] == Ground.FOREST
+    assert layers.speed[cell(50, 45)] == pytest.approx(1.0)
     assert layers.ground[cell(65, 65)] == Ground.MARSH
 
 

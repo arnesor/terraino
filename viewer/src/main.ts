@@ -11,6 +11,7 @@ import { Hud } from './hud'
 import { decodePng, LayerStore } from './layers'
 import { Player } from './player'
 import { Terrain } from './terrain'
+import { Tracks } from './tracks'
 import { Undergrowth } from './undergrowth'
 import { listWorlds, World } from './world'
 
@@ -109,7 +110,10 @@ async function main() {
   const treeInfo = world.manifest.trees
   const forest = treeInfo ? new Forest(world, treeInfo, heights) : null
   if (forest) scene.add(forest.group)
+  const tracks = await Tracks.load(world, heights)
+  if (tracks) scene.add(tracks.group)
   const undergrowth = layers ? new Undergrowth(layers, heights) : null
+  if (undergrowth) undergrowth.tracks = tracks
   if (undergrowth) scene.add(undergrowth.group)
   const buildings = await loadBuildings(world)
   if (buildings) scene.add(buildings)

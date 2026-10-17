@@ -22,9 +22,10 @@ name = "ISOM 2017-2"
 "301" = { ground = "water", trees = "none", speed = 0, order = 60 }
 "302" = { ground = "water", trees = "none", speed = 0, order = 60 }
 "303" = { ground = "water", trees = "none", speed = 0.3, order = 60 }
-"304" = { ground = "water", speed = 0.5, width = 2, clear = 3, order = 61 }
-"305" = { ground = "water", speed = 0.7, width = 0.8, clear = 1.5, order = 61 }
-"306" = { ground = "marsh", speed = 0.8, width = 0.6, clear = 1, order = 41 }
+"304" = { ground = "water", speed = 0.5, width = 2, clear = 3, order = 61, track = "stream" }
+"305" = { ground = "water", speed = 0.7, width = 0.8, clear = 1.5, order = 61, track = "small_stream" }
+# Minor/seasonal water channel: a ditch, wet or with a trickle of water.
+"306" = { ground = "water", speed = 0.8, width = 0.8, clear = 1.5, order = 61, track = "water_channel" }
 "307" = { ground = "marsh", trees = "none", speed = 0.15, order = 42 }
 "308" = { ground = "marsh", speed = 0.6, order = 40 }
 "309" = { ground = "marsh", speed = 0.7, width = 2, order = 41 }
@@ -48,13 +49,14 @@ name = "ISOM 2017-2"
 
 # Roads, paths and other man-made features
 "501" = { ground = "paved", trees = "none", speed = 1.0, order = 85 }
-"502" = { ground = "paved", trees = "none", width = 8, clear = 14, order = 82 }
-"503" = { ground = "gravel", trees = "none", width = 4, clear = 7, order = 80 }
-"504" = { ground = "gravel", width = 2.5, clear = 4, order = 79 }
-"505" = { ground = "path", width = 1.0, clear = 2, order = 78 }
-"506" = { ground = "path", width = 0.6, clear = 1.5, order = 77 }
-"507" = { ground = "path", width = 0.4, clear = 1, order = 76 }
-"508" = { ground = "rough", width = 3, clear = 4, order = 75 }
+"502" = { ground = "paved", trees = "none", width = 8, clear = 14, order = 82, speed = 1.0, track = "paved" }
+"503" = { ground = "gravel", trees = "none", width = 4, clear = 7, order = 80, speed = 1.0, track = "gravel" }
+"504" = { ground = "gravel", width = 2.5, clear = 4, order = 79, speed = 1.0, track = "vehicle_track" }
+"505" = { ground = "path", width = 1.0, clear = 2, order = 78, speed = 1.0, track = "path" }
+"506" = { ground = "path", width = 0.6, clear = 1.5, order = 77, speed = 1.0, track = "small_path" }
+"507" = { ground = "path", width = 0.4, clear = 1, order = 76, speed = 1.0, track = "faint_path" }
+# Narrow ride: drawn like a less distinct small path, in a 4 m tree-free corridor.
+"508" = { ground = "path", width = 1.0, clear = 4, order = 75, speed = 1.0, track = "faint_path" }
 "509" = { ground = "gravel", trees = "none", width = 5, clear = 12, order = 81 }
 "510" = { clear = 12, feature = "power_line" }
 "511" = { clear = 30, feature = "pylon_line" }
