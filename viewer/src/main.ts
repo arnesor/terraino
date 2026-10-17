@@ -223,7 +223,19 @@ async function main() {
   setStatus(
     world.manifest.map.scale ? `${world.manifest.name} · 1:${world.manifest.map.scale}` : world.manifest.name,
   )
-  startButton.addEventListener('click', () => player.controls.lock())
+  // The first start opens the map, with the mouse free for it; clicking the terrain
+  // then takes the mouse for steering. Later (after a pause) Start just resumes.
+  let started = false
+  startButton.addEventListener('click', () => {
+    if (started || hud.mapOpen) {
+      player.controls.lock()
+      return
+    }
+    started = true
+    overlay.hidden = true
+    hud.toggleMap(true)
+    updateResume()
+  })
   player.controls.addEventListener('lock', () => {
     overlay.hidden = true
     updateResume()

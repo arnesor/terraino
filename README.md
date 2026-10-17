@@ -29,6 +29,7 @@ and run through it in the browser like in a first-person game.
 - Buildings from OpenStreetMap and the map, with heights and gable roofs
   measured from the laser data.
 - Boulders, cliffs, stone walls, fences, power lines and towers from the map.
+  Cliffs are near-vertical rock faces, at least 1 m high, carved into the terrain.
 - Roads and paths drawn as their own soft-edged strips on the terrain,
   with distinct junctions joined and nothing growing on them.
   Footpaths show roots and stones; footbridges and log crossings carry them over streams.

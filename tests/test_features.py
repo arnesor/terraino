@@ -6,7 +6,14 @@ import pytest
 from shapely import box
 
 from otest.ingest.georef import Extent
-from otest.process.features import collect_features, measure_cliffs, paint_cliffs
+from otest.process.features import (
+    CLIFF_FACE_M,
+    CLIFF_TAPER_M,
+    carve_cliffs,
+    collect_features,
+    measure_cliffs,
+    paint_cliffs,
+)
 from otest.process.layers import GroundLayers
 from otest.process.symbols import Ground, SymbolSet
 
@@ -76,9 +83,12 @@ def test_cliff_falls_to_lower_side() -> None:
     )
     (face,) = measure_cliffs(cliff_lines, dtm, EXTENT)
     for (tx, ty, th), (bx, by, bh) in zip(face.top, face.bottom, strict=True):
-        assert by < ty  # the face falls to the south
+        assert by == pytest.approx(ty - CLIFF_FACE_M)  # the face falls to the south
         assert bx == pytest.approx(tx)
-        assert th - bh > 9
+        if CLIFF_TAPER_M <= tx - 20 <= 60 - CLIFF_TAPER_M:
+            assert th - bh > 9
+    # The drop tapers off at the ends of the line.
+    assert face.top[0][2] - face.bottom[0][2] < 5
 
 
 def test_low_terrain_still_gets_a_cliff() -> None:
@@ -88,14 +98,33 @@ def test_low_terrain_still_gets_a_cliff() -> None:
     )
     (face,) = measure_cliffs(cliff_lines, dtm, EXTENT)
     drops = [t[2] - b[2] for t, b in zip(face.top, face.bottom, strict=True)]
-    assert min(drops) >= 0.8
+    # A rock face is at least 1 m high, less only where it tapers off at its ends.
+    assert min(drops[2:-2]) >= 1.0
+    assert 0 < drops[0] < 1.0
+
+
+def test_carve_cliffs_makes_a_step() -> None:
+    dtm = np.full(EXTENT.raster_shape(1), 100.0, dtype=np.float32)
+    dtm[50:, :] = 99.9  # the south side is a little lower
+    _, cliff_lines = collect_features(
+        [feature(0, "203.0", line((20, 50), (80, 50)))], ISOM
+    )
+    faces = measure_cliffs(cliff_lines, dtm, EXTENT)
+    carve_cliffs(dtm, faces, EXTENT)
+    # Half a metre behind the line, and 1.5 m in front of it: the foot of the face.
+    above = dtm[int(EXTENT.y1 - 50.5), 50]
+    below = dtm[int(EXTENT.y1 - 48.5), 50]
+    assert above == pytest.approx(100.0)
+    assert above - below >= 1.0
+    assert dtm[int(EXTENT.y1 - 40), 50] == pytest.approx(99.9)  # untouched farther out
+    assert dtm[int(EXTENT.y1 - 50.5), 5] == pytest.approx(100.0)  # beyond the end
 
 
 def test_paint_cliffs() -> None:
     dtm = np.full(EXTENT.raster_shape(1), 100.0, dtype=np.float32)
     dtm[:50, :] = 110.0
     _, cliff_lines = collect_features(
-        [feature(0, "201.0", line((20, 50.5), (80, 50.5)))], ISOM
+        [feature(0, "201.0", line((20, 50.2), (80, 50.2)))], ISOM
     )
     faces = measure_cliffs(cliff_lines, dtm, EXTENT)
     shape = EXTENT.raster_shape(1)
@@ -110,7 +139,8 @@ def test_paint_cliffs() -> None:
         in_map=zeros == 0,
     )
     paint_cliffs(layers, faces, EXTENT)
-    row, col = int(EXTENT.y1 - 49), 50  # just below the cliff
+    row, col = int(EXTENT.y1 - 49.5), 50  # under the face, just below the line
     assert layers.ground[row, col] == Ground.ROCK
     assert layers.speed[int(EXTENT.y1 - 50.5), col] == 0
+    assert layers.speed[row, col] == 0
     assert layers.speed[int(EXTENT.y1 - 60), col] == 1

@@ -13,7 +13,6 @@ interface FeatureFile {
 }
 
 const ROCK = new THREE.Color(0x77756e)
-const LICHEN = new THREE.Color(0x9a9c88)
 const WOOD = new THREE.Color(0x7d6f5c)
 const DARK_WOOD = new THREE.Color(0x4f4336)
 const STONE_WALL = new THREE.Color(0x85827a)
@@ -185,7 +184,16 @@ export class MapFeatures {
       }
     }
 
-    for (const cliff of data.cliffs) parts.push(this.cliff(cliff.top, cliff.bottom))
+    const cliffs = data.cliffs.filter(c => c.top.length >= 2).map(c => this.cliff(c.top, c.bottom))
+    if (cliffs.length) {
+      const merged = mergeGeometries(cliffs)
+      merged.computeBoundingSphere()
+      const mesh = new THREE.Mesh(merged, rockMaterial(this.gfx, true))
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      mesh.name = 'cliffs'
+      this.group.add(mesh)
+    }
 
     if (parts.length) {
       const merged = mergeGeometries(parts)
@@ -345,43 +353,103 @@ export class MapFeatures {
     return beam(a, b, 1.0, 0.12, WOOD)
   }
 
+  /**
+   * A rock face from the map's cliff line (top) down to the foot (bottom, about 1 m out
+   * on the lower side; the pipeline carves the terrain into a step to match). Each
+   * column is a profile: a rounded rock edge from the line out to the face, then a
+   * near-vertical, uneven drop that ends below the ground. The ends are closed.
+   */
   private cliff(top: [number, number, number][], bottom: [number, number, number][]): THREE.BufferGeometry {
-    // A strip of quads from the top line down to the bottom line, with ragged middle rows.
-    const rows = 4
+    const maxDrop = Math.max(...top.map((t, i) => t[1] - bottom[i]![1]), 0.5)
+    // Profile rows: `out` along the face direction (in face widths) and either `lift`
+    // (metres above the top) or `share` (of the drop below the top).
+    const profile: { out: number; lift?: number; share?: number }[] = [
+      { out: -0.2, lift: -0.06 }, // starts in the ground behind the line
+      { out: 0.35, lift: 0.08 }, // the rounded rock edge
+      { out: 0.8, lift: 0.05 },
+      { out: 1.0, lift: -0.1 },
+    ]
+    const steps = Math.max(2, Math.ceil(maxDrop / 1.2))
+    for (let k = 1; k <= steps; k++) profile.push({ out: 1.0, share: k / steps })
+    profile.push({ out: 1.08, lift: -Infinity }) // below the foot
+    const rows = profile.length
     const positions: number[] = []
     const colors: number[] = []
-    const grid: THREE.Vector3[][] = top.map((t, i) => {
+    const indices: number[] = []
+    const columns = top.map((t, i) => {
       const b = bottom[i]!
-      const column: THREE.Vector3[] = []
-      for (let r = 0; r <= rows; r++) {
-        const f = r / rows
-        const p = new THREE.Vector3(t[0] + (b[0] - t[0]) * f, t[1] + (b[1] - t[1]) * f, t[2] + (b[2] - t[2]) * f)
-        if (r > 0 && r < rows) {
-          p.x += (rand(p.x, p.z, r) - 0.5) * 0.6
-          p.z += (rand(p.z, p.x, r) - 0.5) * 0.6
-          p.y += (rand(p.x, p.y, r) - 0.5) * 0.4
+      const ox = b[0] - t[0]
+      const oz = b[2] - t[2]
+      const width = Math.hypot(ox, oz) || 1
+      const nx = ox / width
+      const nz = oz / width
+      const drop = t[1] - b[1]
+      return profile.map((row, r) => {
+        let o = row.out * width
+        let y: number
+        if (r === rows - 1) y = b[1] - 0.4
+        else if (row.share !== undefined) y = t[1] - 0.1 - row.share * (drop - 0.1)
+        else y = t[1] + row.lift!
+        // Uneven rock: in and out of the face, up and down; less on the edge. Blocks
+        // stand out over several columns (slow noise), with smaller bumps on top.
+        const face = row.share !== undefined && row.share < 1
+        if (r > 0 && r < rows - 1) {
+          const block = Math.sin(t[0] * 0.37 + t[2] * 0.29 + r * 0.9) * Math.sin(t[0] * 0.11 - t[2] * 0.17 + r * 1.3)
+          o += face ? block * 0.3 + (rand(t[0] + r * 3.1, t[2], 11) - 0.5) * 0.35 : (rand(t[0] + r * 3.1, t[2], 11) - 0.5) * 0.1
+          y += (rand(t[2], t[0] + r * 1.7, 12) - 0.5) * (face ? 0.25 : 0.04)
         }
-        column.push(p)
-      }
-      return column
+        return new THREE.Vector3(t[0] + nx * o, y, t[2] + nz * o)
+      })
     })
     const c = new THREE.Color()
-    for (let i = 0; i + 1 < grid.length; i++) {
-      for (let r = 0; r < rows; r++) {
-        const a = grid[i]![r]!
-        const b = grid[i + 1]![r]!
-        const d = grid[i]![r + 1]!
-        const e = grid[i + 1]![r + 1]!
-        for (const p of [a, d, b, b, d, e]) {
-          positions.push(p.x, p.y, p.z)
-          c.copy(ROCK).multiplyScalar(0.75 + 0.35 * rand(p.x, p.y, 7)).lerp(LICHEN, r === 0 ? 0.4 : 0.1)
-          colors.push(c.r, c.g, c.b)
-        }
+    for (const column of columns) {
+      column.forEach((p, r) => {
+        positions.push(p.x, p.y, p.z)
+        // Darker in the cracks and towards the foot.
+        const shade = r < 3 ? 1 : 0.62 + 0.38 * (1 - r / rows)
+        c.setScalar(shade * (0.85 + 0.25 * rand(p.x, p.z, 7)))
+        colors.push(c.r, c.g, c.b)
+      })
+    }
+    // Cliffs fall to either side of their line; wind each triangle to face `out`.
+    const pa = new THREE.Vector3()
+    const pb = new THREE.Vector3()
+    const pc = new THREE.Vector3()
+    const triangle = (a: number, b: number, d: number, out: THREE.Vector3) => {
+      pa.fromArray(positions, a * 3)
+      pb.fromArray(positions, b * 3).sub(pa)
+      pc.fromArray(positions, d * 3).sub(pa)
+      if (pb.cross(pc).dot(out) >= 0) indices.push(a, b, d)
+      else indices.push(a, d, b)
+    }
+    const out = new THREE.Vector3()
+    for (let i = 0; i + 1 < columns.length; i++) {
+      // Out of the rock: up from the edge, and towards the lower side.
+      out.set(bottom[i]![0] - top[i]![0], 1, bottom[i]![2] - top[i]![2])
+      for (let r = 0; r + 1 < rows; r++) {
+        const a = i * rows + r
+        const b = (i + 1) * rows + r
+        triangle(a, a + 1, b, out)
+        triangle(b, a + 1, b + 1, out)
       }
+    }
+    // Close the ends: a fan from each end profile to a point a little beyond it.
+    for (const end of [0, columns.length - 1]) {
+      const column = columns[end]!
+      const other = columns[end === 0 ? 1 : end - 1]!
+      const mid = column[Math.floor(rows / 2)]!.clone().lerp(column[1]!, 0.5)
+      const away = mid.clone().sub(other[Math.floor(rows / 2)]!.clone().lerp(other[1]!, 0.5)).setY(0)
+      if (away.lengthSq() > 0) away.normalize().multiplyScalar(0.5)
+      const tip = mid.add(away)
+      const tipIndex = positions.length / 3
+      positions.push(tip.x, tip.y, tip.z)
+      colors.push(0.8, 0.8, 0.8)
+      for (let r = 0; r + 1 < rows; r++) triangle(tipIndex, end * rows + r, end * rows + r + 1, away)
     }
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
     g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
+    g.setIndex(indices)
     g.computeVertexNormals()
     return g
   }

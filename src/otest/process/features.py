@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
@@ -21,7 +22,16 @@ from otest.process.symbols import Ground, SymbolSet
 LINE_STEP_M = 2.0
 CLIFF_STEP_M = 1.5
 CLIFF_PROBE_M = 3.5
-MIN_CLIFF_DROP = {"cliff": 1.5, "rock_face": 0.8}
+MIN_CLIFF_DROP = {"cliff": 1.5, "rock_face": 1.0}
+# The rock face stands this far out from the map line, on the lower side.
+CLIFF_FACE_M = 1.0
+# Below the face the ground stays at the foot height for a short shelf, then rises back
+# to the terrain model at this slope (talus).
+CLIFF_SHELF_M = 0.5
+CLIFF_FOOT_SLOPE = 0.6
+CLIFF_FOOT_M = 4.0
+# The drop tapers off over this distance at the ends of a cliff line.
+CLIFF_TAPER_M = 2.0
 IMPASSABLE_BAND_M = 1.2
 BOULDER_FIELD_M2_PER_STONE = 18.0
 
@@ -56,7 +66,12 @@ class LineFeature:
 
 @dataclass(frozen=True)
 class CliffFace:
-    """A rock face: matching top and bottom polylines as (easting, northing, height)."""
+    """A rock face: matching top and bottom polylines as (easting, northing, height).
+
+    The top runs along the map's cliff line, at the ground height there; the bottom is
+    ``CLIFF_FACE_M`` out on the lower side, at the ground height at the foot of the face.
+    ``carve_cliffs`` shapes the terrain model to match.
+    """
 
     kind: str
     top: list[tuple[float, float, float]]
@@ -236,7 +251,9 @@ def measure_cliffs(
     """Build rock faces for cliff lines, falling to the lower side of each line.
 
     The map draws a cliff along its top edge. At each point the terrain model tells
-    which side is lower and by how much; the face runs from the line down to there.
+    which side is lower and by how much; the face drops from the line to there. A 1 m
+    terrain model smooths cliffs into slopes, so each is at least ``MIN_CLIFF_DROP``
+    high, tapering off at the ends of the line.
     """
     height = _Sampler(dtm, extent)
     faces = []
@@ -259,20 +276,96 @@ def measure_cliffs(
             left_minus_right += left - right
         side = -1.0 if left_minus_right > 0 else 1.0  # direction of the lower side
 
+        along = [0.0]
+        for (xa, ya), (xb, yb) in itertools.pairwise(coords):
+            along.append(along[-1] + math.hypot(xb - xa, yb - ya))
         top, bottom = [], []
-        for (x, y), (nx, ny) in zip(coords, normals, strict=True):
+        for (x, y), (nx, ny), d in zip(coords, normals, along, strict=True):
             dx, dy = nx * side, ny * side
             h_top = max(height(x - dx * 0.8, y - dy * 0.8), height(x, y))
-            bx, by = x + dx * CLIFF_PROBE_M * 0.6, y + dy * CLIFF_PROBE_M * 0.6
             h_bottom = min(
-                height(bx, by), height(x + dx * CLIFF_PROBE_M, y + dy * CLIFF_PROBE_M)
+                height(x + dx * CLIFF_PROBE_M * 0.6, y + dy * CLIFF_PROBE_M * 0.6),
+                height(x + dx * CLIFF_PROBE_M, y + dy * CLIFF_PROBE_M),
             )
             # Map cliffs are at least this high, even where the terrain model smooths them.
-            h_bottom = min(h_bottom, h_top - MIN_CLIFF_DROP[kind])
-            top.append((x, y, h_top + 0.2))
-            bottom.append((bx, by, h_bottom - 0.3))
+            drop = max(h_top - h_bottom, MIN_CLIFF_DROP[kind])
+            end = min(d, along[-1] - d)
+            drop *= 0.35 + 0.65 * min(end / CLIFF_TAPER_M, 1.0)
+            top.append((x, y, h_top))
+            bottom.append((x + dx * CLIFF_FACE_M, y + dy * CLIFF_FACE_M, h_top - drop))
         faces.append(CliffFace(kind, top, bottom))
     return faces
+
+
+def carve_cliffs(
+    dtm: npt.NDArray[np.float32], faces: Iterable[CliffFace], extent: Extent
+) -> None:
+    """Shape the terrain model (in place) into a step under each rock face.
+
+    On the upper side the ground at the map line is raised to the top of the face. On
+    the lower side it drops straight to the foot of the face: on a 1 m grid a sloping
+    drop would bury much of the face. The viewer covers the strip between the line and
+    the face with the face's rock edge. Beyond the face and a short shelf, the ground
+    rises back to the terrain model as talus.
+
+    Examples:
+        >>> dtm = np.full((20, 20), 100.0, dtype=np.float32)
+        >>> face = CliffFace("cliff", [(2, 10, 100), (18, 10, 100)],
+        ...                  [(2, 9, 98), (18, 9, 98)])
+        >>> carve_cliffs(dtm, [face], Extent(0, 0, 20, 20))
+        >>> [round(float(h), 1) for h in dtm[8:16, 10]]  # north to south across it
+        [100.0, 100.0, 98.0, 98.0, 98.6, 99.2, 99.8, 100.0]
+    """
+    reach = CLIFF_FACE_M + CLIFF_FOOT_M
+    for face in faces:
+        top = np.array(face.top, dtype=np.float64)
+        bottom = np.array(face.bottom, dtype=np.float64)
+        if len(top) < 2:
+            continue
+        xs = np.concatenate([top[:, 0], bottom[:, 0]])
+        ys = np.concatenate([top[:, 1], bottom[:, 1]])
+        c0 = max(int(np.floor(xs.min() - reach - extent.x0)), 0)
+        c1 = min(int(np.ceil(xs.max() + reach - extent.x0)), dtm.shape[1] - 1)
+        r0 = max(int(np.floor(extent.y1 - ys.max() - reach)), 0)
+        r1 = min(int(np.ceil(extent.y1 - ys.min() + reach)), dtm.shape[0] - 1)
+        if c0 > c1 or r0 > r1:
+            continue
+        cols, rows = np.meshgrid(np.arange(c0, c1 + 1), np.arange(r0, r1 + 1))
+        px = extent.x0 + cols + 0.5
+        py = extent.y1 - rows - 0.5
+        best = np.full(px.shape, np.inf)
+        offset = np.zeros(px.shape)
+        h_top = np.zeros(px.shape)
+        h_bottom = np.zeros(px.shape)
+        for i in range(len(top) - 1):
+            ax, ay, at = top[i]
+            bx, by, bt = top[i + 1]
+            vx, vy = bx - ax, by - ay
+            length2 = vx * vx + vy * vy or 1.0
+            t = np.clip(((px - ax) * vx + (py - ay) * vy) / length2, 0.0, 1.0)
+            qx, qy = ax + vx * t, ay + vy * t
+            dist = np.hypot(px - qx, py - qy)
+            # Unit vector to the lower side, from the face's bottom line.
+            ox = (bottom[i, 0] - ax + bottom[i + 1, 0] - bx) / 2
+            oy = (bottom[i, 1] - ay + bottom[i + 1, 1] - by) / 2
+            norm = math.hypot(ox, oy) or 1.0
+            closer = dist < best
+            best = np.where(closer, dist, best)
+            offset = np.where(closer, ((px - qx) * ox + (py - qy) * oy) / norm, offset)
+            h_top = np.where(closer, at + (bt - at) * t, h_top)
+            h_bottom = np.where(
+                closer, bottom[i, 2] + (bottom[i + 1, 2] - bottom[i, 2]) * t, h_bottom
+            )
+        ground = dtm[r0 : r1 + 1, c0 : c1 + 1]
+        # Lower side: the foot of the face, then the talus back up to the terrain.
+        rise = np.maximum(offset - CLIFF_FACE_M - CLIFF_SHELF_M, 0.0)
+        target = h_bottom + rise * CLIFF_FOOT_SLOPE
+        lower = (offset > 0) & (offset <= reach) & (best <= reach)
+        ground[lower] = np.minimum(ground[lower], target[lower])
+        # Upper side: the edge is at the top of the face.
+        upper = (offset <= 0) & (offset > -1.0) & (best < 1.0)
+        edge = h_top + offset * 0.3
+        ground[upper] = np.maximum(ground[upper], edge[upper])
 
 
 def paint_cliffs(
@@ -290,7 +383,7 @@ def paint_cliffs(
             rock.append((polygon, 1))
         if face.kind == "cliff":
             line = LineString([(x, y) for x, y, _ in face.top])
-            blocked.append((line.buffer(IMPASSABLE_BAND_M / 2), 1))
+            blocked.append((line.buffer(IMPASSABLE_BAND_M / 2).union(polygon), 1))
     shape = layers.ground.shape
     transform = extent.raster_transform(1)
     if rock:

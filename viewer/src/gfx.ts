@@ -441,6 +441,17 @@ export function rockMaterial(gfx: Gfx, moss: boolean): THREE.MeshLambertMaterial
           + texture(groundTex, vec3(vRockPos.xz * 0.35, GT_ROCK)).rgb * bw.y
           + texture(groundTex, vec3(vRockPos.xy * 0.35, GT_ROCK)).rgb * bw.z;
         rc *= 0.95 + 0.4 * gtNoise(vRockPos.xz * 0.5);
+        // Mute the texture's lichen spots, which repeat on large faces: pull it towards
+        // its average colour (the smallest mipmap), most on steep faces.
+        float steep = 1.0 - abs(vRockNormal.y);
+        vec3 average = textureLod(groundTex, vec3(0.5, 0.5, GT_ROCK), 9.0).rgb;
+        rc = mix(rc, average * (0.95 + 0.4 * gtNoise(vRockPos.xz * 0.5)), 0.2 + 0.25 * steep);
+        // Steep rock: vertical weathering streaks.
+        // Projected from the two level axes, like the texture (stable on curved faces).
+        vec2 side = bw.xz / max(bw.x + bw.z, 1e-4);
+        float streak = (gtNoise(vec2(vRockPos.z * 0.9, vRockPos.y * 0.15)) * 0.7 + gtNoise(vec2(vRockPos.z * 2.6, vRockPos.y * 0.4)) * 0.3) * side.x
+          + (gtNoise(vec2(vRockPos.x * 0.9, vRockPos.y * 0.15)) * 0.7 + gtNoise(vec2(vRockPos.x * 2.6, vRockPos.y * 0.4)) * 0.3) * side.y;
+        rc *= mix(1.0, 0.5 + 0.75 * streak, steep);
         ${
           moss
             ? `float m = smoothstep(0.55, 0.9, vRockNormal.y + (gtNoise(vRockPos.xz * 1.3) - 0.5) * 0.5);

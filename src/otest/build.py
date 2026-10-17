@@ -25,6 +25,7 @@ from otest.process.buildings import collect_footprints, measure_buildings
 from otest.process.classify import classify_map
 from otest.process.features import (
     Features,
+    carve_cliffs,
     collect_features,
     measure_cliffs,
     paint_cliffs,
@@ -322,6 +323,7 @@ def _add_nature_and_buildings(
     if source.features is not None:
         objects = source.features
         objects.cliffs = measure_cliffs(source.cliff_lines, dtm, extent)
+        carve_cliffs(dtm, objects.cliffs, extent)
         paint_cliffs(layers, objects.cliffs, extent)
         world.features = objects
         log.info(
