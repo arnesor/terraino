@@ -26,7 +26,7 @@ TREES_KEEP = 0
 TREES_NONE = 1
 # Only the trees found in the laser data; nothing is added below the canopy.
 TREES_LIDAR = 2
-# A few of the laser's trees, the tallest, far apart (rough open land with scattered trees).
+# A few of the laser's trees, the tallest, far apart (open land with scattered trees).
 TREES_SCATTERED = 3
 TREE_RULES = {
     "keep": TREES_KEEP,

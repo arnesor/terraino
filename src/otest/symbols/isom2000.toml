@@ -55,7 +55,8 @@ name = "ISOM 2000"
 
 # Vegetation
 "401" = { ground = "open", trees = "lidar", speed = 1.0, order = 10 }
-"402" = { ground = "open", trees = "lidar", speed = 1.0, order = 10 }
+# Scattered trees, as 404.
+"402" = { ground = "open", trees = "scattered", speed = 1.0, order = 10 }
 # Rough open land: felled areas, heath and new plantations, no trees above about 1 m
 # (scattered trees are mapped with 404).
 "403" = { ground = "rough", trees = "none", speed = 0.85, order = 11 }

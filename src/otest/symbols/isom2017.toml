@@ -33,7 +33,8 @@ name = "ISOM 2017-2"
 
 # Vegetation
 "401" = { ground = "open", trees = "lidar", speed = 1.0, order = 10 }
-"402" = { ground = "open", trees = "lidar", speed = 1.0, order = 10 }
+# Scattered trees, as 404.
+"402" = { ground = "open", trees = "scattered", speed = 1.0, order = 10 }
 "403" = { ground = "rough", trees = "none", speed = 0.85, order = 11 }
 # Scattered trees: often a cut with seed trees left, newer than the laser data.
 "404" = { ground = "rough", trees = "scattered", speed = 0.85, order = 11 }

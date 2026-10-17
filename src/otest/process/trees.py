@@ -5,7 +5,7 @@ terrain). Trees below the canopy cannot be seen from above, so smaller trees are
 under it until each 16 m cell has as many trees as SR16 reports (or a typical number).
 The orienteering map then decides where trees may stand: in forest the canopy is filled
 up as above, on open land, farmland and gardens only the trees the laser finds stand,
-on rough open land with scattered trees only a few of them, and young trees are added where the map shows dense forest. Species come from SR16, mixed a
+on open land with scattered trees only a few of them, and young trees are added where the map shows dense forest. Species come from SR16, mixed a
 little, because SR16 only gives the dominant species per 16 m cell.
 """
 
@@ -224,8 +224,8 @@ def thin_scattered(
 ) -> npt.NDArray[np.bool_]:
     """Pick scattered trees: the tallest first, none closer than ``spacing`` to another.
 
-    Where the map shows rough open land with scattered trees, the forest has usually
-    been cut since the laser scan, leaving a few seed trees: the tallest ones.
+    Where the map shows open land with scattered trees, the forest has usually been
+    cut since the laser scan, leaving a few seed trees: the tallest ones.
 
     Returns:
         Which of the trees to keep.
