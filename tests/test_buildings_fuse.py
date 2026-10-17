@@ -1,4 +1,5 @@
 import math
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -6,7 +7,10 @@ import numpy.typing as npt
 import pytest
 from shapely import LineString, Polygon, box
 
+from otest.fetch import matrikkel
 from otest.fetch.ar5 import decode_land_cover
+from otest.fetch.cache import DownloadError
+from otest.fetch.matrikkel import BuildingPoint
 from otest.fetch.osm import OsmFeature, parse_overpass
 from otest.ingest.georef import Extent
 from otest.process.buildings import (
@@ -253,3 +257,42 @@ def test_measure_buildings_with_laser_surface() -> None:
     assert house.wall == pytest.approx(3.5, abs=0.3)
     assert house.wall + house.roof == pytest.approx(6.0, abs=0.3)
     assert abs(math.sin(house.ridge)) < 0.05  # ridge east-west
+
+
+def test_registry_sets_kind_colours_and_floors() -> None:
+    dtm = np.full(EXTENT.raster_shape(1), 100.0, dtype=np.float32)
+    canopy = np.zeros_like(dtm)
+    farmhouse = box(10, 10, 22, 19)
+    garage = box(30, 10, 36, 16)
+    barn = box(50, 10, 80, 22)
+    canopy[int(EXTENT.y1 - 19) : int(EXTENT.y1 - 10), 10:22] = 6.5  # two floors
+    footprints = [
+        (farmhouse, "house", "osm", "osm/1"),
+        (garage, "other", "osm", "osm/2"),
+        (barn, "other", "map", "map/3"),
+    ]
+    registry = [
+        BuildingPoint(16, 14, 113, "TB", False, "farm"),
+        BuildingPoint(33, 13, 181, "TB", False, "farm"),
+        BuildingPoint(60, 15, 241, "TB", True, "farm"),
+    ]
+    house, shed, barn_ = measure_buildings(
+        footprints, dtm, canopy, EXTENT, registry=registry
+    )
+    assert (house.kind, house.type_code) == ("farmhouse", 113)
+    assert house.floors == 2
+    assert shed.kind == "garage"
+    assert (shed.wall_color, shed.roof_color) == (house.wall_color, house.roof_color)
+    assert barn_.kind == "barn"
+    assert barn_.floors == 2  # no laser heights: the barn default
+    assert barn_.wall == pytest.approx(5.5)
+
+
+def test_fetch_building_points_without_service(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fail(*args: Any, **kwargs: Any) -> Path:
+        raise DownloadError("offline")
+
+    monkeypatch.setattr(matrikkel, "cached_download", fail)
+    assert matrikkel.fetch_building_points(25832, EXTENT, tmp_path) == []

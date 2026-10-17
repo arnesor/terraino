@@ -8,26 +8,37 @@ a single flat, shed, gable or hip roof is fitted to the whole footprint.
 
 from __future__ import annotations
 
-import hashlib
 import math
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
 import numpy.typing as npt
 import shapely
 from rasterio.features import rasterize
-from shapely import MultiPolygon, Polygon, STRtree
+from shapely import MultiPolygon, Point, Polygon, STRtree
 from shapely.geometry.base import BaseGeometry
 
+from otest.fetch.matrikkel import BuildingPoint
 from otest.fetch.osm import OsmFeature
 from otest.ingest.georef import Extent
+from otest.process.building_types import (
+    STYLES,
+    colours,
+    floors_for,
+    kind_for_type,
+    type_rank,
+)
 from otest.process.geometry import to_geometry
 from otest.process.roofs import RoofPart, robust_fit, segment_roof
 from otest.process.symbols import Ground, SymbolSet
 
 MIN_AREA_M2 = 4.0
+# A registered building's point may lie this far outside its footprint.
+REGISTRY_DISTANCE_M = 5.0
+# Kinds of building people live in; garages on their property take their colours.
+DWELLINGS = ("house", "farmhouse", "cabin")
 # A map building overlapping an OSM building by this share is the same building.
 SAME_BUILDING_OVERLAP = 0.3
 # Footprints filling at least this share of their oriented rectangle get gable roofs.
@@ -44,31 +55,6 @@ FLAT_RISE_M = 0.4
 # How much better (RMS, metres) another model must fit to win over a flat or gable roof.
 FLAT_PREFERENCE_M = 0.06
 GABLE_PREFERENCE_M = 0.05
-
-# Default (wall height, roof height) when the surface model gives no useful heights.
-_DEFAULT_SIZE = {
-    "house": (5.0, 2.8),
-    "garage": (2.5, 1.0),
-    "shed": (2.3, 0.9),
-    "barn": (5.5, 3.5),
-    "farm_auxiliary": (4.5, 2.8),
-    "cabin": (2.6, 1.6),
-    "other": (4.0, 2.0),
-}
-# Wall colours (sRGB hex) and their weights, by kind of building.
-_WALLS = {
-    "house": [
-        ("#f2f0e8", 5),
-        ("#b33a2c", 2),
-        ("#e8c66a", 2),
-        ("#8d9aa3", 1),
-        ("#6b5a48", 1),
-    ],
-    "barn": [("#a8322a", 8), ("#7d2a22", 2), ("#d8d4c8", 1)],
-    "cabin": [("#5a4636", 4), ("#8a3a2a", 2), ("#6e6a5a", 1)],
-    "other": [("#d9d6cc", 3), ("#9aa0a4", 2), ("#b33a2c", 1)],
-}
-_ROOFS = [("#2c2c2e", 6), ("#3d3f42", 3), ("#7a3527", 2), ("#55524e", 1)]
 
 
 @dataclass(frozen=True)
@@ -90,6 +76,8 @@ class Building:
         source: ``"osm"`` or ``"map"``.
         parts: The roof's wings, measured in a laser point cloud; when given, they
             replace ``roof``, ``roof_type`` and ``ridge``, which describe the largest.
+        type_code: Building type in Matrikkelen (NS 3457), if registered.
+        floors: Number of floors (windows are drawn floor by floor).
     """
 
     footprint: Polygon
@@ -103,6 +91,43 @@ class Building:
     kind: str
     source: str
     parts: tuple[RoofPart, ...] = ()
+    type_code: int | None = None
+    floors: int = 1
+
+
+def match_registry(
+    footprints: Sequence[Polygon], points: Sequence[BuildingPoint]
+) -> list[BuildingPoint | None]:
+    """The registered building for each footprint: the point inside it, or near it.
+
+    Where several points fall in one footprint, the most telling type wins (see
+    type_rank): a garage registered inside the house it is built onto stays a house.
+
+    Examples:
+        >>> from shapely import box
+        >>> house = BuildingPoint(5, 5, 111, "TB", False, "1")
+        >>> garage = BuildingPoint(6, 5, 181, "TB", False, "1")
+        >>> barn = BuildingPoint(22, 5, 241, "TB", True, "2")
+        >>> found = match_registry([box(0, 0, 10, 10), box(20, 0, 30, 10)], [garage, house, barn])
+        >>> [p.type_code if p else None for p in found]
+        [111, 241]
+    """
+    found: list[BuildingPoint | None] = [None] * len(footprints)
+    if not footprints or not points:
+        return found
+    tree = STRtree(list(footprints))
+    for point in points:
+        where = Point(point.x, point.y)
+        hits = tree.query(where, predicate="intersects")
+        if len(hits) == 0:
+            hits = tree.query_nearest(where, max_distance=REGISTRY_DISTANCE_M)
+        for i in hits[:1]:
+            current = found[i]
+            if current is None or type_rank(point.type_code) < type_rank(
+                current.type_code
+            ):
+                found[i] = point
+    return found
 
 
 def building_kind(tags: Mapping[str, str]) -> str:
@@ -132,20 +157,6 @@ def building_kind(tags: Mapping[str, str]) -> str:
         if value in values:
             return kind
     return "other"
-
-
-def _pick(options: Sequence[tuple[str, int]], seed: str) -> str:
-    """Deterministic weighted choice: the same building always gets the same colour."""
-    total = sum(w for _, w in options)
-    r = (
-        int(hashlib.md5(seed.encode(), usedforsecurity=False).hexdigest()[:8], 16)
-        % total
-    )
-    for value, weight in options:
-        if r < weight:
-            return value
-        r -= weight
-    return options[-1][0]
 
 
 def _ridge_angle(footprint: Polygon) -> tuple[float, float]:
@@ -412,6 +423,7 @@ def measure_buildings(
     extent: Extent,
     surface: npt.NDArray[np.float32] | None = None,
     fine: int = 2,
+    registry: Sequence[BuildingPoint] = (),
 ) -> list[Building]:
     """Measure base, wall and roof heights of each footprint.
 
@@ -423,6 +435,8 @@ def measure_buildings(
         surface: Surface minus terrain on a grid ``fine`` times finer, from a laser
             point cloud; with it the roof shape is measured.
         fine: Fine cells per metre of ``surface``.
+        registry: Buildings registered in Matrikkelen; their types decide the kind,
+            colours and default size of the footprints they fall in.
     """
     if not footprints:
         return []
@@ -440,10 +454,15 @@ def measure_buildings(
     ids = flat[cells]
     bounds = np.searchsorted(ids, np.arange(1, len(footprints) + 2))
 
+    registered = match_registry([fp[0] for fp in footprints], registry)
     buildings = []
-    for i, (poly, kind, source, ident) in enumerate(footprints):
+    for i, (poly, osm_kind, source, ident) in enumerate(footprints):
         own = cells[bounds[i] : bounds[i + 1]]
-        default_wall, default_roof = _DEFAULT_SIZE[kind]
+        point = registered[i]
+        kind = (kind_for_type(point.type_code) if point else None) or osm_kind
+        style = STYLES.get(kind, STYLES["other"])
+        default_wall, default_roof = style.wall, style.roof
+        measured = True
         if len(own) >= 3:
             heights = canopy.ravel()[own]
             base = float(dtm.ravel()[own].min())
@@ -486,6 +505,7 @@ def measure_buildings(
         else:
             if top < 2.0:
                 wall, roof = default_wall, default_roof
+                measured = False
             else:
                 top = min(top, 25.0)
                 wall = float(np.clip(eave, 2.2, top))
@@ -494,9 +514,16 @@ def measure_buildings(
                 roof_type = "gable"
             else:
                 wall, roof = max(wall + roof * 0.5, 2.2), 0.0
-        palette = _WALLS.get(kind if kind in _WALLS else "other", _WALLS["other"])
-        if kind == "farm_auxiliary":
-            palette = _WALLS["barn"]
+        # Farm buildings on one property share their colours; other buildings vary.
+        farm = kind in ("barn", "farm_auxiliary")
+        seed = (
+            f"{point.property_id}/{kind}"
+            if point and point.property_id and farm
+            else ident
+        )
+        # Summer farms (seterhus, koier) keep the old look even when not in SEFRAK.
+        old = bool(point and point.sefrak) or kind == "summer_farm"
+        wall_color, roof_color = colours(kind, seed, old=old)
         buildings.append(
             Building(
                 footprint=poly,
@@ -505,11 +532,32 @@ def measure_buildings(
                 roof=round(min(roof, 9.0), 2),
                 roof_type=roof_type,
                 ridge=angle,
-                wall_color=_pick(palette, ident),
-                roof_color=_pick(_ROOFS, ident + "roof"),
+                wall_color=wall_color,
+                roof_color=roof_color,
                 kind=kind,
                 source=source,
                 parts=tuple(parts or ()),
+                type_code=point.type_code if point else None,
+                floors=floors_for(kind, wall if measured else None),
             )
         )
-    return buildings
+    return _match_property_colours(buildings, registered)
+
+
+def _match_property_colours(
+    buildings: list[Building], registered: Sequence[BuildingPoint | None]
+) -> list[Building]:
+    """Garages and outbuildings take the colours of the dwelling on their property."""
+    dwellings: dict[str, Building] = {}
+    for b, point in zip(buildings, registered, strict=True):
+        if point and point.property_id and b.kind in DWELLINGS:
+            best = dwellings.get(point.property_id)
+            if best is None or b.footprint.area > best.footprint.area:
+                dwellings[point.property_id] = b
+    result = []
+    for b, point in zip(buildings, registered, strict=True):
+        home = dwellings.get(point.property_id or "") if point else None
+        if home is not None and b.kind == "garage":
+            b = replace(b, wall_color=home.wall_color, roof_color=home.roof_color)
+        result.append(b)
+    return result

@@ -18,7 +18,7 @@ from shapely import LineString, Polygon
 from shapely.geometry import mapping
 
 from otest.export import WorldData, write_world
-from otest.fetch import ar5, kartverket, nibio, osm
+from otest.fetch import ar5, kartverket, matrikkel, nibio, osm
 from otest.ingest.georef import Extent
 from otest.ingest.image import ImageMap, read_image_map
 from otest.ingest.lidar import ATTRIBUTION as LIDAR_ATTRIBUTION
@@ -331,7 +331,17 @@ def _add_nature_and_buildings(
     map_buildings = source.omap + _as_map_buildings(source.buildings, source.symbols)
     footprints = collect_footprints(osm_features, map_buildings, source.symbols)
     apply_osm(layers, osm_features, [fp[0] for fp in footprints], extent)
-    buildings = measure_buildings(footprints, dtm, chm, extent, surface=surface)
+    registry = matrikkel.fetch_building_points(source.epsg, extent, cache)
+    if registry:
+        world.attribution = [*world.attribution, matrikkel.ATTRIBUTION]
+    buildings = measure_buildings(
+        footprints, dtm, chm, extent, surface=surface, registry=registry
+    )
+    log.info(
+        "%d of %d buildings have a type from Matrikkelen",
+        sum(b.type_code is not None for b in buildings),
+        len(buildings),
+    )
     roofs = Counter(b.roof_type for b in buildings)
     log.info(
         "Raised %d buildings (roofs: %s)",

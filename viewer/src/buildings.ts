@@ -27,6 +27,10 @@ export interface BuildingRecord {
   wallColor: string
   roofColor: string
   kind: string
+  /** Building type in Matrikkelen (NS 3457), if registered. */
+  type?: number | null
+  /** Floors; windows are drawn floor by floor up the wall. */
+  floors?: number
   /** Wings measured in a laser point cloud; when present they replace roofType, roof and ridge. */
   parts?: RoofPartRecord[]
 }
@@ -36,6 +40,7 @@ const OVERHANG = 0.4
 const FOUNDATION = 1.0
 // Texture scale: a wall module (with one window) and a floor, and a roof tile repeat.
 const MODULE_M = 3.2
+// Floor height when a building does not say how many floors it has.
 const FLOOR_M = 2.7
 const ROOF_TILE_M = 2.0
 
@@ -118,19 +123,19 @@ function counterClockwise(outline: [number, number][]): [number, number][] {
 const modules = (length: number) => Math.max(1, Math.round(length / MODULE_M))
 
 /** A vertical wall quad from (x0, z0) to (x1, z1) between two heights, textured from the base. */
-function wallQuad(mb: MeshBuilder, x0: number, z0: number, x1: number, z1: number, bottom: number, top: number, base: number, color: THREE.Color, out: THREE.Vector3) {
+function wallQuad(mb: MeshBuilder, x0: number, z0: number, x1: number, z1: number, bottom: number, top: number, base: number, floor: number, color: THREE.Color, out: THREE.Vector3) {
   const m = modules(Math.hypot(x1 - x0, z1 - z0))
-  const vb = (bottom - base) / FLOOR_M
-  const vt = (top - base) / FLOOR_M
+  const vb = (bottom - base) / floor
+  const vt = (top - base) / floor
   mb.quad(v(x0, bottom, z0), v(x1, bottom, z1), v(x1, top, z1), v(x0, top, z0), color, out, [uv(0, vb), uv(m, vb), uv(m, vt), uv(0, vt)])
 }
 
-function addWalls(mb: MeshBuilder, outline: [number, number][], bottom: number, top: number, base: number, color: THREE.Color) {
+function addWalls(mb: MeshBuilder, outline: [number, number][], bottom: number, top: number, base: number, floor: number, color: THREE.Color) {
   for (let i = 0; i < outline.length; i++) {
     const [x0, z0] = outline[i]!
     const [x1, z1] = outline[(i + 1) % outline.length]!
     // Counter-clockwise outline: the outside is to the right when walking along it.
-    wallQuad(mb, x0, z0, x1, z1, bottom, top, base, color, v(-(z1 - z0), 0, x1 - x0))
+    wallQuad(mb, x0, z0, x1, z1, bottom, top, base, floor, color, v(-(z1 - z0), 0, x1 - x0))
   }
 }
 
@@ -159,7 +164,7 @@ function frame(p: RoofPartRecord) {
 }
 
 /** Roof planes, gable ends and the wall above the main walls, for one part. */
-function addPart(walls: MeshBuilder, roofs: MeshBuilder, p: RoofPartRecord, base: number, wallTop: number, wallColor: THREE.Color, roofColor: THREE.Color) {
+function addPart(walls: MeshBuilder, roofs: MeshBuilder, p: RoofPartRecord, base: number, floor: number, wallTop: number, wallColor: THREE.Color, roofColor: THREE.Color) {
   const { ux, uz, wx, wz, point } = frame(p)
   const [hl, hw] = p.half
   const eaveY = base + p.eave
@@ -178,7 +183,7 @@ function addPart(walls: MeshBuilder, roofs: MeshBuilder, p: RoofPartRecord, base
       const [s1, t1] = corners[(i + 1) % 4]!
       const a = point(s0, t0, 0)
       const b = point(s1, t1, 0)
-      wallQuad(walls, a.x, a.z, b.x, b.z, wallTop, eaveY, base, wallColor, outs[i]!)
+      wallQuad(walls, a.x, a.z, b.x, b.z, wallTop, eaveY, base, floor, wallColor, outs[i]!)
     })
   }
 
@@ -209,11 +214,11 @@ function addPart(walls: MeshBuilder, roofs: MeshBuilder, p: RoofPartRecord, base
     // The high wall goes up to the roof; the end walls get a triangle each.
     const hA = point(-hl, hw, 0)
     const hB = point(hl, hw, 0)
-    wallQuad(walls, hA.x, hA.z, hB.x, hB.z, eaveY, ridgeY, base, wallColor, right)
+    wallQuad(walls, hA.x, hA.z, hB.x, hB.z, eaveY, ridgeY, base, floor, wallColor, right)
     for (const [s, out] of [[-hl, back], [hl, along]] as [number, THREE.Vector3][]) {
       const m = modules(2 * hw)
-      const vl = (eaveY - base) / FLOOR_M
-      const vh = (ridgeY - base) / FLOOR_M
+      const vl = (eaveY - base) / floor
+      const vh = (ridgeY - base) / floor
       walls.triangle(point(s, -hw, eaveY), point(s, hw, eaveY), point(s, hw, ridgeY), wallColor, out, [uv(0, vl), uv(m, vl), uv(m, vh)])
     }
     return
@@ -258,8 +263,8 @@ function addPart(walls: MeshBuilder, roofs: MeshBuilder, p: RoofPartRecord, base
     } else {
       // Gable triangle in the end wall.
       const m = modules(2 * hw)
-      const vl = (eaveY - base) / FLOOR_M
-      const vh = (ridgeY - base) / FLOOR_M
+      const vl = (eaveY - base) / floor
+      const vh = (ridgeY - base) / floor
       walls.triangle(point(s, -hw, eaveY), point(s, hw, eaveY), point(s, 0, ridgeY), wallColor, out, [uv(0, vl), uv(m, vl), uv(m / 2, vh)])
     }
   }
@@ -297,11 +302,16 @@ function partsFromRoofType(b: BuildingRecord, outline: [number, number][]): Roof
 }
 
 // Wall texture by kind of building.
-type WallKind = 'wall' | 'boards' | 'logs'
+type WallKind = 'wall' | 'boards' | 'logs' | 'cladding'
 const WALL_KIND: Record<string, WallKind> = {
   house: 'wall',
+  farmhouse: 'wall',
+  church: 'wall',
+  industry: 'cladding',
   other: 'wall',
   cabin: 'logs',
+  summer_farm: 'logs',
+  boathouse: 'boards',
   barn: 'boards',
   farm_auxiliary: 'boards',
   garage: 'boards',
@@ -315,7 +325,12 @@ export async function loadBuildings(world: World, gfx: Gfx): Promise<THREE.Group
   if (!response.ok) return null
   const records = (await response.json()) as BuildingRecord[]
 
-  const walls: Record<WallKind, MeshBuilder> = { wall: new MeshBuilder(), boards: new MeshBuilder(), logs: new MeshBuilder() }
+  const walls: Record<WallKind, MeshBuilder> = {
+    wall: new MeshBuilder(),
+    boards: new MeshBuilder(),
+    logs: new MeshBuilder(),
+    cladding: new MeshBuilder(),
+  }
   const roofs = new MeshBuilder()
   for (const b of records) {
     const outline = counterClockwise(b.outline)
@@ -323,11 +338,13 @@ export async function loadBuildings(world: World, gfx: Gfx): Promise<THREE.Group
     const roofColor = new THREE.Color(b.roofColor)
     const wallTop = b.base + b.wall
     const mb = walls[WALL_KIND[b.kind] ?? 'wall']
-    addWalls(mb, outline, b.base - FOUNDATION, wallTop, b.base, wallColor)
+    // Window rows: one per floor, evenly up the wall.
+    const floor = b.floors ? Math.max(b.wall / b.floors, 2.2) : FLOOR_M
+    addWalls(mb, outline, b.base - FOUNDATION, wallTop, b.base, floor, wallColor)
     // A flat roof over the whole outline closes whatever the parts do not cover.
     addFlatCap(roofs, outline, wallTop, roofColor)
     const parts = b.parts?.length ? b.parts : partsFromRoofType(b, outline)
-    for (const p of parts) addPart(mb, roofs, p, b.base, wallTop, wallColor, roofColor)
+    for (const p of parts) addPart(mb, roofs, p, b.base, floor, wallTop, wallColor, roofColor)
   }
 
   const group = new THREE.Group()
@@ -337,6 +354,7 @@ export async function loadBuildings(world: World, gfx: Gfx): Promise<THREE.Group
     [walls.wall, t.wall],
     [walls.boards, t.boards],
     [walls.logs, t.logs],
+    [walls.cladding, t.cladding],
     [roofs, t.roof],
   ]
   for (const [builder, map] of maps) {

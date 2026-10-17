@@ -28,7 +28,9 @@ and run through it in the browser like in a first-person game.
   size and how far down its live branches reach, undergrowth where the laser hits it,
   and roofs split into their planes, giving wings with gable, hipped, shed and flat
   roofs (cross gables, L- and T-shaped houses) and their eave and ridge heights.
-- Buildings with textured walls (cladding with windows, boards, logs) and roof tiles.
+- Buildings with textured walls (cladding with windows, boards, logs) and roof tiles,
+  their kind, colours and floors from the building type registered in Matrikkelen
+  (white farmhouses, red barns, dark cabins, garages matching the house they belong to).
 - Ground from the map (forest floor, open land, marsh, fields, paths, roads, water),
   and from NIBIO AR5 land cover outside the map.
 - Buildings from OpenStreetMap and the map, with heights and gable roofs
@@ -175,6 +177,7 @@ How the map symbols become 3D is set in `src/otest/symbols/*.toml`, one table pe
 | Land cover outside the map    | NIBIO, AR5 arealressurskart (WMS)              | NLOD 2.0    |
 | Buildings, roads, water       | OpenStreetMap (Overpass API)                   | ODbL        |
 | Laser point clouds (optional) | Kartverket, hoydedata.no (downloaded by hand)  | CC BY 4.0   |
+| Building types                | Kartverket, Matrikkelen bygningspunkt (WFS)    | CC BY 4.0   |
 | Orienteering map              | Your map file                                  | Map owner's |
 
 The OCAD reader in `tools/ocad-export` uses [ocad2geojson], which is licensed under AGPL-3.0,

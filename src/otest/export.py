@@ -289,6 +289,8 @@ def _write_buildings(
                 "wallColor": b.wall_color,
                 "roofColor": b.roof_color,
                 "kind": b.kind,
+                "type": b.type_code,
+                "floors": b.floors,
                 # Wings measured in a laser point cloud, each with its own roof.
                 "parts": [
                     {
