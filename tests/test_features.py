@@ -9,10 +9,12 @@ from otest.ingest.georef import Extent
 from otest.process.features import (
     CLIFF_FACE_M,
     CLIFF_TAPER_M,
+    LineFeature,
     carve_cliffs,
     collect_features,
     measure_cliffs,
     paint_cliffs,
+    place_poles,
 )
 from otest.process.layers import GroundLayers
 from otest.process.symbols import Ground, SymbolSet
@@ -144,3 +146,15 @@ def test_paint_cliffs() -> None:
     assert layers.speed[int(EXTENT.y1 - 50.5), col] == 0
     assert layers.speed[row, col] == 0
     assert layers.speed[int(EXTENT.y1 - 60), col] == 1
+
+
+def test_poles_on_registered_masts() -> None:
+    line = LineFeature("power_line", [(0.0, 0.0), (400.0, 0.0)], 10.0)
+    fence = LineFeature("fence", [(0.0, 5.0), (100.0, 5.0)], 1.0)
+    masts = [(10.0, 0.3), (75.0, -0.4), (310.0, 0.2), (150.0, 30.0)]
+    power, other = place_poles([line, fence], masts)
+    xs = [round(x) for x, _ in power.poles]
+    # Its own masts (not the one 30 m off it), three poles evenly in the 235 m gap,
+    # and an end pole 90 m past the last mast.
+    assert xs == [10, 75, 134, 192, 251, 310, 400]
+    assert other.poles == ()

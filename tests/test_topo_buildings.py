@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from shapely import box
 
-from otest.fetch import topo_buildings
+from otest.fetch import topo
 from otest.fetch.cache import DownloadError
 from otest.fetch.topo_buildings import (
     FILL,
@@ -70,5 +70,5 @@ def test_no_buildings_without_the_service(
     def fail(*args: Any, **kwargs: Any) -> Path:
         raise DownloadError("offline")
 
-    monkeypatch.setattr(topo_buildings, "cached_download", fail)
+    monkeypatch.setattr(topo, "cached_download", fail)
     assert fetch_topo_buildings(25832, Extent(0, 0, 500, 500), tmp_path) == []

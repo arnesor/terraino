@@ -38,7 +38,8 @@ and run through it in the browser like in a first-person game.
   and from NIBIO AR5 land cover outside the map.
 - Buildings from OpenStreetMap and the map, with heights and gable roofs
   measured from the laser data.
-- Boulders, cliffs, stone walls, fences, power lines and towers from the map.
+- Boulders, cliffs, stone walls, fences, power lines and towers from the map,
+  with power line poles on the masts registered in Kartverket's topographic map.
   Cliffs are near-vertical rock faces, at least 1 m high, carved into the terrain.
 - Roads and paths drawn as their own soft-edged strips on the terrain,
   with distinct junctions joined and nothing growing on them.

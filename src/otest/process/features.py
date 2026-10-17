@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import itertools
 import math
-from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
 import numpy.typing as npt
 from rasterio.features import rasterize
-from shapely import LineString, MultiLineString, MultiPolygon, Point, Polygon
+from shapely import LineString, MultiLineString, MultiPolygon, Point, Polygon, STRtree
 from shapely.geometry.base import BaseGeometry
 
 from otest.ingest.georef import Extent
@@ -33,6 +33,13 @@ CLIFF_FOOT_M = 4.0
 # The drop tapers off over this distance at the ends of a cliff line.
 CLIFF_TAPER_M = 2.0
 IMPASSABLE_BAND_M = 1.2
+# Masts this close to a power line are its poles; a line running on this far beyond its
+# first or last mast gets an end pole; gaps longer than MAX_GAP_SPACINGS times the usual
+# spacing get poles in between.
+POLE_SNAP_M = 3.0
+POLE_END_GAP_M = 20.0
+MAX_GAP_SPACINGS = 2.5
+POLE_SPACING_M = {"power_line": 60.0, "pylon_line": 250.0}
 BOULDER_FIELD_M2_PER_STONE = 18.0
 
 
@@ -57,11 +64,20 @@ class PointFeature:
 
 @dataclass(frozen=True)
 class LineFeature:
-    """An object along a line (wall, fence, power line), in projected coordinates."""
+    """An object along a line (wall, fence, power line), in projected coordinates.
+
+    Attributes:
+        kind: Feature kind.
+        coords: The line.
+        size: Height in metres.
+        poles: Where the poles of a power line stand, in order along it; empty if
+            unknown (the viewer then spaces them evenly).
+    """
 
     kind: str
     coords: list[tuple[float, float]]
     size: float
+    poles: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -241,6 +257,58 @@ class _Sampler:
         row = int(np.clip(self.extent.y1 - y, 0, self.dtm.shape[0] - 1))
         col = int(np.clip(x - self.extent.x0, 0, self.dtm.shape[1] - 1))
         return float(self.dtm[row, col])
+
+
+def place_poles(
+    lines: Sequence[LineFeature], masts: Sequence[tuple[float, float]]
+) -> list[LineFeature]:
+    """Put the poles of power lines on the masts registered along them.
+
+    Mappers draw power lines through their masts, so the masts within POLE_SNAP_M of a
+    power line are its poles. Where the line runs on beyond its first or last mast, or
+    two masts are far apart (masts missing), poles are added at even spacing.
+
+    Examples:
+        >>> line = LineFeature("power_line", [(0, 0), (300, 0)], 10.0)
+        >>> masts = [(50.4, 0.6), (130, -0.2), (210, 0.3), (120, 9.0)]  # the last: another line
+        >>> (placed,) = place_poles([line], masts)
+        >>> [(round(x), round(y)) for x, y in placed.poles]
+        [(0, 0), (50, 1), (130, 0), (210, 0), (300, 0)]
+    """
+    if not masts:
+        return list(lines)
+    tree = STRtree([Point(m) for m in masts])
+    placed = []
+    for line in lines:
+        spacing = POLE_SPACING_M.get(line.kind)
+        if spacing is None or len(line.coords) < 2:
+            placed.append(line)
+            continue
+        path = LineString(line.coords)
+        hits = tree.query(path, predicate="dwithin", distance=POLE_SNAP_M)
+        own = sorted((path.project(Point(masts[i])), masts[i]) for i in hits)
+        if not own:
+            placed.append(line)
+            continue
+        anchors: list[tuple[float, tuple[float, float]]] = []
+        if own[0][0] > POLE_END_GAP_M:
+            anchors.append((0.0, line.coords[0]))
+        anchors.extend(own)
+        if path.length - own[-1][0] > POLE_END_GAP_M:
+            anchors.append((path.length, line.coords[-1]))
+        poles = [anchors[0][1]]
+        for (d0, _), (d1, p1) in itertools.pairwise(anchors):
+            gap = d1 - d0
+            if gap > spacing * MAX_GAP_SPACINGS:
+                n = round(gap / spacing)
+                for k in range(1, n):
+                    q = path.interpolate(d0 + gap * k / n)
+                    poles.append((q.x, q.y))
+            poles.append(p1)
+        placed.append(
+            replace(line, poles=tuple((float(x), float(y)) for x, y in poles))
+        )
+    return placed
 
 
 def measure_cliffs(

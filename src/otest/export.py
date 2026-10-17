@@ -340,6 +340,8 @@ def _write_features(out_dir: Path, features: Features, extent: Extent) -> None:
                 "points": [
                     [round(x - ox, 2), round(oz - y, 2)] for x, y in line.coords
                 ],
+                # Exact pole positions of power lines, where known.
+                "poles": [[round(x - ox, 2), round(oz - y, 2)] for x, y in line.poles],
             }
             for line in features.lines
         ],

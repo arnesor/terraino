@@ -19,6 +19,7 @@ from shapely.geometry import mapping
 
 from otest.export import WorldData, write_world
 from otest.fetch import ar5, kartverket, matrikkel, nibio, osm, topo_buildings
+from otest.fetch.masts import fetch_masts
 from otest.ingest.georef import Extent
 from otest.ingest.image import ImageMap, read_image_map
 from otest.ingest.lidar import ATTRIBUTION as LIDAR_ATTRIBUTION
@@ -27,12 +28,14 @@ from otest.ingest.ocad import AREA_SYMBOL, export_ocad
 from otest.process.buildings import collect_footprints, measure_buildings
 from otest.process.classify import classify_map
 from otest.process.features import (
+    POLE_SPACING_M,
     Features,
     PointFeature,
     carve_cliffs,
     collect_features,
     measure_cliffs,
     paint_cliffs,
+    place_poles,
 )
 from otest.process.fuse import (
     add_lidar_undergrowth,
@@ -378,6 +381,17 @@ def _add_nature_and_buildings(
     if source.features is not None:
         objects = source.features
         objects.cliffs = measure_cliffs(source.cliff_lines, dtm, extent)
+        if any(line.kind in POLE_SPACING_M for line in objects.lines):
+            masts = fetch_masts(source.epsg, extent, cache)
+            objects.lines = place_poles(objects.lines, masts)
+            poled = [line for line in objects.lines if line.kind in POLE_SPACING_M]
+            log.info(
+                "Power lines: %d of %d with poles on registered masts",
+                sum(bool(line.poles) for line in poled),
+                len(poled),
+            )
+            if masts and topo_buildings.ATTRIBUTION not in world.attribution:
+                world.attribution = [*world.attribution, topo_buildings.ATTRIBUTION]
         carve_cliffs(dtm, objects.cliffs, extent)
         paint_cliffs(layers, objects.cliffs, extent)
         world.features = objects

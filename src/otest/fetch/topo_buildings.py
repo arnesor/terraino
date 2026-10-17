@@ -13,21 +13,21 @@ import logging
 import math
 import warnings
 from collections.abc import Sequence
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
-from PIL import Image
 from rasterio.errors import NotGeoreferencedWarning
 from rasterio.features import shapes
 from rasterio.transform import from_origin
 from scipy import ndimage
-from shapely import Polygon, box
+from shapely import Polygon
 from shapely.geometry import shape
 
-from otest.fetch.cache import DownloadError, cached_download
+from otest.fetch.cache import DownloadError
+from otest.fetch.topo import ATTRIBUTION as ATTRIBUTION
+from otest.fetch.topo import read_layer
 from otest.ingest.georef import Extent
 
 log = logging.getLogger(__name__)
@@ -36,14 +36,11 @@ warnings.filterwarnings(
     "ignore", category=NotGeoreferencedWarning, module="rasterio.features"
 )
 
-WMS_URL = "https://wms.geonorge.no/skwms1/wms.topo"
 LAYER = "fkb_bygning"
-ATTRIBUTION = "© Kartverket (Topografisk Norgeskart, CC BY 4.0)"
 PIXEL_M = 0.1
 TILE_M = 400
 # Tiles overlap by this much, so buildings on a tile edge are whole in one of them.
 OVERLAP_M = 40
-PARALLEL_DOWNLOADS = 3
 FILL = (196, 135, 35)
 ROOF_LINE = (110, 100, 80)
 FILL_DISTANCE = 45.0
@@ -317,57 +314,24 @@ def _trace_crop(
     return buildings
 
 
-def _tile_path(cache_dir: Path, epsg: int, tx: float, ty: float) -> Path:
-    return cache_dir / "topo" / f"{LAYER}_{epsg}_{tx:.0f}_{ty:.0f}_{PIXEL_M}.png"
-
-
-def _fetch_tile(epsg: int, tx: float, ty: float, cache_dir: Path) -> list[TopoBuilding]:
-    size = round((TILE_M + 2 * OVERLAP_M) / PIXEL_M)
-    bx0, by0 = tx - OVERLAP_M, ty - OVERLAP_M
-    bx1, by1 = tx + TILE_M + OVERLAP_M, ty + TILE_M + OVERLAP_M
-    params = {
-        "service": "WMS",
-        "version": "1.3.0",
-        "request": "GetMap",
-        "layers": LAYER,
-        "styles": "",
-        "crs": f"EPSG:{epsg}",
-        "bbox": f"{bx0},{by0},{bx1},{by1}",
-        "width": str(size),
-        "height": str(size),
-        "format": "image/png",
-        "transparent": "true",
-    }
-    path = cached_download(
-        WMS_URL,
-        params,
-        _tile_path(cache_dir, epsg, tx, ty),
-        expect_content_type="image/png",
-    )
-    with Image.open(path) as img:
-        rgba = np.asarray(img.convert("RGBA"))
-    return trace_buildings(rgba, bx0, by1, keep=box(tx, ty, tx + TILE_M, ty + TILE_M))
-
-
 def fetch_topo_buildings(
     epsg: int, extent: Extent, cache_dir: Path
 ) -> list[TopoBuilding]:
     """Buildings with roof lines within ``extent``; empty (with a warning) on failure."""
-    tiles = [
-        (float(tx), float(ty))
-        for ty in np.arange(extent.y0, extent.y1, TILE_M)
-        for tx in np.arange(extent.x0, extent.x1, TILE_M)
-    ]
-    log.info("Tracing buildings in %d map tiles from Kartverket", len(tiles))
     try:
-        with ThreadPoolExecutor(PARALLEL_DOWNLOADS) as pool:
-            parts = list(
-                pool.map(lambda t: _fetch_tile(epsg, t[0], t[1], cache_dir), tiles)
-            )
+        buildings = read_layer(
+            LAYER,
+            epsg,
+            extent,
+            cache_dir,
+            pixel_m=PIXEL_M,
+            tile_m=TILE_M,
+            overlap_m=OVERLAP_M,
+            reader=lambda rgba, x0, y1, keep: trace_buildings(rgba, x0, y1, keep),
+        )
     except DownloadError as exc:
         log.warning("No buildings from Kartverket's map: %s", exc)
         return []
-    buildings = [b for part in parts for b in part]
     log.info(
         "Traced %d buildings (%d with roof lines) from Kartverket's map",
         len(buildings),

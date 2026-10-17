@@ -8,7 +8,8 @@ interface FeatureFile {
   kinds: string[]
   /** [kind index, x, z, size, angle] */
   points: [number, number, number, number, number][]
-  lines: { kind: string; size: number; points: [number, number][] }[]
+  /** poles: where a power line's poles stand, when known (else they are spaced evenly) */
+  lines: { kind: string; size: number; points: [number, number][]; poles?: [number, number][] }[]
   cliffs: { kind: string; top: [number, number, number][]; bottom: [number, number, number][] }[]
 }
 
@@ -183,7 +184,8 @@ export class MapFeatures {
       } else if (line.kind === 'fence' || line.kind === 'ruined_fence') {
         parts.push(...this.fence(pts, line.size, line.kind === 'ruined_fence'))
       } else if (line.kind === 'power_line' || line.kind === 'pylon_line') {
-        parts.push(...this.powerLine(pts, line.size, line.kind === 'pylon_line', wires))
+        const poles = line.poles?.length ? line.poles.map(([x, z]) => new THREE.Vector3(x, ground(x, z), z)) : null
+        parts.push(...this.powerLine(pts, line.size, line.kind === 'pylon_line', wires, poles))
       }
     }
 
@@ -246,13 +248,13 @@ export class MapFeatures {
     return out
   }
 
-  private powerLine(pts: THREE.Vector3[], height: number, steel: boolean, wires: number[]): THREE.BufferGeometry[] {
+  private powerLine(pts: THREE.Vector3[], height: number, steel: boolean, wires: number[], known: THREE.Vector3[] | null): THREE.BufferGeometry[] {
     const out: THREE.BufferGeometry[] = []
-    // Poles every ~60 m (pylons ~250 m), always at both ends.
+    // The registered poles, or else poles every ~60 m (pylons ~250 m), always at both ends.
     const spacing = steel ? 250 : 60
-    const poles = alongLine(pts, spacing)
+    const poles = known ?? alongLine(pts, spacing)
     const last = pts[pts.length - 1]!
-    if (poles.length === 0 || poles[poles.length - 1]!.distanceTo(last) > spacing * 0.3) poles.push(last)
+    if (!known && (poles.length === 0 || poles[poles.length - 1]!.distanceTo(last) > spacing * 0.3)) poles.push(last)
     const arm = steel ? 6 : 1.6
     const tops: THREE.Vector3[][] = []
     poles.forEach((p, i) => {
