@@ -6,7 +6,8 @@ export interface BuildingRecord {
   base: number
   wall: number
   roof: number
-  roofType: 'gable' | 'flat'
+  roofType: 'gable' | 'hip' | 'shed' | 'flat'
+  /** Ridge direction (scene x, z); for a shed roof its high edge, the roof rising to the right of it. */
   ridge: [number, number]
   wallColor: string
   roofColor: string
@@ -140,6 +141,84 @@ function addGableRoof(mb: MeshBuilder, b: BuildingRecord, outline: [number, numb
   mb.triangle(g10, g11, gr1, wallColor, alongU)
 }
 
+/** The building's bounding box in roof axes: u along the ridge, w across it (to its right). */
+function roofFrame(b: BuildingRecord, outline: [number, number][]) {
+  const [ux, uz] = b.ridge
+  const wx = -uz
+  const wz = ux
+  let umin = Infinity
+  let umax = -Infinity
+  let wmin = Infinity
+  let wmax = -Infinity
+  for (const [x, z] of outline) {
+    const u = x * ux + z * uz
+    const w = x * wx + z * wz
+    umin = Math.min(umin, u)
+    umax = Math.max(umax, u)
+    wmin = Math.min(wmin, w)
+    wmax = Math.max(wmax, w)
+  }
+  const point = (u: number, w: number, y: number) => v(u * ux + w * wx, y, u * uz + w * wz)
+  return { ux, uz, wx, wz, umin, umax, wmin, wmax, point }
+}
+
+/** Hipped roof: four planes of the same pitch, up to a shorter ridge (or a point). */
+function addHipRoof(mb: MeshBuilder, b: BuildingRecord, outline: [number, number][], wallTop: number, roofColor: THREE.Color) {
+  const { ux, uz, wx, wz, umin, umax, wmin, wmax, point } = roofFrame(b, outline)
+  const umid = (umin + umax) / 2
+  const wmid = (wmin + wmax) / 2
+  const hw = Math.max((wmax - wmin) / 2, 0.1)
+  const half = Math.max((umax - umin) / 2 - hw, 0) // half the ridge length
+  const ridgeY = wallTop + b.roof
+  const slope = b.roof / hw
+  const eaveY = wallTop - OVERHANG * slope
+  const e00 = point(umin - OVERHANG, wmin - OVERHANG, eaveY)
+  const e10 = point(umax + OVERHANG, wmin - OVERHANG, eaveY)
+  const e01 = point(umin - OVERHANG, wmax + OVERHANG, eaveY)
+  const e11 = point(umax + OVERHANG, wmax + OVERHANG, eaveY)
+  const r0 = point(umid - half, wmid, ridgeY)
+  const r1 = point(umid + half, wmid, ridgeY)
+  const under = roofColor.clone().multiplyScalar(0.5)
+  const faces: [THREE.Vector3[], THREE.Vector3][] = [
+    [[e00, e10, r1, r0], v(-wx, 1, -wz)],
+    [[e11, e01, r0, r1], v(wx, 1, wz)],
+    [[e01, e00, r0], v(-ux, 1, -uz)],
+    [[e10, e11, r1], v(ux, 1, uz)],
+  ]
+  for (const [p, facing] of faces) {
+    if (p.length === 4 && half > 0.01) {
+      mb.quad(p[0]!, p[1]!, p[2]!, p[3]!, roofColor, facing)
+      mb.quad(p[0]!, p[1]!, p[2]!, p[3]!, under, DOWN)
+    } else {
+      mb.triangle(p[0]!, p[1]!, p[2]!, roofColor, facing)
+      mb.triangle(p[0]!, p[1]!, p[2]!, under, DOWN)
+    }
+  }
+}
+
+/** Shed (pent) roof: one plane rising across the building; the walls below it close up. */
+function addShedRoof(mb: MeshBuilder, b: BuildingRecord, outline: [number, number][], wallTop: number, roofColor: THREE.Color, wallColor: THREE.Color) {
+  const { ux, uz, wx, wz, umin, umax, wmin, wmax, point } = roofFrame(b, outline)
+  const highY = wallTop + b.roof
+  const slope = b.roof / Math.max(wmax - wmin, 0.1)
+  const p00 = point(umin - OVERHANG, wmin - OVERHANG, wallTop - OVERHANG * slope)
+  const p10 = point(umax + OVERHANG, wmin - OVERHANG, wallTop - OVERHANG * slope)
+  const p11 = point(umax + OVERHANG, wmax + OVERHANG, highY + OVERHANG * slope)
+  const p01 = point(umin - OVERHANG, wmax + OVERHANG, highY + OVERHANG * slope)
+  mb.quad(p00, p10, p11, p01, roofColor, UP)
+  mb.quad(p00, p10, p11, p01, roofColor.clone().multiplyScalar(0.5), DOWN)
+  // The high wall goes up to the roof, and the end walls get a triangle each.
+  const lowA = point(umin, wmin, wallTop)
+  const lowB = point(umax, wmin, wallTop)
+  const highA = point(umin, wmax, wallTop)
+  const highB = point(umax, wmax, wallTop)
+  const topA = point(umin, wmax, highY)
+  const topB = point(umax, wmax, highY)
+  mb.quad(highA, highB, topB, topA, wallColor, v(wx, 0, wz))
+  mb.triangle(lowA, highA, topA, wallColor, v(-ux, 0, -uz))
+  mb.triangle(lowB, highB, topB, wallColor, v(ux, 0, uz))
+}
+
 export async function loadBuildings(world: World): Promise<THREE.Group | null> {
   const info = world.manifest.buildings
   if (!info) return null
@@ -157,6 +236,10 @@ export async function loadBuildings(world: World): Promise<THREE.Group | null> {
     addWalls(walls, outline, b.base - FOUNDATION, wallTop, wallColor)
     if (b.roofType === 'gable') {
       addGableRoof(roofs, b, outline, wallTop, roofColor, wallColor)
+    } else if (b.roofType === 'hip') {
+      addHipRoof(roofs, b, outline, wallTop, roofColor)
+    } else if (b.roofType === 'shed') {
+      addShedRoof(roofs, b, outline, wallTop, roofColor, wallColor)
     } else {
       addFlatRoof(roofs, outline, wallTop, roofColor)
     }

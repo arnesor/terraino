@@ -9,6 +9,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "click>=8.0.1",
+    "laspy[lazrs]>=2.7.0",
     "numpy>=2.5.3",
     "pillow>=12.3.0",
     "pyproj>=3.8.0",
@@ -73,7 +74,7 @@ known_first_party = ["otest"]
 
 [[tool.mypy.overrides]]
 # No type information published for these packages.
-module = ["rasterio", "rasterio.*"]
+module = ["rasterio", "rasterio.*", "laspy", "laspy.*"]
 ignore_missing_imports = true
 
 [tool.rumdl]

@@ -123,7 +123,9 @@ async function main() {
     forest.shadows = environment.quality !== 'low'
     scene.add(forest.group)
   }
-  const undergrowth = layers ? new Undergrowth(layers, heights, gfx, QUALITY[environment.quality]) : null
+  const undergrowth = layers
+    ? new Undergrowth(layers, heights, gfx, QUALITY[environment.quality], layerInfo?.undergrowth === 'lidar')
+    : null
   if (undergrowth) undergrowth.tracks = tracks
   if (undergrowth) scene.add(undergrowth.group)
   const buildings = await loadBuildings(world)

@@ -251,7 +251,8 @@ def test_scattered_trees_are_few_and_far_apart() -> None:
     stump_rows, stump_cols, stump_heights = scattered_stumps(chm, layers)
     assert (stump_heights >= MIN_TREE_HEIGHT_M).all()
     assert len(stump_rows) > len(x) * 3
-    assert (layers.tree_rule[stump_rows, stump_cols] == TREES_SCATTERED).all()
+    cells = stump_rows.astype(int), stump_cols.astype(int)
+    assert (layers.tree_rule[cells] == TREES_SCATTERED).all()
     # Forest outside the area keeps all its trees.
     outside = (
         layers.tree_rule[trees.row.astype(int), trees.col.astype(int)] == TREES_KEEP

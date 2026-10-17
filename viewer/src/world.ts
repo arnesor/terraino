@@ -28,6 +28,8 @@ export interface LayerInfo {
   canopyUnit: number
   levels: number
   ground: Record<string, number>
+  /** 'lidar' when the undergrowth layer comes from a laser point cloud as well. */
+  undergrowth?: 'lidar' | 'map'
 }
 
 export interface TreeInfo {
@@ -41,6 +43,8 @@ export interface TreeInfo {
   species: Record<string, string>
   /** Added to the species byte of trees that grew up in a stand (seed trees). */
   standGrownFlag?: number
+  /** Crown base class (0 unknown, 1-3 low to high) in the species byte, from this bit. */
+  crownBaseShift?: number
 }
 
 export interface Manifest {

@@ -59,6 +59,7 @@ def world(tmp_path: Path) -> World:
         height=np.array([12.0, 20.0], dtype=np.float32),
         crown=np.array([1.5, 2.5], dtype=np.float32),
         species=np.array([1, 3], dtype=np.uint8),
+        crown_base=np.array([0.5, np.nan], dtype=np.float32),
     )
     data = WorldData(
         name="test",
@@ -145,8 +146,10 @@ def test_trees_written_per_chunk(world: World) -> None:
     assert first["x"][0] / info["posScale"] == pytest.approx(10.0)
     assert first["z"][0] / info["posScale"] == pytest.approx(20.0)
     assert first["height"][0] / info["heightScale"] == pytest.approx(12.0)
+    # The first tree's crown begins half way up: crown base class 3 above the species.
+    assert first["species"][0] == 1 | 3 << info["crownBaseShift"]
     last = np.fromfile(out / "trees" / "1_2.bin", dtype=TREE_DTYPE)
-    assert last["species"].tolist() == [3]
+    assert last["species"].tolist() == [3]  # unknown crown base: class 0
     assert last["x"][0] / info["posScale"] == pytest.approx(300 - CHUNK)
 
 

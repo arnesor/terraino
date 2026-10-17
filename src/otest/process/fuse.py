@@ -7,6 +7,7 @@ from collections.abc import Iterable, Sequence
 import numpy as np
 import numpy.typing as npt
 from rasterio.features import rasterize
+from scipy import ndimage
 from shapely import LineString, MultiLineString, MultiPolygon, Polygon
 from shapely.geometry.base import BaseGeometry
 
@@ -18,6 +19,11 @@ from otest.process.symbols import Ground
 FOREST_CANOPY_M = 3.0
 # Undergrowth level given to low vegetation found in the laser data.
 LIDAR_UNDERGROWTH = 0.6
+# Laser undergrowth density (share of returns stopped 0.5-3 m above the ground) that
+# starts to count as undergrowth, the range up to full undergrowth, and the smoothing.
+LIDAR_LOW_MIN = 0.1
+LIDAR_LOW_RANGE = 0.5
+LIDAR_UNDERGROWTH_SMOOTH = 3
 _NO_UNDERGROWTH = [
     Ground.WATER,
     Ground.BUILDING,
@@ -94,6 +100,37 @@ def add_low_vegetation(layers: GroundLayers, found: npt.NDArray[np.bool_]) -> No
     """
     cells = found & ~layers.clear & ~np.isin(layers.ground, _NO_UNDERGROWTH)
     layers.shrubs[cells] = np.maximum(layers.shrubs[cells], LIDAR_UNDERGROWTH)
+
+
+def add_lidar_undergrowth(layers: GroundLayers, low: npt.NDArray[np.float32]) -> None:
+    """Undergrowth in the forest where the laser stops in the 0.5-3 m layer.
+
+    Args:
+        layers: Ground layers to update.
+        low: Share of the returns reaching the 0.5-3 m layer that stop in it (NaN
+            where unknown), from the laser point cloud.
+
+    Examples:
+        >>> from otest.process.layers import GroundLayers
+        >>> z = np.zeros((1, 3), dtype=np.float32)
+        >>> layers = GroundLayers(
+        ...     ground=np.array([[1, 1, 2]], np.uint8), speed=z + 1, young=z, shrubs=z,
+        ...     tree_rule=np.zeros((1, 3), np.uint8), clear=z > 0, in_map=z == 0)
+        >>> add_lidar_undergrowth(layers, np.array([[0.05, 0.6, 0.6]], np.float32))
+        >>> [round(v, 2) for v in layers.shrubs[0].tolist()]  # smoothed; not on open land
+        [0.27, 0.6, 0.0]
+    """
+    density = np.nan_to_num(low, nan=0.0)
+    density = ndimage.uniform_filter(density, size=LIDAR_UNDERGROWTH_SMOOTH)
+    level = np.clip(
+        (density - LIDAR_LOW_MIN) / LIDAR_LOW_RANGE, 0.0, LIDAR_UNDERGROWTH
+    ).astype(np.float32)
+    cells = (
+        (layers.tree_rule == TREES_KEEP)
+        & ~layers.clear
+        & np.isin(layers.ground, [Ground.FOREST, Ground.UNKNOWN])
+    )
+    layers.shrubs[cells] = np.maximum(layers.shrubs[cells], level[cells])
 
 
 def apply_land_cover(layers: GroundLayers, land_cover: npt.NDArray[np.uint8]) -> None:

@@ -71,6 +71,10 @@ TREE_DTYPE = np.dtype(
 SPECIES_NAMES = {1: "spruce", 2: "pine", 3: "deciduous"}
 # Added to the species byte of trees that grew up in a stand (seed trees left standing).
 STAND_GROWN_FLAG = 16
+# Crown base class in bits 5-6 of the species byte: 0 unknown, 1 branches to the
+# ground, 2 lowest third bare, 3 lower half or more bare (limits as shares of height).
+CROWN_BASE_SHIFT = 5
+CROWN_BASE_LIMITS = (0.19, 0.41)
 
 # The rendered map images are large; they come from our own exporter.
 Image.MAX_IMAGE_PIXELS = None
@@ -126,6 +130,7 @@ class WorldData:
         buildings: Buildings to raise, or None.
         features: Rocks, cliffs, walls and other map features, or None.
         tracks: Roads and paths, or None.
+        lidar: True if a laser point cloud shaped the trees, undergrowth and roofs.
     """
 
     name: str
@@ -146,6 +151,7 @@ class WorldData:
     buildings: Sequence[Building] | None = None
     features: Features | None = None
     tracks: Sequence[Track] | None = None
+    lidar: bool = False
 
 
 def _chunk(grid: npt.NDArray[Any], cx: int, cy: int) -> npt.NDArray[Any]:
@@ -243,6 +249,14 @@ def _write_trees(out_dir: Path, trees: Trees, chunks: tuple[int, int]) -> list[i
         records["species"] |= np.where(trees.stand_grown, STAND_GROWN_FLAG, 0).astype(
             np.uint8
         )
+    if trees.crown_base is not None:
+        base = trees.crown_base
+        crown_class = np.where(
+            np.isfinite(base),
+            np.digitize(np.nan_to_num(base), CROWN_BASE_LIMITS) + 1,
+            0,
+        ).astype(np.uint8)
+        records["species"] |= crown_class << CROWN_BASE_SHIFT
     records = records[order]
     sorted_ids = chunk_id[order]
 
@@ -440,6 +454,8 @@ def write_world(out_dir: Path, world: WorldData) -> Path:
             "canopyUnit": CANOPY_UNIT_M,
             "levels": LEVELS,
             "ground": {g.name.lower(): int(g) for g in Ground},
+            # Where undergrowth comes from: the map only, or also the laser point cloud.
+            "undergrowth": "lidar" if world.lidar else "map",
         }
     if world.trees is not None:
         counts = _write_trees(out_dir, world.trees, chunks)
@@ -453,6 +469,7 @@ def write_world(out_dir: Path, world: WorldData) -> Path:
             "recordBytes": TREE_DTYPE.itemsize,
             "species": SPECIES_NAMES,
             "standGrownFlag": STAND_GROWN_FLAG,
+            "crownBaseShift": CROWN_BASE_SHIFT,
         }
 
     if world.buildings is not None:

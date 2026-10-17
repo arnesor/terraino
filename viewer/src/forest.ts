@@ -67,6 +67,7 @@ class TreeChunk {
     const crown = new Float32Array(n)
     const species = new Uint8Array(n)
     const standGrown = new Uint8Array(n)
+    const crownBase = new Uint8Array(n)
     const ox = cx * chunkSize
     const oz = cy * chunkSize
     for (let i = 0; i < n; i++) {
@@ -81,6 +82,7 @@ class TreeChunk {
       crown[i] = view.getUint8(o + 6) / info.crownScale
       const kind = view.getUint8(o + 7)
       standGrown[i] = info.standGrownFlag && kind & info.standGrownFlag ? 1 : 0
+      crownBase[i] = info.crownBaseShift ? (kind >> info.crownBaseShift) & 3 : 0
       species[i] = kind & 15
       this.rotation[i] = posRandom(x, z, 1) * Math.PI * 2
       this.tint[i] = 0.85 + posRandom(x, z, 2) * 0.3
@@ -91,7 +93,12 @@ class TreeChunk {
       const h = this.height[i]!
       const r = posRandom(x, z, 3)
       let v: number
-      if (species[i] === SPRUCE) {
+      if (species[i] === SPRUCE && crownBase[i]) {
+        // Measured in the laser point cloud: 1 branches to the ground ... 3 half bare.
+        v = crownBase[i]! - 1
+        if (v === 0 && tracks?.near(x, z, Math.min(0.2 * h, 4))) v = 1
+        if (standGrown[i]) v = Math.max(v, h < 9 ? 1 : 2)
+      } else if (species[i] === SPRUCE) {
         // How far down the live branches go. Spruce in a stand shed their lower branches;
         // trees in the open, young trees and edge trees keep them.
         const neighbours = this.countNear(x, z, 4.5) - 1
@@ -107,7 +114,9 @@ class TreeChunk {
       else v = r < 0.5 ? 5 : 6
       this.variant[i] = v
       const k = crown[i]! / Math.max(h, 0.5) / MODEL_CROWN[v]!
-      this.width[i] = h * Math.min(Math.max(k, 0.7), 1.25)
+      // Crowns measured in the laser data may vary more than the estimated ones.
+      const [lo, hi] = crownBase[i] ? [0.6, 1.4] : [0.7, 1.25]
+      this.width[i] = h * Math.min(Math.max(k, lo), hi)
     }
     this.box = new THREE.Box3(
       new THREE.Vector3(ox, heights.chunkMin(cx, cy), oz),

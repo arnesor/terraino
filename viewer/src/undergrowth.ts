@@ -13,11 +13,16 @@ const MAX_TWIGS = 6000
 const MAX_STUMPS = 4000
 const STUMP_CELL = 32
 
-// Chance of a bush per square metre on the forest floor, where the laser cannot see
-// below the canopy. Elsewhere bushes stand only where the undergrowth layer has them:
-// from the map's undergrowth symbols or low vegetation found in the laser data.
+// Chance of a bush per square metre on the forest floor, where the height models cannot
+// see below the canopy. Elsewhere bushes stand only where the undergrowth layer has
+// them: from the map's undergrowth symbols or low vegetation found in the laser data.
+// With a laser point cloud the undergrowth layer covers the forest too, and only a few
+// random bushes are added.
 const BUSH_BASE: Partial<Record<number, number>> = {
   [Ground.forest]: 0.025,
+}
+const BUSH_BASE_LIDAR: Partial<Record<number, number>> = {
+  [Ground.forest]: 0.004,
 }
 // Fallen logs and dry branches per square metre of forest.
 const LOGS = 0.0012
@@ -129,14 +134,16 @@ export class Undergrowth {
   private readonly stumpGrid = new Map<number, number[]>()
   private builtAt: THREE.Vector3 | null = null
   private quality: QualitySettings
+  private readonly bushBase: Partial<Record<number, number>>
 
   /** Roads, paths and streams: nothing grows on them. */
   tracks: Tracks | null = null
 
-  constructor(layers: LayerStore, heights: HeightField, gfx: Gfx, quality: QualitySettings) {
+  constructor(layers: LayerStore, heights: HeightField, gfx: Gfx, quality: QualitySettings, lidar = false) {
     this.layers = layers
     this.heights = heights
     this.quality = quality
+    this.bushBase = lidar ? BUSH_BASE_LIDAR : BUSH_BASE
     const add = (geometry: THREE.BufferGeometry, material: THREE.Material, capacity: number, cast: boolean) => {
       const mesh = new THREE.InstancedMesh(geometry, material, capacity)
       mesh.count = 0
@@ -223,7 +230,7 @@ export class Undergrowth {
         if (s.ground === Ground.water || s.ground === Ground.building) continue
         const forest = s.ground === Ground.forest
 
-        const bushChance = (BUSH_BASE[s.ground] ?? 0) + s.shrubs * 0.35
+        const bushChance = (this.bushBase[s.ground] ?? 0) + s.shrubs * 0.35
         if (cellRandom(x, z, 1) < bushChance) {
           const bx = x + cellRandom(x, z, 2)
           const bz = z + cellRandom(x, z, 3)

@@ -24,6 +24,9 @@ and run through it in the browser like in a first-person game.
   instead of heights interpolated from contour lines.
 - Individual trees from the laser surface model, with species from NIBIO SR16,
   thinned on open land and made denser where the map shows green.
+- With a laser point cloud: sharper tree positions and true heights, each tree's crown
+  size and how far down its live branches reach, undergrowth where the laser hits it,
+  and roof shapes (flat, shed, gable, hip) with eave and ridge heights.
 - Ground from the map (forest floor, open land, marsh, fields, paths, roads, water),
   and from NIBIO AR5 land cover outside the map.
 - Buildings from OpenStreetMap and the map, with heights and gable roofs
@@ -87,6 +90,21 @@ Useful build options (see `uv run otest build --help`):
   they add the number of trees per hectare to the species from the SR16 web map.
 - `--symbols` sets the symbol standard of an OCAD map if the guess is wrong.
 - `--no-forest` builds the terrain only.
+- `--lidar FOLDER` uses a laser point cloud (see below).
+
+### Laser point clouds
+
+Without them, trees and roofs come from Kartverket's 1 m height models.
+Point clouds from [hoydedata.no](https://hoydedata.no/) give much more detail.
+Download the projects covering the map (LAZ, "Punktsky") and unpack each into its own folder.
+Give the folders with `--lidar`, the densest first; each place uses the first one that covers it:
+
+```console
+uv run otest build map.ocd --lidar ~/hoydedata/5pkt-2016 --lidar ~/hoydedata/2pkt-2016
+```
+
+Or set `OTEST_LIDAR_DIRS` to the folders separated by `:`.
+Reading them takes about a minute; the result is cached in `data-cache/lidar/`.
 
 Maps must be georeferenced in UTM zone 32, 33 or 35 (ETRS89 or WGS 84).
 
@@ -154,14 +172,14 @@ How the map symbols become 3D is set in `src/otest/symbols/*.toml`, one table pe
 | Tree species and tree count   | NIBIO, SR16 skogressurskart (WMS or GeoTIFF)   | NLOD 2.0    |
 | Land cover outside the map    | NIBIO, AR5 arealressurskart (WMS)              | NLOD 2.0    |
 | Buildings, roads, water       | OpenStreetMap (Overpass API)                   | ODbL        |
+| Laser point clouds (optional) | Kartverket, hoydedata.no (downloaded by hand)  | CC BY 4.0   |
 | Orienteering map              | Your map file                                  | Map owner's |
 
 The OCAD reader in `tools/ocad-export` uses [ocad2geojson], which is licensed under AGPL-3.0,
 and so is that tool.
 The Python package runs it as a separate program.
 
-Not used yet: laser point clouds from hoydedata.no
-(must be ordered by hand) and road widths from NVDB.
+Not used yet: road widths from NVDB.
 
 [ocad2geojson]: https://github.com/perliedman/ocad2geojson
 

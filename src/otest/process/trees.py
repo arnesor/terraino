@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -46,6 +47,20 @@ LOW_VEGETATION_WINDOW = 9
 YOUNG_HEIGHT_M = (1.2, 4.5)
 # Scattered trees stand at least this far apart (about 40 per hectare).
 SCATTERED_SPACING_M = 12.0
+# Laser tree tops on the 0.5 m canopy: smoothing, and the search window (in fine cells)
+# for low and for tall (TALL_TREE_M and more) trees.
+FINE_SIGMA = 1.0
+FINE_WINDOW = (5, 9)
+TALL_TREE_M = 16.0
+# Crowns end where the canopy drops below this.
+CROWN_EDGE_M = 2.0
+CROWN_RADIUS_M = (0.4, 7.0)
+# A crown's base: this quantile of the lowest vegetation return in each of its cells.
+# The laser mostly hits the upper crown; low branches show only in some cells.
+CROWN_BASE_QUANTILE = 0.25
+# Returns lower than this were not counted (otest.ingest.lidar.CROWN_MIN_M), so a crown
+# reaching that low has branches to the ground.
+CROWN_BASE_FLOOR_M = 1.0
 
 # Probability of each species given SR16's dominant species (spruce, pine, deciduous).
 _MIX = {
@@ -81,6 +96,8 @@ class Trees:
         stand_grown: True for trees that grew up in a stand but now stand alone (seed
             trees left after a cut): long bare trunks, not branches to the ground.
             None means none are.
+        crown_base: Where the live crown begins, as a share of the height (from the
+            laser point cloud); NaN where unknown, None if unknown for all.
     """
 
     col: npt.NDArray[np.float32]
@@ -89,10 +106,54 @@ class Trees:
     crown: npt.NDArray[np.float32]
     species: npt.NDArray[np.uint8]
     stand_grown: npt.NDArray[np.bool_] | None = None
+    crown_base: npt.NDArray[np.float32] | None = None
 
     def __len__(self) -> int:
         """Number of trees."""
         return len(self.col)
+
+
+@dataclass
+class TreeTops:
+    """Tree tops found in the laser data, on the world's 1 m grid.
+
+    Attributes:
+        row: Row position in cells from the north edge, fractional (cell centres at .5).
+        col: Column position in cells from the west edge, fractional.
+        height: Tree height in metres.
+        crown: Crown radius in metres; NaN where unknown.
+        crown_base: Where the live crown begins, as a share of the height; NaN where
+            unknown.
+        cell: Size in metres of the grid the tops were found on; positions are jittered
+            within a cell of this size, so the forest does not look gridded.
+    """
+
+    row: npt.NDArray[np.float32]
+    col: npt.NDArray[np.float32]
+    height: npt.NDArray[np.float32]
+    crown: npt.NDArray[np.float32]
+    crown_base: npt.NDArray[np.float32]
+    cell: float = 1.0
+
+    def __len__(self) -> int:
+        """Number of tops."""
+        return len(self.row)
+
+    def take(self, mask: npt.NDArray[np.bool_]) -> TreeTops:
+        """The tops where ``mask`` is True."""
+        return TreeTops(
+            self.row[mask],
+            self.col[mask],
+            self.height[mask],
+            self.crown[mask],
+            self.crown_base[mask],
+            self.cell,
+        )
+
+    @property
+    def cells(self) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
+        """Rows and columns of the 1 m cells the tops are in."""
+        return self.row.astype(np.intp), self.col.astype(np.intp)
 
 
 def canopy_height(
@@ -132,17 +193,119 @@ def find_tree_tops(
     return rows, cols, heights
 
 
+def tops_from_canopy(chm: npt.NDArray[np.float32]) -> TreeTops:
+    """Tree tops of a 1 m canopy height model (no crown sizes)."""
+    rows, cols, heights = find_tree_tops(chm)
+    nan = np.full(len(rows), np.nan, dtype=np.float32)
+    return TreeTops(
+        row=rows.astype(np.float32) + 0.5,
+        col=cols.astype(np.float32) + 0.5,
+        height=heights.astype(np.float32),
+        crown=nan,
+        crown_base=nan.copy(),
+    )
+
+
+def tops_from_lidar(
+    canopy: npt.NDArray[np.float32],
+    crown_base: npt.NDArray[np.float32],
+    fine: int = 2,
+    min_height: float = MIN_TREE_HEIGHT_M,
+) -> TreeTops:
+    """Tree tops, crown sizes and crown bases from the laser point cloud.
+
+    The tops are local maxima of the fine canopy height model. Each crown is the area
+    that drains to its top (a watershed of the canopy, down to CROWN_EDGE_M); its size
+    gives the crown radius. The crown base comes from the lowest vegetation in the
+    crown's 1 m cells (see CROWN_BASE_QUANTILE), measured from CROWN_BASE_FLOOR_M.
+
+    Args:
+        canopy: Canopy height on a grid ``fine`` times finer than the 1 m grid, without
+            NaN.
+        crown_base: Lower edge of the vegetation on the 1 m grid (NaN where unknown).
+        fine: Fine cells per metre.
+        min_height: Lower tops are not trees.
+
+    Examples:
+        >>> yy, xx = np.mgrid[0:40, 0:40]
+        >>> cone = 10 - 1.2 * np.hypot(yy - 20, xx - 20)  # one tree, 20 x 20 m grid
+        >>> canopy = np.maximum(cone, 0).astype(np.float32)
+        >>> base = np.full((20, 20), 3.7, dtype=np.float32)  # crown from 3.7 m
+        >>> tops = tops_from_lidar(canopy, base)
+        >>> len(tops), float(tops.row[0]), float(tops.height[0])
+        (1, 10.25, 10.0)
+        >>> round(float(tops.crown[0]), 1), round(float(tops.crown_base[0]), 2)
+        (3.3, 0.3)
+    """
+    smooth = ndimage.gaussian_filter(canopy, sigma=FINE_SIGMA)
+    small, large = FINE_WINDOW
+    window = np.where(
+        smooth < TALL_TREE_M,
+        ndimage.maximum_filter(smooth, size=small),
+        ndimage.maximum_filter(smooth, size=large),
+    )
+    peaks = (smooth >= window) & (smooth >= min_height)
+    del window
+    fr, fc = np.nonzero(peaks)
+    del peaks
+    heights = ndimage.maximum_filter(canopy, size=3)[fr, fc].astype(np.float32)
+
+    # Crowns: flood the inverted canopy from the tops.
+    markers = np.zeros(canopy.shape, dtype=np.int32)
+    markers[fr, fc] = np.arange(1, len(fr) + 1, dtype=np.int32)
+    depth = np.clip((60.0 - smooth) * 100, 0, 65535).astype(np.uint16)
+    del smooth
+    labels = ndimage.watershed_ift(depth, markers)
+    del depth, markers
+    labels[canopy < CROWN_EDGE_M] = 0
+    area = np.bincount(labels.ravel().clip(0), minlength=len(fr) + 1)[1:] / fine**2
+    lo, hi = CROWN_RADIUS_M
+    crown = np.clip(np.sqrt(area / np.pi), lo, hi).astype(np.float32)
+
+    # Crown base: median over the crown's 1 m cells.
+    coarse = labels[fine // 2 :: fine, fine // 2 :: fine][
+        : crown_base.shape[0], : crown_base.shape[1]
+    ]
+    del labels
+    valid = (coarse > 0) & np.isfinite(crown_base[: coarse.shape[0], : coarse.shape[1]])
+    ids = coarse[valid]
+    values = crown_base[: coarse.shape[0], : coarse.shape[1]][valid]
+    base = np.full(len(fr), np.nan, dtype=np.float32)
+    if len(ids):
+        order = np.lexsort((values, ids))
+        ids, values = ids[order], values[order]
+        unique, start, counts = np.unique(ids, return_index=True, return_counts=True)
+        base[unique - 1] = values[
+            start + ((counts - 1) * CROWN_BASE_QUANTILE).astype(np.intp)
+        ]
+    floor = CROWN_BASE_FLOOR_M
+    share = (base - floor) / np.maximum(heights - floor, 0.1)
+    share = np.clip(share, 0.0, 0.95).astype(np.float32)
+
+    return TreeTops(
+        row=((fr + 0.5) / fine).astype(np.float32),
+        col=((fc + 0.5) / fine).astype(np.float32),
+        height=heights,
+        crown=crown,
+        crown_base=share,
+        cell=1.0 / fine,
+    )
+
+
 def understorey_cells(
     chm: npt.NDArray[np.float32],
     allowed: npt.NDArray[np.bool_],
     tops: tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]],
     trees_per_ha: npt.NDArray[np.float32] | None,
     rng: np.random.Generator,
+    weight: npt.NDArray[np.float32] | None = None,
 ) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
     """Pick cells for trees below the canopy, so each 16 m block reaches its target.
 
     The target is SR16's trees per hectare (or DEFAULT_TREES_PER_HA) times the block's
-    canopy share, capped at one tree per MIN_AREA_PER_TREE_M2 of canopy.
+    canopy share, capped at one tree per MIN_AREA_PER_TREE_M2 of canopy. Within a block
+    the cells are drawn at random, more likely where ``weight`` is high (the laser hit
+    vegetation below the canopy there).
 
     Returns:
         Rows and columns of the new trees.
@@ -169,9 +332,13 @@ def understorey_cells(
     need = np.maximum(np.rint(target - existing), 0).astype(np.int64)
 
     # Random canopy cells, ranked within their block; keep the first `need` of each.
+    # Weighted draw: the key u ** (1 / w) favours cells with a high weight.
     cand = np.flatnonzero(canopy.ravel() & (need[block.ravel()] > 0))
     cand_block = block.ravel()[cand]
-    order = np.lexsort((rng.random(len(cand)), cand_block))
+    key = rng.random(len(cand))
+    if weight is not None:
+        key = -(key ** (1.0 / np.maximum(weight.ravel()[cand], 1e-3)))
+    order = np.lexsort((key, cand_block))
     cand, cand_block = cand[order], cand_block[order]
     first = np.searchsorted(cand_block, cand_block, side="left")
     rank = np.arange(len(cand)) - first
@@ -217,8 +384,8 @@ def _allowed(layers: GroundLayers) -> npt.NDArray[np.bool_]:
 
 
 def thin_scattered(
-    rows: npt.NDArray[np.intp],
-    cols: npt.NDArray[np.intp],
+    rows: npt.NDArray[np.integer[Any]] | npt.NDArray[np.floating[Any]],
+    cols: npt.NDArray[np.integer[Any]] | npt.NDArray[np.floating[Any]],
     heights: npt.NDArray[np.float32],
     spacing: float = SCATTERED_SPACING_M,
 ) -> npt.NDArray[np.bool_]:
@@ -258,6 +425,8 @@ def place_trees(
     species_map: npt.NDArray[np.uint8],
     trees_per_ha: npt.NDArray[np.float32] | None = None,
     seed: int = 0,
+    tops: TreeTops | None = None,
+    understorey_weight: npt.NDArray[np.float32] | None = None,
 ) -> Trees:
     """Combine laser tree tops and the map into the final set of trees.
 
@@ -267,15 +436,20 @@ def place_trees(
         species_map: Dominant SR16 species on the 1 m grid.
         trees_per_ha: SR16 tree count on the 1 m grid, if available.
         seed: Random seed; the same inputs and seed give the same forest.
+        tops: Tree tops from the laser point cloud; found in ``chm`` if not given.
+        understorey_weight: Where to prefer trees below the canopy (see
+            understorey_cells).
 
     Returns:
         All trees.
     """
     rng = np.random.default_rng(seed)
     allowed_cells = _allowed(layers)
-    rows, cols, heights, scattered, keep = _laser_tops(chm, layers, allowed_cells)
+    found, scattered, keep = _laser_tops(chm, layers, allowed_cells, tops)
     seed_trees = scattered[keep]
-    rows, cols, heights = rows[keep], cols[keep], heights[keep]
+    laser = found.take(keep)
+    rows, cols = laser.cells
+    heights = laser.height
 
     ur, uc = understorey_cells(
         chm,
@@ -283,6 +457,7 @@ def place_trees(
         (rows, cols),
         trees_per_ha,
         rng,
+        understorey_weight,
     )
     uh = chm[ur, uc] * rng.uniform(*UNDERSTOREY_HEIGHT, size=len(ur)).astype(np.float32)
     rows = np.concatenate([rows, ur])
@@ -303,17 +478,30 @@ def place_trees(
     ir, ic = all_rows.astype(np.intp), all_cols.astype(np.intp)
     species = _pick_species(species_map[ir, ic], layers.ground[ir, ic], rng)
 
-    # Laser tops sit on cell centres; jitter so the forest does not look gridded.
-    jitter = rng.uniform(-0.45, 0.45, size=(2, len(all_rows))).astype(np.float32)
-    stand_grown = np.zeros(len(all_rows), dtype=bool)
+    # Tops sit on cell centres; jitter so the forest does not look gridded. The laser
+    # tops keep their own (finer) positions.
+    n = len(all_rows)
+    jitter = rng.uniform(-0.45, 0.45, size=(2, n)).astype(np.float32)
+    jitter[:, : len(laser)] *= laser.cell
+    row = all_rows + 0.5
+    col = all_cols + 0.5
+    row[: len(laser)] = laser.row
+    col[: len(laser)] = laser.col
+    crown = _crowns(all_heights, species)
+    measured = np.isfinite(laser.crown)
+    crown[: len(laser)][measured] = laser.crown[measured]
+    stand_grown = np.zeros(n, dtype=bool)
     stand_grown[: len(seed_trees)] = seed_trees
+    crown_base = np.full(n, np.nan, dtype=np.float32)
+    crown_base[: len(laser)] = laser.crown_base
     return Trees(
-        col=all_cols + 0.5 + jitter[0],
-        row=all_rows + 0.5 + jitter[1],
+        col=col + jitter[0],
+        row=row + jitter[1],
         height=all_heights,
-        crown=_crowns(all_heights, species),
+        crown=crown,
         species=species,
         stand_grown=stand_grown,
+        crown_base=crown_base,
     )
 
 
@@ -321,44 +509,41 @@ def _laser_tops(
     chm: npt.NDArray[np.float32],
     layers: GroundLayers,
     allowed_cells: npt.NDArray[np.bool_],
-) -> tuple[
-    npt.NDArray[np.intp],
-    npt.NDArray[np.intp],
-    npt.NDArray[np.float32],
-    npt.NDArray[np.bool_],
-    npt.NDArray[np.bool_],
-]:
+    tops: TreeTops | None,
+) -> tuple[TreeTops, npt.NDArray[np.bool_], npt.NDArray[np.bool_]]:
     """Laser tree tops where the map allows trees.
 
     Returns:
-        Rows, columns and heights; which are in scattered-tree areas; which to keep
-        (all but the scattered ones thinned out).
+        The tops; which are in scattered-tree areas; which to keep (all but the
+        scattered ones thinned out).
     """
-    rows, cols, heights = find_tree_tops(chm)
-    allowed = allowed_cells[rows, cols]
-    rows, cols, heights = rows[allowed], cols[allowed], heights[allowed]
+    found = tops if tops is not None else tops_from_canopy(chm)
+    rows, cols = found.cells
+    found = found.take(allowed_cells[rows, cols])
+    rows, cols = found.cells
     scattered = layers.tree_rule[rows, cols] == TREES_SCATTERED
     keep = ~scattered
     keep[scattered] = thin_scattered(
-        rows[scattered], cols[scattered], heights[scattered]
+        found.row[scattered], found.col[scattered], found.height[scattered]
     )
-    return rows, cols, heights, scattered, keep
+    return found, scattered, keep
 
 
 def scattered_stumps(
-    chm: npt.NDArray[np.float32], layers: GroundLayers
-) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp], npt.NDArray[np.float32]]:
+    chm: npt.NDArray[np.float32], layers: GroundLayers, tops: TreeTops | None = None
+) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.float32], npt.NDArray[np.float32]]:
     """Stumps of the trees cut where the map shows scattered trees.
 
     The laser tree tops that ``place_trees`` leaves out of scattered-tree areas were
     usually felled after the laser scan.
 
     Returns:
-        Rows, columns and heights (of the felled trees).
+        Rows and columns (fractional, cell centres at .5) and heights of the felled
+        trees.
     """
-    rows, cols, heights, scattered, keep = _laser_tops(chm, layers, _allowed(layers))
+    found, scattered, keep = _laser_tops(chm, layers, _allowed(layers), tops)
     cut = scattered & ~keep
-    return rows[cut], cols[cut], heights[cut]
+    return found.row[cut], found.col[cut], found.height[cut]
 
 
 def low_vegetation(chm: npt.NDArray[np.float32]) -> npt.NDArray[np.bool_]:

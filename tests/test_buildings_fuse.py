@@ -9,12 +9,19 @@ from shapely import LineString, Polygon, box
 from otest.fetch.ar5 import decode_land_cover
 from otest.fetch.osm import OsmFeature, parse_overpass
 from otest.ingest.georef import Extent
-from otest.process.buildings import building_kind, collect_footprints, measure_buildings
+from otest.process.buildings import (
+    building_kind,
+    collect_footprints,
+    fit_roof,
+    measure_buildings,
+)
 from otest.process.fuse import apply_land_cover, apply_osm, road_style
 from otest.process.layers import TREES_LIDAR, GroundLayers
 from otest.process.symbols import Ground, SymbolSet
 
 EXTENT = Extent(0, 0, 100, 100)
+# 12 x 8 m, the long side east-west.
+ROOF_FOOTPRINT = box(0, 0, 12, 8)
 
 
 def empty_layers(in_map: npt.NDArray[np.bool_] | None = None) -> GroundLayers:
@@ -175,3 +182,72 @@ def test_measure_without_laser_heights_uses_defaults() -> None:
     )
     assert (shed.wall, shed.roof) == (2.3, 0.9)
     assert shed.base == 50.0
+
+
+def roof_samples(
+    height: Any, footprint: Polygon = ROOF_FOOTPRINT
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Samples every 0.5 m inside the footprint, of height(x, y)."""
+    x0, y0, x1, y1 = footprint.bounds
+    yy, xx = np.mgrid[y0 + 0.25 : y1 : 0.5, x0 + 0.25 : x1 : 0.5]
+    return xx.ravel(), yy.ravel(), height(xx, yy).ravel()
+
+
+@pytest.mark.parametrize(
+    ("height", "roof_type", "ridge_deg", "eave", "ridge"),
+    [
+        # Hipped: 12 x 8 m, the ridge 4 m long, 2 m above the eaves at 3 m.
+        (
+            lambda x, y: 5 - 0.5 * np.maximum(np.abs(y - 4), np.abs(x - 6) - 2),
+            "hip",
+            0,
+            3.0,
+            5.0,
+        ),
+        # Shed rising to the south: its high edge runs east, the roof to its right.
+        (lambda x, y: 3 + 0.25 * (8 - y), "shed", 0, 3.0, 5.0),
+        # Shed rising to the east, along the building.
+        (lambda x, y: 3 + 0.2 * x, "shed", 90, 3.0, 5.4),
+        # Gable with the ridge across the building (north-south).
+        (lambda x, y: 6 - 0.4 * np.abs(x - 6), "gable", 90, 3.6, 6.0),
+    ],
+)
+def test_fit_roof(
+    height: Any, roof_type: str, ridge_deg: float, eave: float, ridge: float
+) -> None:
+    rng = np.random.default_rng(0)
+    x, y, z = roof_samples(height)
+    z = z + rng.normal(0, 0.05, len(z))
+    z[::37] += 1.5  # a chimney and an overhanging branch or two
+    fit = fit_roof(x, y, z, ROOF_FOOTPRINT)
+    assert fit is not None
+    assert fit.roof_type == roof_type
+    period = 360 if roof_type == "shed" else 180
+    assert math.degrees(fit.angle) % period == pytest.approx(ridge_deg % period, abs=3)
+    assert fit.eave == pytest.approx(eave, abs=0.25)
+    assert fit.ridge == pytest.approx(ridge, abs=0.25)
+
+
+def test_measure_buildings_with_laser_surface() -> None:
+    dtm = np.full(EXTENT.raster_shape(1), 100.0, dtype=np.float32)
+    footprint = box(40, 40, 52, 48)  # 12 x 8 m, long side east-west
+    fine = 2
+    rows, cols = np.mgrid[0 : 100 * fine, 0 : 100 * fine]
+    x = (cols + 0.5) / fine
+    y = 100 - (rows + 0.5) / fine
+    # Hipped roof, eaves 3.5 m and ridge 6 m above the ground.
+    roof = 6 - 2.5 / 4 * np.maximum(np.abs(y - 44), np.abs(x - 46) - 2)
+    inside = (x > 40) & (x < 52) & (y > 40) & (y < 48)
+    surface = np.where(inside, roof, 0.0).astype(np.float32)
+    (house,) = measure_buildings(
+        [(footprint, "house", "osm", "osm/1")],
+        dtm,
+        np.zeros_like(dtm),
+        EXTENT,
+        surface=surface,
+        fine=fine,
+    )
+    assert house.roof_type == "hip"
+    assert house.wall == pytest.approx(3.5, abs=0.3)
+    assert house.wall + house.roof == pytest.approx(6.0, abs=0.3)
+    assert abs(math.sin(house.ridge)) < 0.05  # ridge east-west

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,6 +21,8 @@ from otest.export import WorldData, write_world
 from otest.fetch import ar5, kartverket, nibio, osm
 from otest.ingest.georef import Extent
 from otest.ingest.image import ImageMap, read_image_map
+from otest.ingest.lidar import ATTRIBUTION as LIDAR_ATTRIBUTION
+from otest.ingest.lidar import coarse_canopy, filled_canopy, load_lidar
 from otest.ingest.ocad import AREA_SYMBOL, export_ocad
 from otest.process.buildings import collect_footprints, measure_buildings
 from otest.process.classify import classify_map
@@ -32,6 +35,7 @@ from otest.process.features import (
     paint_cliffs,
 )
 from otest.process.fuse import (
+    add_lidar_undergrowth,
     add_low_vegetation,
     apply_land_cover,
     apply_osm,
@@ -43,11 +47,13 @@ from otest.process.maparea import find_map_area
 from otest.process.symbols import Ground, SymbolSet, detect_symbol_set, is_helper_symbol
 from otest.process.tracks import collect_tracks
 from otest.process.trees import (
+    TreeTops,
     canopy_height,
     effective_canopy,
     low_vegetation,
     place_trees,
     scattered_stumps,
+    tops_from_lidar,
 )
 
 log = logging.getLogger(__name__)
@@ -56,6 +62,10 @@ EXTENT_ALIGN_M = 16  # SR16's grid, so its cells line up with the world's
 OMAP_ATTRIBUTION = "Orienteering map: © the map's owner"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif", ".tif", ".tiff", ".kmz"}
 DRAPE_PX_PER_M = 2
+# Weight for placing trees below the canopy: a base, plus the laser's understorey
+# density (UNKNOWN_MID where it is unknown).
+UNDERSTOREY_BASE_WEIGHT = 0.15
+UNKNOWN_MID = 0.2
 
 
 @dataclass(frozen=True)
@@ -71,6 +81,7 @@ class BuildOptions:
         symbol_set: Symbol standard (``"isom2000"``, ``"isom2017"``), or None to guess.
         epsg: Coordinate system of an image map's world file.
         forest: Set False to build terrain only.
+        lidar_dirs: Folders with laser point clouds (LAZ tiles), most preferred first.
     """
 
     margin: float = 300.0
@@ -80,6 +91,7 @@ class BuildOptions:
     symbol_set: str | None = None
     epsg: int | None = None
     forest: bool = True
+    lidar_dirs: tuple[Path, ...] = ()
 
 
 @dataclass
@@ -300,6 +312,17 @@ def _add_nature_and_buildings(
     del dom
     layers = source.layers
 
+    lidar = None
+    surface = None
+    if options.lidar_dirs:
+        lidar = load_lidar(options.lidar_dirs, source.epsg, extent, dtm, cache)
+        if lidar is None:
+            log.warning("No laser tiles cover the world; using the height models only")
+        else:
+            surface = filled_canopy(lidar, chm)
+            world.attribution = [*world.attribution, LIDAR_ATTRIBUTION]
+            world.lidar = True
+
     land_cover = ar5.fetch_land_cover(source.epsg, extent, cache)
     if land_cover is not None:
         apply_land_cover(layers, land_cover)
@@ -308,11 +331,12 @@ def _add_nature_and_buildings(
     map_buildings = source.omap + _as_map_buildings(source.buildings, source.symbols)
     footprints = collect_footprints(osm_features, map_buildings, source.symbols)
     apply_osm(layers, osm_features, [fp[0] for fp in footprints], extent)
-    buildings = measure_buildings(footprints, dtm, chm, extent)
+    buildings = measure_buildings(footprints, dtm, chm, extent, surface=surface)
+    roofs = Counter(b.roof_type for b in buildings)
     log.info(
-        "Raised %d buildings (%d gable roofs)",
+        "Raised %d buildings (roofs: %s)",
         len(buildings),
-        sum(b.roof_type == "gable" for b in buildings),
+        ", ".join(f"{n} {kind}" for kind, n in roofs.most_common()),
     )
     world.buildings = buildings
     world.tracks = collect_tracks(
@@ -335,7 +359,18 @@ def _add_nature_and_buildings(
             len(objects.cliffs),
         )
 
-    add_low_vegetation(layers, low_vegetation(chm))
+    if lidar is not None and surface is not None:
+        add_low_vegetation(layers, low_vegetation(coarse_canopy(surface)))
+        add_lidar_undergrowth(layers, lidar.low)
+        log.info("Finding trees in the laser point cloud")
+        tops: TreeTops | None = tops_from_lidar(surface, lidar.crown_base)
+        understorey: npt.NDArray[np.float32] | None = (
+            UNDERSTOREY_BASE_WEIGHT + np.nan_to_num(lidar.mid, nan=UNKNOWN_MID)
+        ).astype(np.float32)
+        del surface, lidar
+    else:
+        add_low_vegetation(layers, low_vegetation(chm))
+        tops = understorey = None
 
     forest = nibio.fetch_forest(source.epsg, extent, cache, options.sr16_dir)
     trees = place_trees(
@@ -344,16 +379,18 @@ def _add_nature_and_buildings(
         forest.species,
         forest.trees_per_ha,
         seed=int(extent.x0 + extent.y0) % 2**32,
+        tops=tops,
+        understorey_weight=understorey,
     )
-    stump_rows, stump_cols, stump_heights = scattered_stumps(chm, layers)
+    stump_rows, stump_cols, stump_heights = scattered_stumps(chm, layers, tops)
     if len(stump_rows):
         if world.features is None:
             world.features = Features()
         world.features.points.extend(
             PointFeature(
                 "stump",
-                extent.x0 + float(c) + 0.5,
-                extent.y1 - float(r) - 0.5,
+                extent.x0 + float(c),
+                extent.y1 - float(r),
                 size=float(np.clip(0.02 * h + 0.1, 0.15, 0.6)),
             )
             for r, c, h in zip(stump_rows, stump_cols, stump_heights, strict=True)
