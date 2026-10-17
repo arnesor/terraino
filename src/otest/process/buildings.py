@@ -44,6 +44,11 @@ MIN_AREA_M2 = 4.0
 # surface model, where its heights vary less than this (trees vary much more).
 MAX_FIT_RMS_M = 0.35
 MAX_SURFACE_SPREAD_M = 6.0
+# A solid surface: at least SOLID_COVER of it SOLID_MIN_M or more above the ground, its
+# 10-90 % heights within SOLID_SPREAD_M of each other.
+SOLID_COVER = 0.9
+SOLID_MIN_M = 2.5
+SOLID_SPREAD_M = 6.0
 # A registered building's point may lie this far outside its footprint.
 REGISTRY_DISTANCE_M = 5.0
 # Kinds of building people live in; garages on their property take their colours.
@@ -463,7 +468,7 @@ def measure_buildings(
     surface: npt.NDArray[np.float32] | None = None,
     fine: int = 2,
     registry: Sequence[BuildingPoint] = (),
-    roof_lines: Mapping[str, Sequence[tuple[float, float, float, float]]] | None = None,
+    topo: Mapping[str, TopoBuilding] | None = None,
 ) -> list[Building]:
     """Measure base, wall and roof heights of each footprint.
 
@@ -477,8 +482,9 @@ def measure_buildings(
         fine: Fine cells per metre of ``surface``.
         registry: Buildings registered in Matrikkelen; their types decide the kind,
             colours and default size of the footprints they fall in.
-        roof_lines: Roof lines (x0, y0, x1, y1) from Kartverket's map by footprint id;
-            they shape the roofs the laser does not measure.
+        topo: Buildings from Kartverket's map by footprint id: their roof lines shape
+            the roofs the laser does not measure, their fill colour hints at their kind,
+            and wings of one complex share its kind and colours.
     """
     if not footprints:
         return []
@@ -497,12 +503,28 @@ def measure_buildings(
     bounds = np.searchsorted(ids, np.arange(1, len(footprints) + 2))
 
     registered = match_registry([fp[0] for fp in footprints], registry)
+    # Wings of one complex: the most telling registered type stands for all of them.
+    complexes = [
+        topo[fp[3]].complex if topo and fp[3] in topo else fp[3] for fp in footprints
+    ]
+    complex_type: dict[str, BuildingPoint] = {}
+    for key, point in zip(complexes, registered, strict=True):
+        if point is None:
+            continue
+        best = complex_type.get(key)
+        if best is None or type_rank(point.type_code) < type_rank(best.type_code):
+            complex_type[key] = point
     roof_source: Counter[str] = Counter()
     buildings = []
     for i, (poly, osm_kind, source, ident) in enumerate(footprints):
         own = cells[bounds[i] : bounds[i + 1]]
-        point = registered[i]
-        kind = (kind_for_type(point.type_code) if point else None) or osm_kind
+        point = registered[i] or complex_type.get(complexes[i])
+        mapped_kind = topo[ident].category if topo and ident in topo else None
+        kind = (
+            (kind_for_type(point.type_code) if point else None)
+            or mapped_kind
+            or osm_kind
+        )
         style = STYLES.get(kind, STYLES["other"])
         if len(own) >= 3:
             heights = canopy.ravel()[own]
@@ -510,15 +532,18 @@ def measure_buildings(
             top = float(np.percentile(heights, 95))
             eave = float(np.percentile(heights, 25))
             spread = float(np.percentile(heights, 90) - np.percentile(heights, 10))
+            # Default heights count from the middle of the ground, not its lowest point.
+            rise = float(np.median(dtm.ravel()[own])) - base
         else:
             centre = poly.representative_point()
             row = int(np.clip(extent.y1 - centre.y, 0, dtm.shape[0] - 1))
             col = int(np.clip(centre.x - extent.x0, 0, dtm.shape[1] - 1))
             base = float(dtm[row, col])
-            top = eave = spread = 0.0
+            top = eave = spread = rise = 0.0
 
         angle, fill = _ridge_angle(poly)
-        lines = (roof_lines or {}).get(ident, ())
+        mapped = (topo or {}).get(ident)
+        lines = [(r.x0, r.y0, r.x1, r.y1) for r in mapped.lines] if mapped else []
 
         def plausible(wall: float, roof: float) -> bool:
             # Taller than the kind can be: the laser saw trees, or the site before
@@ -580,11 +605,29 @@ def measure_buildings(
             else:
                 wall, roof = max(wall + roof * 0.5, 2.2), 0.0
             roof_source["surface model"] += 1
+        elif (
+            solid := _solid_height(poly, surface, extent, fine)
+        ) is not None and plausible(solid + rise, 0.0):
+            # The laser covers the footprint with an even surface (a building, not
+            # trees), but its roof is too complex to fit: its height, the map's roof.
+            wall = solid + rise
+            parts = parts_from_lines(
+                poly, lines, wall, math.radians(style.pitch), flat=not lines
+            )
+            roof = 0.0
+            if parts:
+                biggest = max(parts, key=lambda p: p.area)
+                roof = biggest.ridge - wall
+                angle = biggest.angle
+                roof_type = biggest.roof_type
+                if roof_type == "gable" and all(biggest.hips):
+                    roof_type = "hip"
+            roof_source["laser height"] += 1
         else:
             # Not measured: the kind's height, the roof from the map's roof lines (or a
             # gable along the long side) at the kind's pitch.
             measured = False
-            wall = style.wall
+            wall = style.wall + rise
             flat = kind == "industry" or (not lines and fill < RECTANGULAR)
             parts = parts_from_lines(
                 poly, lines, wall, math.radians(style.pitch), flat=flat
@@ -603,7 +646,7 @@ def measure_buildings(
         seed = (
             f"{point.property_id}/{kind}"
             if point and point.property_id and farm
-            else ident
+            else complexes[i]
         )
         # Summer farms (seterhus, koier) keep the old look even when not in SEFRAK.
         old = bool(point and point.sefrak) or kind == "summer_farm"
@@ -622,7 +665,7 @@ def measure_buildings(
                 source=source,
                 parts=tuple(parts or ()),
                 type_code=point.type_code if point else None,
-                floors=floors_for(kind, wall if measured else None),
+                floors=floors_for(kind, wall - rise if measured else None),
             )
         )
     log.info(
@@ -630,6 +673,42 @@ def measure_buildings(
         ", ".join(f"{n} from {source}" for source, n in roof_source.most_common()),
     )
     return _match_property_colours(buildings, registered)
+
+
+def _solid_height(
+    footprint: Polygon,
+    surface: npt.NDArray[np.float32] | None,
+    extent: Extent,
+    fine: int,
+) -> float | None:
+    """Eave height of a building the laser saw but whose roof shape could not be fitted.
+
+    The surface (height above the ground) must cover nearly the whole footprint and be
+    fairly even: trees leave gaps and vary much more.
+    """
+    if surface is None:
+        return None
+    inner = footprint.buffer(-ROOF_INSET_M)
+    if inner.is_empty:
+        return None
+    x0, y0, x1, y1 = inner.bounds
+    c0 = max(int((x0 - extent.x0) * fine), 0)
+    c1 = min(int(np.ceil((x1 - extent.x0) * fine)), surface.shape[1])
+    r0 = max(int((extent.y1 - y1) * fine), 0)
+    r1 = min(int(np.ceil((extent.y1 - y0) * fine)), surface.shape[0])
+    if r0 >= r1 or c0 >= c1:
+        return None
+    rows, cols = np.mgrid[r0:r1, c0:c1]
+    x = extent.x0 + (cols + 0.5) / fine
+    y = extent.y1 - (rows + 0.5) / fine
+    heights = surface[r0:r1, c0:c1][shapely.contains_xy(inner, x, y)]
+    if len(heights) < MIN_ROOF_CELLS:
+        return None
+    covered = float(np.mean(heights >= SOLID_MIN_M))
+    low, high = np.percentile(heights, [10, 90])
+    if covered < SOLID_COVER or high - low > SOLID_SPREAD_M:
+        return None
+    return float(max(np.percentile(heights, 25), 2.2))
 
 
 def _map_direction(

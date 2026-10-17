@@ -342,10 +342,7 @@ def _add_nature_and_buildings(
             f"{n} from {s}" for s, n in Counter(fp[2] for fp in footprints).items()
         ),
     )
-    roof_lines = {
-        f"kartverket/{i}": [(r.x0, r.y0, r.x1, r.y1) for r in b.lines]
-        for i, b in enumerate(topo)
-    }
+    topo_by_id = {f"kartverket/{i}": b for i, b in enumerate(topo)}
     apply_osm(layers, osm_features, [fp[0] for fp in footprints], extent)
     registry = matrikkel.fetch_building_points(source.epsg, extent, cache)
     if registry:
@@ -357,7 +354,7 @@ def _add_nature_and_buildings(
         extent,
         surface=surface,
         registry=registry,
-        roof_lines=roof_lines,
+        topo=topo_by_id,
     )
     log.info(
         "%d of %d buildings have a type from Matrikkelen",

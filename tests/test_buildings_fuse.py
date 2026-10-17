@@ -5,6 +5,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 import pytest
+import shapely
 from shapely import LineString, Polygon, box
 
 from otest.fetch import matrikkel
@@ -12,7 +13,7 @@ from otest.fetch.ar5 import decode_land_cover
 from otest.fetch.cache import DownloadError
 from otest.fetch.matrikkel import BuildingPoint
 from otest.fetch.osm import OsmFeature, parse_overpass
-from otest.fetch.topo_buildings import TopoBuilding
+from otest.fetch.topo_buildings import RoofLine, TopoBuilding
 from otest.ingest.georef import Extent
 from otest.process.buildings import (
     building_kind,
@@ -316,7 +317,7 @@ def test_laser_surface_of_trees_is_not_a_roof() -> None:
         EXTENT,
         surface=surface,
         fine=fine,
-        roof_lines={"osm/9": [(40.5, 43.5, 48.5, 43.5)]},
+        topo={"osm/9": TopoBuilding(footprint, (RoofLine(40.5, 43.5, 48.5, 43.5),))},
     )
     assert garage.wall == pytest.approx(2.6)  # the garage default, one floor
     assert garage.floors == 1
@@ -339,3 +340,43 @@ def test_kartverket_outlines_come_first() -> None:
         ("kartverket", "other"),
         ("osm", "house"),  # only in OSM
     ]
+
+
+def test_complex_roof_keeps_the_laser_height() -> None:
+    # A school of several wings: the laser sees an uneven roof 7-10 m up all over it.
+    dtm = np.full(EXTENT.raster_shape(1), 100.0, dtype=np.float32)
+    fine = 2
+    rng = np.random.default_rng(5)
+    surface = np.zeros((100 * fine, 100 * fine), dtype=np.float32)
+    school = shapely.union_all(
+        [box(10, 10, 60, 22), box(10, 22, 22, 50), box(48, 22, 60, 40)]
+    )
+    assert isinstance(school, Polygon)
+    rows, cols = np.mgrid[0 : 100 * fine, 0 : 100 * fine]
+    inside = shapely.contains_xy(school, (cols + 0.5) / fine, 100 - (rows + 0.5) / fine)
+    surface[inside] = rng.uniform(7, 10, int(inside.sum()))
+    (b,) = measure_buildings(
+        [(school, "other", "osm", "osm/7")],
+        dtm,
+        np.zeros_like(dtm),
+        EXTENT,
+        surface=surface,
+        fine=fine,
+        registry=[BuildingPoint(30, 15, 613, "TB", False, "school")],
+    )
+    assert b.kind == "public"
+    assert b.wall == pytest.approx(7.75, abs=0.3)  # the surface's lower quartile
+    assert b.floors == 3
+
+
+def test_default_walls_count_from_the_middle_of_a_slope() -> None:
+    # Ground rising 4 m across the footprint; no laser data.
+    dtm = np.tile(np.linspace(100, 104, 100, dtype=np.float32), (100, 1))
+    (cabin,) = measure_buildings(
+        [(box(40, 40, 50, 46), "cabin", "osm", "osm/8")],
+        dtm,
+        np.zeros_like(dtm),
+        EXTENT,
+    )
+    ground = float(np.median(dtm[54:60, 40:50]))
+    assert cabin.base + cabin.wall == pytest.approx(ground + 2.7, abs=0.2)

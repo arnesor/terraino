@@ -13,7 +13,7 @@ import logging
 import math
 import warnings
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -41,10 +41,19 @@ PIXEL_M = 0.1
 TILE_M = 400
 # Tiles overlap by this much, so buildings on a tile edge are whole in one of them.
 OVERLAP_M = 40
-FILL = (196, 135, 35)
+# The map fills buildings by use, and these fills hint at the kind of building.
+FILL = (196, 135, 35)  # dwellings, farms and most others
+FILLS: dict[tuple[int, int, int], str | None] = {
+    FILL: None,
+    (115, 163, 212): "public",  # schools, health, culture
+    (220, 170, 40): "industry",  # industry and commerce
+    (196, 95, 25): None,
+}
 ROOF_LINE = (110, 100, 80)
 FILL_DISTANCE = 45.0
-LINE_ORANGE_MAX = 115
+# Roof lines are neither close to a fill colour nor as dark as the outlines.
+LINE_FILL_DISTANCE = 30.0
+OUTLINE_BRIGHTNESS_MAX = 200
 CROP_MARGIN = 4
 EDGE_PIXELS = 3
 LINE_BRIGHTNESS_MIN = 150
@@ -84,10 +93,21 @@ class RoofLine:
 
 @dataclass(frozen=True)
 class TopoBuilding:
-    """A building from the topographic map: its outline and roof lines."""
+    """A building from the topographic map: its outline, roof lines and use.
+
+    Attributes:
+        footprint: Outline, projected coordinates.
+        lines: Roof lines.
+        category: Kind of building its fill colour stands for ("public", "industry"),
+            or None.
+        complex: Wings drawn against each other (one building complex, e.g. a school)
+            share this key.
+    """
 
     footprint: Polygon
     lines: tuple[RoofLine, ...]
+    category: str | None = None
+    complex: str = ""
 
 
 def _colour_distance(
@@ -110,7 +130,8 @@ def _main_angle(poly: Polygon) -> float:
 
 def _tidy(traced: Polygon) -> Polygon | None:
     """Simplify the traced outline; a nearly rectangular one becomes its rectangle."""
-    poly = traced.buffer(PIXEL_M / 2, join_style="mitre").simplify(SIMPLIFY_M)
+    # Out to the middle of the outline: half a pixel, and the pixel cut beside it.
+    poly = traced.buffer(PIXEL_M * 1.5, join_style="mitre").simplify(SIMPLIFY_M)
     if not isinstance(poly, Polygon):
         return None
     rect = poly.minimum_rotated_rectangle
@@ -231,7 +252,7 @@ def trace_buildings(
         >>> img[70:90, 10:50, 3] = 255                 # an outline only: no building
         >>> (b,) = trace_buildings(img, 1000.0, 2000.0)
         >>> round(b.footprint.area), [round(line.length) for line in b.lines]
-        (33, [7])
+        (36, [7])
         >>> round(math.degrees(b.lines[0].angle)) % 180
         0
     """
@@ -246,10 +267,11 @@ def trace_buildings(
             continue
         rows, cols = found
         crop = rgba[rows, cols]
+        cx0, cy1 = x0 + cols.start * PIXEL_M, y1 - rows.start * PIXEL_M
+        # Wings in one group touch each other: they are one building complex.
+        key = f"{cx0:.1f}_{cy1:.1f}"
         buildings.extend(
-            _trace_crop(
-                crop, x0 + cols.start * PIXEL_M, y1 - rows.start * PIXEL_M, keep
-            )
+            replace(w, complex=key) for w in _trace_crop(crop, cx0, cy1, keep)
         )
     return buildings
 
@@ -259,15 +281,18 @@ def _trace_crop(
 ) -> list[TopoBuilding]:
     """Buildings in a crop; those touching its edge are left out (see trace_buildings)."""
     alpha = rgba[..., 3] > 0
-    fill = alpha & (_colour_distance(rgba, FILL) < FILL_DISTANCE)
-    # Roof lines are grey; blended with the orange fill at their edges they are still
-    # much less orange (red minus blue) than the fill, and brighter than the outline.
-    r = rgba[..., 0].astype(np.int32)
-    b = rgba[..., 2].astype(np.int32)
+    distances = np.stack([_colour_distance(rgba, c) for c in FILLS])
+    nearest = distances.argmin(axis=0)
+    closest = distances.min(axis=0)
+    fill = alpha & (closest < FILL_DISTANCE)
+    # Roof lines are grey: away from every fill colour, and brighter than the outline.
     brightness = rgba[..., :3].astype(np.int32).sum(axis=-1)
-    line = alpha & (r - b < LINE_ORANGE_MAX) & (brightness > LINE_BRIGHTNESS_MIN)
-    # Roof lines are drawn inside the buildings: they join the pieces of one fill.
-    core = fill | (line & ndimage.binary_dilation(fill, iterations=2))
+    line = alpha & (closest >= LINE_FILL_DISTANCE) & (brightness > LINE_BRIGHTNESS_MIN)
+    # Dark outlines (with the blended pixels beside them) separate buildings and the
+    # wings of one; grey roof lines are drawn inside and join the pieces of one roof.
+    outline = ndimage.binary_dilation(alpha & (brightness < OUTLINE_BRIGHTNESS_MAX))
+    line &= ~outline
+    core = (fill | (line & ndimage.binary_dilation(fill, iterations=2))) & ~outline
     labels, n = ndimage.label(core)
     if n == 0:
         return []
@@ -310,7 +335,14 @@ def _trace_crop(
             lines = [
                 RoofLine(s.x0 + cx, s.y0 + cy, s.x1 + cx, s.y1 + cy) for s in found
             ]
-        buildings.append(TopoBuilding(tidy, tuple(lines)))
+        # The building's use: its most common fill colour.
+        kinds = nearest[(labels == label) & fill]
+        category = (
+            list(FILLS.values())[int(np.bincount(kinds).argmax())]
+            if len(kinds)
+            else None
+        )
+        buildings.append(TopoBuilding(tidy, tuple(lines), category))
     return buildings
 
 

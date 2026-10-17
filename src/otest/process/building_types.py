@@ -139,6 +139,19 @@ STYLES: dict[str, Style] = {
     "church": Style(
         [("#f5f3ee", 1)], [("#2e3133", 3), ("#7a3527", 1)], floors=1, wall=7.0, roof=6.0
     ),
+    "public": Style(
+        [
+            ("#e8e4da", 4),
+            ("#d9b25c", 2),
+            ("#9e2f24", 2),
+            ("#a85a44", 2),
+            ("#c9c7c0", 2),
+        ],
+        [("#2e3133", 5), ("#3d3f42", 3), ("#7a3527", 1)],
+        floors=2,
+        wall=7.0,
+        roof=1.5,
+    ),
     "other": Style(
         [("#d9d6cc", 3), ("#9aa0a4", 2), ("#b33a2c", 1), ("#ead9a0", 1)],
         _DARK_ROOFS,
@@ -162,6 +175,7 @@ _SHAPES = {
     "farm_auxiliary": (30, 6.0, 5.0),
     "industry": (10, 15.0, 6.0),
     "church": (45, 15.0, 12.0),
+    "public": (18, 15.0, 6.0),
     "other": (25, 15.0, 6.0),
 }
 STYLES = {
@@ -181,6 +195,8 @@ def kind_for_type(code: int) -> str | None:
     Examples:
         >>> kind_for_type(113), kind_for_type(181), kind_for_type(241), kind_for_type(671)
         ('farmhouse', 'garage', 'barn', 'church')
+        >>> kind_for_type(613)
+        'public'
     """
     if code in (113, 123, 124, 163):
         return "farmhouse"
@@ -202,6 +218,8 @@ def kind_for_type(code: int) -> str | None:
         return "industry"
     if 670 <= code < 680:
         return "church"
+    if 600 <= code < 900:
+        return "public"  # schools, kindergartens, culture, sports, health, rescue
     if 300 <= code < 1000:
         return "other"
     return None

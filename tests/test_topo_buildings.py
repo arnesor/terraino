@@ -35,7 +35,7 @@ def test_buildings_cut_by_the_tile_edge_are_left_out() -> None:
     paint(img, slice(0, 50), slice(100, 180), FILL)  # touches the top edge
     paint(img, slice(100, 160), slice(100, 180), FILL)
     (b,) = trace_buildings(img, X0, Y1)
-    assert b.footprint.bounds[1] == pytest.approx(Y1 - 16.05, abs=0.1)
+    assert b.footprint.bounds[1] == pytest.approx(Y1 - 16.15, abs=0.1)
 
 
 def test_only_buildings_centred_in_the_tile_are_kept() -> None:
@@ -72,3 +72,20 @@ def test_no_buildings_without_the_service(
 
     monkeypatch.setattr(topo, "cached_download", fail)
     assert fetch_topo_buildings(25832, Extent(0, 0, 500, 500), tmp_path) == []
+
+
+def test_wings_split_at_outlines_and_share_a_complex() -> None:
+    blue = (115, 163, 212)
+    img = tile()
+    # Two wings of a public building, drawn against each other with a black outline.
+    paint(img, slice(50, 150), slice(50, 120), blue)
+    paint(img, slice(50, 150), slice(121, 250), blue)
+    paint(img, slice(50, 150), slice(120, 121), (20, 25, 30))
+    paint(img, slice(99, 100), slice(125, 245), ROOF_LINE)  # ridge of the east wing
+    west, east = sorted(
+        trace_buildings(img, X0, Y1), key=lambda b: b.footprint.centroid.x
+    )
+    assert west.category == east.category == "public"
+    assert west.complex == east.complex
+    assert west.footprint.area == pytest.approx(7.0 * 10.0, rel=0.06)
+    assert [round(line.length) for line in east.lines] == [12]
