@@ -10,6 +10,7 @@ const FLY_FAST_SPEED = 200
 const GRAVITY = 9.81
 const JUMP_SPEED = 3.5
 const BODY_RADIUS = 0.3
+const DRAG_LOOK_SPEED = 0.004 // radians per pixel when looking by dragging
 
 /** What the ground and the forest allow at a position. */
 export interface Surroundings {
@@ -34,6 +35,8 @@ export class Player {
   /** Running speed factor of the ground under the player, for the HUD. */
   runnability = 1
   surroundings: Surroundings | null = null
+  /** Accept movement keys without pointer lock (while the map window has the mouse). */
+  keysWithoutLock = false
 
   constructor(camera: THREE.PerspectiveCamera, dom: HTMLElement, heights: HeightField, bounds: [number, number]) {
     this.camera = camera
@@ -42,7 +45,7 @@ export class Player {
     this.controls = new PointerLockControls(camera, dom)
     window.addEventListener('keydown', e => {
       this.keys.add(e.code)
-      if (e.code === 'KeyF' && this.controls.isLocked) this.toggleFlying()
+      if (e.code === 'KeyF' && this.acceptsKeys) this.toggleFlying()
       if (e.code === 'Space' && !this.flying && this.onGround) {
         this.verticalSpeed = JUMP_SPEED
         this.onGround = false
@@ -50,6 +53,18 @@ export class Player {
     })
     window.addEventListener('keyup', e => this.keys.delete(e.code))
     window.addEventListener('blur', () => this.keys.clear())
+  }
+
+  private get acceptsKeys(): boolean {
+    return this.controls.isLocked || this.keysWithoutLock
+  }
+
+  /** Turn the view by a mouse movement of (dx, dy) pixels, as when dragging. */
+  look(dx: number, dy: number) {
+    const euler = new THREE.Euler(0, 0, 0, 'YXZ').setFromQuaternion(this.camera.quaternion)
+    euler.y -= dx * DRAG_LOOK_SPEED
+    euler.x = THREE.MathUtils.clamp(euler.x - dy * DRAG_LOOK_SPEED, -1.4, 1.4)
+    this.camera.quaternion.setFromEuler(euler)
   }
 
   placeAt(x: number, z: number) {
@@ -78,7 +93,7 @@ export class Player {
     const right = new THREE.Vector3().crossVectors(forward, this.camera.up).normalize()
 
     const move = new THREE.Vector3()
-    if (this.controls.isLocked) {
+    if (this.acceptsKeys) {
       if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) move.add(forward)
       if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) move.sub(forward)
       if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) move.add(right)

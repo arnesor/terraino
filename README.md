@@ -92,15 +92,22 @@ Maps must be georeferenced in UTM zone 32, 33 or 35 (ETRS89 or WGS 84).
 | Shift       | Run (fly fast)                                    |
 | Space       | Jump (fly up)                                     |
 | F           | Fly on/off, C flies down                          |
-| M           | Map; + and − zoom, P shows/hides your position     |
-| E           | With the map open: set a course by clicking       |
+| M           | Map window: drag to move, wheel to zoom, double click to go there |
+| E           | With the map open: set a course by clicking (or Set course) |
 | L           | Copy a link to the course                         |
 | T           | Go to the start; R restarts the run               |
 | O           | Orienteering map on the ground on/off             |
 | G           | Graphics quality (shadows)                        |
 | Esc         | Pause                                             |
 
-To run a course, open the map (M), press E and click the start, the controls and the finish.
+The map window frees the mouse so you can drag, zoom and double click in it,
+and you can keep running with W A S D. Click the terrain to steer with the mouse again
+while the map stays open, and press Esc to give the mouse back to the map.
+Auto turns the map with your running direction; ⟲, ⟳ and N↑ turn it by hand.
+Close the map with M or ✕.
+
+To run a course, open the map (M), press E
+(or Set course) and click the start, the controls and the finish.
 The clock starts when you leave the start triangle,
 and each control is punched when you get within 2.5 m of the flag.
 

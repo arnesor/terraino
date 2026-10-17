@@ -140,11 +140,39 @@ async function main() {
   const hud = new Hud(document.getElementById('hud')!, world, player, run, () =>
     `${(forest?.drawn ?? 0).toLocaleString('en')} trees · ${environment.quality} quality`,
   )
-  // Editing a course needs a free mouse pointer, without showing the pause screen.
-  hud.onEditingChange = editing => {
-    if (editing) player.controls.unlock()
-    else player.controls.lock()
+  // The map window gets the mouse when it opens. Pressing on the terrain takes it back
+  // for steering (the map stays open), and Esc gives it to the map again.
+  const resume = document.getElementById('resume')!
+  const updateResume = () => {
+    resume.hidden = !(hud.mapOpen && !player.controls.isLocked && overlay.hidden)
   }
+  hud.onMapToggle = open => {
+    player.keysWithoutLock = open
+    if (open) player.controls.unlock()
+    else player.controls.lock()
+    updateResume()
+  }
+  let dragLook: { x: number; y: number } | null = null
+  renderer.domElement.addEventListener('pointerdown', e => {
+    if (!overlay.hidden || player.controls.isLocked) return
+    dragLook = { x: e.clientX, y: e.clientY }
+    if (e.pointerType === 'mouse') player.controls.lock()
+  })
+  window.addEventListener('pointermove', e => {
+    if (!dragLook || player.controls.isLocked) return
+    player.look(e.clientX - dragLook.x, e.clientY - dragLook.y)
+    dragLook = { x: e.clientX, y: e.clientY }
+  })
+  window.addEventListener('pointerup', () => (dragLook = null))
+  hud.onTeleport = (east, north) => {
+    const [x, z] = world.toScene(east, north)
+    if (player.flying) player.toggleFlying()
+    player.placeAt(x, z)
+  }
+  document.addEventListener('pointerlockerror', () => {
+    if (!hud.mapOpen) overlay.hidden = false
+    updateResume()
+  })
   window.addEventListener('keydown', e => {
     if (e.code === 'KeyO') terrain.setMode(terrain.mode === 'ground' ? 'map' : 'ground')
     if (e.code === 'KeyT' && run.course.controls.length) {
@@ -174,8 +202,14 @@ async function main() {
     world.manifest.map.scale ? `${world.manifest.name} · 1:${world.manifest.map.scale}` : world.manifest.name,
   )
   startButton.addEventListener('click', () => player.controls.lock())
-  player.controls.addEventListener('lock', () => (overlay.hidden = true))
-  player.controls.addEventListener('unlock', () => (overlay.hidden = hud.editing))
+  player.controls.addEventListener('lock', () => {
+    overlay.hidden = true
+    updateResume()
+  })
+  player.controls.addEventListener('unlock', () => {
+    overlay.hidden = hud.mapOpen
+    updateResume()
+  })
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight
