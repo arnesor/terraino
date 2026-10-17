@@ -1,7 +1,8 @@
 /*
  * Vendored from "Orienteering 3D" (https://claude.ai/artifact/A8dqe89rvxzyN29Az3W29D),
  * MIT licensed, see LICENSE in this folder. Changes for otest: an ES module instead of a
- * window global, and the colour space API of current three.js.
+ * window global, the colour space API of current three.js, and a spruce top with a leader
+ * shoot instead of a tuft (marked otest:).
  */
 /* Procedural tree, bush and rock geometry for the Steinshøgda world.
  * Trees are built at unit height (y 0..1) and scaled per instance.
@@ -111,11 +112,12 @@
           const t = k / (N - 1), y = cb + (0.92 - cb) * t;
           const tt = Math.min(1, Math.max(0, (y - 0.06) / 0.86));    // position on a full-length crown
           const L = (0.205 * Math.pow(1 - tt, 0.85) + 0.022) * (cb > 0.1 ? 0.82 : 1);
-          const nb = tt > 0.85 ? 4 : 7, rot = R() * 6.283;
+          const nb = tt > 0.85 ? 5 : 7, rot = R() * 6.283;
           for (let i = 0; i < nb; i++) {
             const a = rot + (i / nb) * 6.283 + (R() - 0.5) * 0.4;
             const dx = Math.cos(a), dz = Math.sin(a);
-            const rise = 0.12 - tt * 0.25 + (R() - 0.5) * 0.1;
+            // otest: young branches near the top point upwards; lower ones level out and droop
+            const rise = 0.12 - tt * 0.25 + Math.max(0, tt - 0.65) * 1.4 + (R() - 0.5) * 0.1;
             const dl = Math.hypot(1, rise);
             const d = [dx / dl, rise / dl, dz / dl];
             const roll = 0.75;
@@ -126,7 +128,19 @@
             }
           }
         }
-        clump(bf, 0, 0.965, 0, 0.045, R, crownC, 1.0);
+        // otest: the top is a slim leader shoot over a few short, upturned whorls (a tuft of
+        // crossed cards here showed as a lump on top of the narrow crown)
+        for (let k = 0; k < 3; k++) {
+          const y = 0.932 + k * 0.017, L = 0.028 - k * 0.006, rot = R() * 6.283;
+          for (let i = 0; i < 5; i++) {
+            const a = rot + (i / 5) * 6.283 + (R() - 0.5) * 0.3, dx = Math.cos(a), dz = Math.sin(a);
+            const rise = 0.6 + k * 0.25, dl = Math.hypot(1, rise);
+            card(bf, [dx * 0.003, y, dz * 0.003], [dx / dl, rise / dl, dz / dl], [-dz, 0, dx], L, L * 0.32, 0.05, crownC, 0.85, 1.0, false);
+          }
+        }
+        for (const [sx, sz] of [[1, 0], [0, 1]]) {
+          card(bf, [0, 0.925, 0], [0, 1, 0], [sx, 0, sz], 0.08, 0.008, 0, crownC, 0.85, 1.0, false);
+        }
         // dry twigs on the bare lower trunk (thin, short, drooping; on the bark material)
         if (cb > 0.1) {
           const n = Math.round(cb * 110);
