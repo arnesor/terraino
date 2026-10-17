@@ -69,6 +69,8 @@ TREE_DTYPE = np.dtype(
     [("x", "<u2"), ("z", "<u2"), ("height", "<u2"), ("crown", "u1"), ("species", "u1")]
 )
 SPECIES_NAMES = {1: "spruce", 2: "pine", 3: "deciduous"}
+# Added to the species byte of trees that grew up in a stand (seed trees left standing).
+STAND_GROWN_FLAG = 16
 
 # The rendered map images are large; they come from our own exporter.
 Image.MAX_IMAGE_PIXELS = None
@@ -237,6 +239,10 @@ def _write_trees(out_dir: Path, trees: Trees, chunks: tuple[int, int]) -> list[i
     )
     records["crown"] = np.clip(np.rint(trees.crown * TREE_CROWN_SCALE), 0, 255)
     records["species"] = trees.species
+    if trees.stand_grown is not None:
+        records["species"] |= np.where(trees.stand_grown, STAND_GROWN_FLAG, 0).astype(
+            np.uint8
+        )
     records = records[order]
     sorted_ids = chunk_id[order]
 
@@ -446,6 +452,7 @@ def write_world(out_dir: Path, world: WorldData) -> Path:
             "crownScale": TREE_CROWN_SCALE,
             "recordBytes": TREE_DTYPE.itemsize,
             "species": SPECIES_NAMES,
+            "standGrownFlag": STAND_GROWN_FLAG,
         }
 
     if world.buildings is not None:

@@ -66,6 +66,7 @@ class TreeChunk {
     this.tint = new Float32Array(n)
     const crown = new Float32Array(n)
     const species = new Uint8Array(n)
+    const standGrown = new Uint8Array(n)
     const ox = cx * chunkSize
     const oz = cy * chunkSize
     for (let i = 0; i < n; i++) {
@@ -78,7 +79,9 @@ class TreeChunk {
       this.y[i] = heights.heightAt(x, z) - 0.2
       this.height[i] = view.getUint16(o + 4, true) / info.heightScale
       crown[i] = view.getUint8(o + 6) / info.crownScale
-      species[i] = view.getUint8(o + 7)
+      const kind = view.getUint8(o + 7)
+      standGrown[i] = info.standGrownFlag && kind & info.standGrownFlag ? 1 : 0
+      species[i] = kind & 15
       this.rotation[i] = posRandom(x, z, 1) * Math.PI * 2
       this.tint[i] = 0.85 + posRandom(x, z, 2) * 0.3
     }
@@ -98,6 +101,8 @@ class TreeChunk {
         else v = (r - low) / (1 - low) < (neighbours >= 5 ? 0.4 : 0.7) ? 1 : 2
         // Along paths the low branches are broken off.
         if (v === 0 && tracks?.near(x, z, Math.min(0.2 * h, 4))) v = 1
+        // Seed trees left after a cut grew up in a stand: long bare trunks.
+        if (standGrown[i]) v = h < 9 ? 1 : 2
       } else if (species[i] === PINE) v = r < 0.5 ? 3 : 4
       else v = r < 0.5 ? 5 : 6
       this.variant[i] = v

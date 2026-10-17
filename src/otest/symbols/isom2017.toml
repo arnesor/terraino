@@ -35,7 +35,8 @@ name = "ISOM 2017-2"
 "401" = { ground = "open", trees = "lidar", speed = 1.0, order = 10 }
 "402" = { ground = "open", trees = "lidar", speed = 1.0, order = 10 }
 "403" = { ground = "rough", trees = "none", speed = 0.85, order = 11 }
-"404" = { ground = "rough", trees = "lidar", speed = 0.85, order = 11 }
+# Scattered trees: often a cut with seed trees left, newer than the laser data.
+"404" = { ground = "rough", trees = "scattered", speed = 0.85, order = 11 }
 "405" = { ground = "forest", speed = 1.0, order = 12 }
 "406" = { ground = "forest", young = 3, speed = 0.75, order = 20 }
 "407" = { overprint = true, shrubs = 0.45, speed = 0.75, order = 20 }

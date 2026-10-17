@@ -7,14 +7,24 @@ from shapely import Polygon, box
 
 from otest.ingest.georef import Extent
 from otest.process.fuse import fill_unknown_ground
-from otest.process.layers import TREES_LIDAR, TREES_NONE, GroundLayers, rasterize_map
+from otest.process.layers import (
+    TREES_KEEP,
+    TREES_LIDAR,
+    TREES_NONE,
+    TREES_SCATTERED,
+    GroundLayers,
+    rasterize_map,
+)
 from otest.process.symbols import Ground, SymbolSet
 from otest.process.trees import (
+    MIN_TREE_HEIGHT_M,
+    SCATTERED_SPACING_M,
     canopy_height,
     effective_canopy,
     find_tree_tops,
     low_vegetation,
     place_trees,
+    scattered_stumps,
     understorey_cells,
 )
 
@@ -204,3 +214,46 @@ def test_undergrowth_overprint_keeps_rough_open_land() -> None:
     assert layers.speed[cell(40, 40)] == pytest.approx(0.75)
     assert layers.ground[cell(78, 78)] == Ground.FOREST
     assert layers.shrubs[cell(78, 78)] == pytest.approx(0.45)
+
+
+def test_scattered_trees_are_few_and_far_apart() -> None:
+    # Rough open land with scattered trees over a dense forest in the laser data.
+    layers = rasterize_map(
+        [area(0, "404.0", box(20, 20, 80, 80))], ISOM, EXTENT, MAP_AREA
+    )
+    chm = cone_forest(
+        [
+            (r, c, 12.0 + (r * 7 + c * 3) % 9)
+            for r in range(5, 100, 4)
+            for c in range(5, 100, 4)
+        ]
+    )
+    species = np.full(chm.shape, 2, dtype=np.uint8)
+    trees = place_trees(chm, layers, species, seed=1)
+    inside = (
+        layers.tree_rule[trees.row.astype(int), trees.col.astype(int)]
+        == TREES_SCATTERED
+    )
+    x, y, h = trees.col[inside], trees.row[inside], trees.height[inside]
+    assert (
+        0 < len(x) <= 50
+    )  # 0.36 ha: at most one tree per 72 m², far fewer than laser tops
+    gaps = (
+        np.hypot(x[:, None] - x[None, :], y[:, None] - y[None, :]) + np.eye(len(x)) * 99
+    )
+    assert gaps.min() > SCATTERED_SPACING_M - 1  # jitter moves trees up to 0.64 m
+    # The tallest trees are the ones left standing.
+    assert np.median(h) > 16
+    # The trees left standing grew up in a stand; the others were cut, leaving stumps.
+    assert trees.stand_grown is not None
+    assert trees.stand_grown[inside].all()
+    assert not trees.stand_grown[~inside].any()
+    stump_rows, stump_cols, stump_heights = scattered_stumps(chm, layers)
+    assert (stump_heights >= MIN_TREE_HEIGHT_M).all()
+    assert len(stump_rows) > len(x) * 3
+    assert (layers.tree_rule[stump_rows, stump_cols] == TREES_SCATTERED).all()
+    # Forest outside the area keeps all its trees.
+    outside = (
+        layers.tree_rule[trees.row.astype(int), trees.col.astype(int)] == TREES_KEEP
+    )
+    assert outside.sum() > len(x) * 5

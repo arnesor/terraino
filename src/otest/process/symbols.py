@@ -13,7 +13,7 @@ from enum import IntEnum
 from importlib import resources
 from typing import Any, Literal
 
-TreeRule = Literal["keep", "none", "lidar"]
+TreeRule = Literal["keep", "none", "lidar", "scattered"]
 TRACKS = frozenset(
     {
         "paved",
@@ -145,7 +145,7 @@ class SymbolRule:
         if values.get("feature") is not None and values["feature"] not in FEATURES:
             msg = f"Unknown feature {values['feature']!r}"
             raise ValueError(msg)
-        if values.get("trees", "keep") not in ("keep", "none", "lidar"):
+        if values.get("trees", "keep") not in ("keep", "none", "lidar", "scattered"):
             msg = f"Unknown trees rule {values['trees']!r}"
             raise ValueError(msg)
         return cls(**values)

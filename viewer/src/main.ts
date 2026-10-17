@@ -129,6 +129,7 @@ async function main() {
   const buildings = await loadBuildings(world)
   if (buildings) scene.add(buildings)
   const features = await MapFeatures.load(world, heights, gfx)
+  if (features && undergrowth) undergrowth.setStumps(features.stumps)
   if (features) scene.add(features.group)
 
   const player = new Player(camera, renderer.domElement, heights, world.sceneSize)

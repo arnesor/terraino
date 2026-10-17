@@ -55,7 +55,7 @@ def test_rough_open_land_has_no_trees(key: str) -> None:
     assert rough is not None
     assert scattered is not None
     assert rough.trees == "none"
-    assert scattered.trees == "lidar"
+    assert scattered.trees == "scattered"
 
 
 @pytest.mark.parametrize(("key", "number"), [("isom2000", "509"), ("isom2017", "508")])

@@ -39,6 +39,8 @@ export interface TreeInfo {
   crownScale: number
   recordBytes: number
   species: Record<string, string>
+  /** Added to the species byte of trees that grew up in a stand (seed trees). */
+  standGrownFlag?: number
 }
 
 export interface Manifest {

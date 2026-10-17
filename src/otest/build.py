@@ -25,6 +25,7 @@ from otest.process.buildings import collect_footprints, measure_buildings
 from otest.process.classify import classify_map
 from otest.process.features import (
     Features,
+    PointFeature,
     carve_cliffs,
     collect_features,
     measure_cliffs,
@@ -46,6 +47,7 @@ from otest.process.trees import (
     effective_canopy,
     low_vegetation,
     place_trees,
+    scattered_stumps,
 )
 
 log = logging.getLogger(__name__)
@@ -343,6 +345,20 @@ def _add_nature_and_buildings(
         forest.trees_per_ha,
         seed=int(extent.x0 + extent.y0) % 2**32,
     )
+    stump_rows, stump_cols, stump_heights = scattered_stumps(chm, layers)
+    if len(stump_rows):
+        if world.features is None:
+            world.features = Features()
+        world.features.points.extend(
+            PointFeature(
+                "stump",
+                extent.x0 + float(c) + 0.5,
+                extent.y1 - float(r) - 0.5,
+                size=float(np.clip(0.02 * h + 0.1, 0.15, 0.6)),
+            )
+            for r, c, h in zip(stump_rows, stump_cols, stump_heights, strict=True)
+        )
+        log.info("Left %d stumps where the map shows scattered trees", len(stump_rows))
     canopy = effective_canopy(chm, layers)
     fill_unknown_ground(layers, canopy)
     counts = np.bincount(trees.species, minlength=4)[1:]

@@ -9,7 +9,9 @@ const REBUILD_DISTANCE = 8
 const MAX_BUSHES = 12000
 const MAX_COVER = 16000
 const MAX_LOGS = 600
-const MAX_TWIGS = 3000
+const MAX_TWIGS = 6000
+const MAX_STUMPS = 4000
+const STUMP_CELL = 32
 
 // Chance of a bush per square metre on the forest floor, where the laser cannot see
 // below the canopy. Elsewhere bushes stand only where the undergrowth layer has them:
@@ -30,6 +32,22 @@ const COVER_SIZE: Record<CoverKind, [number, number]> = {
   heather: [0.7, 0.36],
   sedge: [0.75, 0.7],
   dry: [0.7, 0.55],
+}
+
+/** A cut stump of height and diameter 1, its top a pale cut surface. */
+function stumpGeometry(): THREE.BufferGeometry {
+  const g = new THREE.CylinderGeometry(0.47, 0.55, 1, 9, 1)
+  g.translate(0, 0.5, 0)
+  const pos = g.getAttribute('position')
+  const normal = g.getAttribute('normal')
+  const colors = new Float32Array(pos.count * 3)
+  for (let i = 0; i < pos.count; i++) {
+    const top = normal.getY(i) > 0.9
+    const c = top ? [2.6, 2.2, 1.6] : pos.getY(i) < 0.5 ? [0.7, 0.7, 0.7] : [1, 1, 1]
+    colors.set(c, i * 3)
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  return g
 }
 
 /** Deterministic random number in [0, 1) for an integer cell and a salt. */
@@ -107,6 +125,8 @@ export class Undergrowth {
   private readonly cover = new Map<CoverKind, THREE.InstancedMesh>()
   private readonly logs: THREE.InstancedMesh
   private readonly twigs: THREE.InstancedMesh[]
+  private readonly stumpMesh: THREE.InstancedMesh
+  private readonly stumpGrid = new Map<number, number[]>()
   private builtAt: THREE.Vector3 | null = null
   private quality: QualitySettings
 
@@ -133,11 +153,24 @@ export class Undergrowth {
     }
     this.logs = add(gfx.models.log, gfx.logBark, MAX_LOGS, true)
     this.twigs = gfx.models.twig.map(g => add(g, gfx.logBark, MAX_TWIGS, false))
+    this.stumpMesh = add(stumpGeometry(), gfx.logBark, MAX_STUMPS, true)
     this.group.name = 'undergrowth'
   }
 
   setQuality(quality: QualitySettings) {
     this.quality = quality
+    this.builtAt = null
+  }
+
+  /** Stumps of felled trees (x, z, diameter, ...), with slash around them. */
+  setStumps(stumps: number[]) {
+    this.stumpGrid.clear()
+    for (let i = 0; i < stumps.length; i += 3) {
+      const key = Math.floor(stumps[i]! / STUMP_CELL) * 100003 + Math.floor(stumps[i + 1]! / STUMP_CELL)
+      let list = this.stumpGrid.get(key)
+      if (!list) this.stumpGrid.set(key, (list = []))
+      list.push(stumps[i]!, stumps[i + 1]!, stumps[i + 2]!)
+    }
     this.builtAt = null
   }
 
@@ -263,7 +296,65 @@ export class Undergrowth {
       }
     }
 
-    for (const mesh of [this.bushes, this.logs, ...this.twigs, ...this.cover.values()]) {
+    // Stumps where trees were felled, with branches (slash) and the odd top left lying.
+    const g0 = Math.floor((eye.x - bushRadius) / STUMP_CELL)
+    const g1 = Math.floor((eye.x + bushRadius) / STUMP_CELL)
+    const h0 = Math.floor((eye.z - bushRadius) / STUMP_CELL)
+    const h1 = Math.floor((eye.z + bushRadius) / STUMP_CELL)
+    for (let gx = g0; gx <= g1; gx++) {
+      for (let gz = h0; gz <= h1; gz++) {
+        const list = this.stumpGrid.get(gx * 100003 + gz)
+        if (!list) continue
+        for (let i = 0; i < list.length; i += 3) {
+          const sx = list[i]!
+          const sz = list[i + 1]!
+          const d = list[i + 2]!
+          if ((sx - eye.x) ** 2 + (sz - eye.z) ** 2 > bushRadius * bushRadius) continue
+          if (this.onTrack(sx, sz, 0.3)) continue
+          const k = Math.round(sx * 10) * 7919 + Math.round(sz * 10)
+          const r = (salt: number) => cellRandom(k, 17, salt)
+          pos.set(sx, this.heights.heightAt(sx, sz) - 0.06, sz)
+          quat.setFromAxisAngle(up, r(1) * Math.PI * 2)
+          scale.set(d, 0.22 + 0.25 * r(2), d)
+          const t = 0.85 + 0.3 * r(3)
+          color.setRGB(t, t * 0.96, t * 0.9)
+          put(this.stumpMesh, MAX_STUMPS)
+          // Slash: dry branches lying around the stump.
+          const n = 2 + Math.floor(r(4) * 3)
+          for (let j = 0; j < n; j++) {
+            const a = r(10 + j) * Math.PI * 2
+            const dist = 0.6 + 2.2 * r(20 + j)
+            const bx = sx + Math.cos(a) * dist
+            const bz = sz + Math.sin(a) * dist
+            if (this.onTrack(bx, bz, 0.5)) continue
+            const sc = 1.6 + 1.6 * r(30 + j)
+            quat.setFromEuler(euler.set((r(40 + j) - 0.5) * 0.25, r(50 + j) * Math.PI * 2, (r(60 + j) - 0.5) * 0.2))
+            scale.set(sc, sc, sc)
+            pos.set(bx, this.heights.heightAt(bx, bz) - 0.02, bz)
+            const v = 0.6 + 0.35 * r(70 + j)
+            color.setRGB(v, v * 0.95, v * 0.88)
+            put(this.twigs[j % this.twigs.length]!, MAX_TWIGS)
+          }
+          // Now and then the felled top, left lying.
+          if (r(80) < 0.12) {
+            const a = r(81) * Math.PI * 2
+            const length = 2 + 3 * r(82)
+            const lx = sx + Math.cos(a) * (length / 2 + 1)
+            const lz = sz + Math.sin(a) * (length / 2 + 1)
+            if (!this.onTrack(lx, lz, length / 2 + 0.5)) {
+              const radius = 0.05 + 0.05 * r(83)
+              quat.setFromEuler(euler.set(0, -a, 0, 'YZX'))
+              scale.set(length, radius, radius)
+              pos.set(lx, this.heights.heightAt(lx, lz) + radius * 0.6, lz)
+              color.setRGB(0.8, 0.76, 0.7)
+              put(this.logs, MAX_LOGS)
+            }
+          }
+        }
+      }
+    }
+
+    for (const mesh of [this.bushes, this.logs, this.stumpMesh, ...this.twigs, ...this.cover.values()]) {
       mesh.count = counts.get(mesh) ?? 0
       mesh.instanceMatrix.needsUpdate = true
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true

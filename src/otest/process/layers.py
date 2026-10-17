@@ -26,7 +26,14 @@ TREES_KEEP = 0
 TREES_NONE = 1
 # Only the trees found in the laser data; nothing is added below the canopy.
 TREES_LIDAR = 2
-TREE_RULES = {"keep": TREES_KEEP, "none": TREES_NONE, "lidar": TREES_LIDAR}
+# A few of the laser's trees, the tallest, far apart (rough open land with scattered trees).
+TREES_SCATTERED = 3
+TREE_RULES = {
+    "keep": TREES_KEEP,
+    "none": TREES_NONE,
+    "lidar": TREES_LIDAR,
+    "scattered": TREES_SCATTERED,
+}
 
 # Overprinting areas (marsh, stony ground) do not change the vegetation below them.
 _OVERPRINT = {Ground.MARSH, Ground.STONY}
@@ -41,7 +48,7 @@ class GroundLayers:
         speed: Running speed factor, 1 = easy forest.
         young: Young trees to add per 100 m².
         shrubs: Undergrowth density, 0..1.
-        tree_rule: TREES_KEEP, TREES_NONE or TREES_LIDAR.
+        tree_rule: TREES_KEEP, TREES_NONE, TREES_LIDAR or TREES_SCATTERED.
         clear: True where no trees may stand (roads, paths, streams, power lines).
         in_map: True inside the mapped area.
     """

@@ -5,12 +5,13 @@ terrain). Trees below the canopy cannot be seen from above, so smaller trees are
 under it until each 16 m cell has as many trees as SR16 reports (or a typical number).
 The orienteering map then decides where trees may stand: in forest the canopy is filled
 up as above, on open land, farmland and gardens only the trees the laser finds stand,
-and young trees are added where the map shows dense forest. Species come from SR16, mixed a
+on rough open land with scattered trees only a few of them, and young trees are added where the map shows dense forest. Species come from SR16, mixed a
 little, because SR16 only gives the dominant species per 16 m cell.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -18,7 +19,13 @@ import numpy.typing as npt
 from scipy import ndimage
 
 from otest.fetch.nibio import Species
-from otest.process.layers import TREES_KEEP, TREES_LIDAR, TREES_NONE, GroundLayers
+from otest.process.layers import (
+    TREES_KEEP,
+    TREES_LIDAR,
+    TREES_NONE,
+    TREES_SCATTERED,
+    GroundLayers,
+)
 from otest.process.symbols import Ground
 
 MIN_TREE_HEIGHT_M = 2.5
@@ -37,6 +44,8 @@ LOW_VEGETATION_M = (0.5, MIN_TREE_HEIGHT_M)
 LOW_VEGETATION_PROMINENCE_M = 0.4
 LOW_VEGETATION_WINDOW = 9
 YOUNG_HEIGHT_M = (1.2, 4.5)
+# Scattered trees stand at least this far apart (about 40 per hectare).
+SCATTERED_SPACING_M = 12.0
 
 # Probability of each species given SR16's dominant species (spruce, pine, deciduous).
 _MIX = {
@@ -69,6 +78,9 @@ class Trees:
         height: Tree height in metres.
         crown: Crown radius in metres.
         species: Species values.
+        stand_grown: True for trees that grew up in a stand but now stand alone (seed
+            trees left after a cut): long bare trunks, not branches to the ground.
+            None means none are.
     """
 
     col: npt.NDArray[np.float32]
@@ -76,6 +88,7 @@ class Trees:
     height: npt.NDArray[np.float32]
     crown: npt.NDArray[np.float32]
     species: npt.NDArray[np.uint8]
+    stand_grown: npt.NDArray[np.bool_] | None = None
 
     def __len__(self) -> int:
         """Number of trees."""
@@ -203,6 +216,42 @@ def _allowed(layers: GroundLayers) -> npt.NDArray[np.bool_]:
     return allowed
 
 
+def thin_scattered(
+    rows: npt.NDArray[np.intp],
+    cols: npt.NDArray[np.intp],
+    heights: npt.NDArray[np.float32],
+    spacing: float = SCATTERED_SPACING_M,
+) -> npt.NDArray[np.bool_]:
+    """Pick scattered trees: the tallest first, none closer than ``spacing`` to another.
+
+    Where the map shows rough open land with scattered trees, the forest has usually
+    been cut since the laser scan, leaving a few seed trees: the tallest ones.
+
+    Returns:
+        Which of the trees to keep.
+
+    Examples:
+        >>> rows = np.array([0, 0, 0, 30])
+        >>> cols = np.array([0, 5, 20, 0])
+        >>> heights = np.array([10, 20, 15, 5], dtype=np.float32)
+        >>> thin_scattered(rows, cols, heights, spacing=12).tolist()
+        [False, True, True, True]
+    """
+    keep = np.zeros(len(rows), dtype=bool)
+    taken: dict[tuple[int, int], list[tuple[float, float]]] = {}
+    for i in np.argsort(-heights, kind="stable"):
+        r, c = float(rows[i]), float(cols[i])
+        gr, gc = int(r // spacing), int(c // spacing)
+        near = (taken.get((gr + a, gc + b), []) for a in (-1, 0, 1) for b in (-1, 0, 1))
+        if any(
+            math.hypot(r - tr, c - tc) < spacing for cell in near for tr, tc in cell
+        ):
+            continue
+        keep[i] = True
+        taken.setdefault((gr, gc), []).append((r, c))
+    return keep
+
+
 def place_trees(
     chm: npt.NDArray[np.float32],
     layers: GroundLayers,
@@ -224,8 +273,8 @@ def place_trees(
     """
     rng = np.random.default_rng(seed)
     allowed_cells = _allowed(layers)
-    rows, cols, heights = find_tree_tops(chm)
-    keep = allowed_cells[rows, cols]
+    rows, cols, heights, scattered, keep = _laser_tops(chm, layers, allowed_cells)
+    seed_trees = scattered[keep]
     rows, cols, heights = rows[keep], cols[keep], heights[keep]
 
     ur, uc = understorey_cells(
@@ -256,13 +305,60 @@ def place_trees(
 
     # Laser tops sit on cell centres; jitter so the forest does not look gridded.
     jitter = rng.uniform(-0.45, 0.45, size=(2, len(all_rows))).astype(np.float32)
+    stand_grown = np.zeros(len(all_rows), dtype=bool)
+    stand_grown[: len(seed_trees)] = seed_trees
     return Trees(
         col=all_cols + 0.5 + jitter[0],
         row=all_rows + 0.5 + jitter[1],
         height=all_heights,
         crown=_crowns(all_heights, species),
         species=species,
+        stand_grown=stand_grown,
     )
+
+
+def _laser_tops(
+    chm: npt.NDArray[np.float32],
+    layers: GroundLayers,
+    allowed_cells: npt.NDArray[np.bool_],
+) -> tuple[
+    npt.NDArray[np.intp],
+    npt.NDArray[np.intp],
+    npt.NDArray[np.float32],
+    npt.NDArray[np.bool_],
+    npt.NDArray[np.bool_],
+]:
+    """Laser tree tops where the map allows trees.
+
+    Returns:
+        Rows, columns and heights; which are in scattered-tree areas; which to keep
+        (all but the scattered ones thinned out).
+    """
+    rows, cols, heights = find_tree_tops(chm)
+    allowed = allowed_cells[rows, cols]
+    rows, cols, heights = rows[allowed], cols[allowed], heights[allowed]
+    scattered = layers.tree_rule[rows, cols] == TREES_SCATTERED
+    keep = ~scattered
+    keep[scattered] = thin_scattered(
+        rows[scattered], cols[scattered], heights[scattered]
+    )
+    return rows, cols, heights, scattered, keep
+
+
+def scattered_stumps(
+    chm: npt.NDArray[np.float32], layers: GroundLayers
+) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp], npt.NDArray[np.float32]]:
+    """Stumps of the trees cut where the map shows scattered trees.
+
+    The laser tree tops that ``place_trees`` leaves out of scattered-tree areas were
+    usually felled after the laser scan.
+
+    Returns:
+        Rows, columns and heights (of the felled trees).
+    """
+    rows, cols, heights, scattered, keep = _laser_tops(chm, layers, _allowed(layers))
+    cut = scattered & ~keep
+    return rows[cut], cols[cut], heights[cut]
 
 
 def low_vegetation(chm: npt.NDArray[np.float32]) -> npt.NDArray[np.bool_]:
@@ -292,6 +388,7 @@ def effective_canopy(
 ) -> npt.NDArray[np.float32]:
     """Canopy height where the map allows trees, 0 elsewhere (for distant shading)."""
     canopy = chm.copy()
+    # Scattered trees are too few to make a canopy.
     canopy[~np.isin(layers.tree_rule, [TREES_KEEP, TREES_LIDAR]) | layers.clear] = 0
     canopy[np.isin(layers.ground, [Ground.WATER, Ground.BUILDING, Ground.PAVED])] = 0
     return canopy

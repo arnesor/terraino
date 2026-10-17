@@ -4,7 +4,8 @@
 #   ground  ground class: forest open rough marsh rock field paved gravel path water
 #           lawn stony sand building (see otest.process.symbols.Ground)
 #   trees   "keep" (laser canopy trees, plus smaller trees below the canopy up to the
-#           SR16 count), "lidar" (only the trees the laser finds) or "none"
+#           SR16 count), "lidar" (only the trees the laser finds), "scattered" (a few
+#           of the laser's trees, the tallest, far apart) or "none"
 #   young   young trees added per 100 m², making the forest denser
 #   shrubs  undergrowth density, 0..1
 #   speed   running speed factor, 1 = easy forest floor, 0 = impassable
@@ -58,7 +59,8 @@ name = "ISOM 2000"
 # Rough open land: felled areas, heath and new plantations, no trees above about 1 m
 # (scattered trees are mapped with 404).
 "403" = { ground = "rough", trees = "none", speed = 0.85, order = 11 }
-"404" = { ground = "rough", trees = "lidar", speed = 0.85, order = 11 }
+# Scattered trees: often a cut with seed trees left, newer than the laser data.
+"404" = { ground = "rough", trees = "scattered", speed = 0.85, order = 11 }
 "405" = { ground = "forest", speed = 1.0, order = 12 }
 "406" = { ground = "forest", young = 3, speed = 0.75, order = 20 }
 "407" = { overprint = true, shrubs = 0.45, speed = 0.75, order = 20 }

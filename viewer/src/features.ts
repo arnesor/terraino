@@ -81,6 +81,8 @@ function alongLine(pts: THREE.Vector3[], spacing: number): THREE.Vector3[] {
 /** Rocks, cliffs, walls, fences, power lines and small structures from the map. */
 export class MapFeatures {
   readonly group = new THREE.Group()
+  /** Stumps of felled trees, as x, z, diameter; drawn near the player by Undergrowth. */
+  readonly stumps: number[] = []
   private readonly obstacles = new Map<number, [number, number, number][]>()
 
   private readonly gfx: Gfx
@@ -170,6 +172,7 @@ export class MapFeatures {
       else if (kind === 'cairn') parts.push(...this.cairn(x, y, z, size))
       else if (kind === 'fodder_rack') parts.push(...this.fodderRack(x, y, z, size, angle))
       else if (kind === 'footbridge') parts.push(this.footbridge(x, z, size, angle, ground))
+      else if (kind === 'stump') this.stumps.push(x, z, size)
     }
 
     const wires: number[] = []
