@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { type Gfx, GROUND_TEX_GLSL } from './gfx'
 import type { HeightField } from './heightfield'
 import type { World } from './world'
 
@@ -9,23 +10,24 @@ export interface TrackRecord {
 }
 
 /**
- * Look of each kind (otest.process.symbols.TRACKS). Strips are partly transparent and
- * fade out towards their edges, so they blend into the ground like worn earth:
- * `opacity` in the middle, fading from `fade` (0 = centre, 1 = edge) outwards.
+ * Look of each kind (otest.process.symbols.TRACKS). Strips reach `margin` metres past
+ * the track's edge, where the ground beside it is worn (paths) or damp (streams).
+ * Footpaths are drawn first, then water (so a stream shows across a path, which gets a
+ * footbridge), then roads (culverts carry them over streams).
  */
-const STYLES: Record<string, { id: number; colour: number; opacity: number; fade: number; order: number }> = {
-  paved: { id: 0, colour: 0x48484b, opacity: 0.97, fade: 0.8, order: 1 },
-  gravel: { id: 1, colour: 0x7f776a, opacity: 0.92, fade: 0.65, order: 2 },
-  vehicle_track: { id: 2, colour: 0x6f5e4a, opacity: 0.85, fade: 0.5, order: 3 },
-  path: { id: 3, colour: 0x86705a, opacity: 0.8, fade: 0.35, order: 4 },
-  small_path: { id: 4, colour: 0x86705a, opacity: 0.7, fade: 0.3, order: 5 },
-  faint_path: { id: 5, colour: 0x7a6853, opacity: 0.6, fade: 0.25, order: 6 },
-  // Water lines: dark water reflecting the sky; a water channel is wet earth with a
-  // thin trickle in the middle. Drawn below paths, so a path crossing a stream shows.
-  stream: { id: 6, colour: 0x1f2d30, opacity: 0.95, fade: 0.6, order: 0 },
-  small_stream: { id: 7, colour: 0x1f2d30, opacity: 0.9, fade: 0.45, order: 0 },
-  water_channel: { id: 8, colour: 0x3a3127, opacity: 0.8, fade: 0.35, order: 0 },
+const STYLES: Record<string, { id: number; margin: number; order: number }> = {
+  faint_path: { id: 5, margin: 0.8, order: 1 },
+  small_path: { id: 4, margin: 1.0, order: 2 },
+  path: { id: 3, margin: 1.2, order: 3 },
+  water_channel: { id: 8, margin: 1.0, order: 4 },
+  small_stream: { id: 7, margin: 1.6, order: 5 },
+  stream: { id: 6, margin: 2.0, order: 6 },
+  vehicle_track: { id: 2, margin: 1.0, order: 7 },
+  gravel: { id: 1, margin: 1.0, order: 8 },
+  paved: { id: 0, margin: 0.6, order: 9 },
 }
+const FOOTPATHS = new Set(['path', 'small_path', 'faint_path'])
+const BRIDGED_WATER = new Set(['stream', 'small_stream', 'water_channel'])
 const SAMPLE_M = 1.0
 const LIFT_M = 0.06
 // At most this far between vertices across a strip, so it follows the ground's shape.
@@ -33,58 +35,123 @@ const ACROSS_M = 1.0
 const CAP_SEGMENTS = 6
 const MAX_MITER = 2
 const INDEX_CELL = 8
+const TILE_M = 256
 
 const SHADER_COMMON = /* glsl */ `
 uniform int trackKind;
-uniform float trackOpacity;
-uniform float trackFade;
-varying vec2 vTrackUv;
+uniform float uTime;
+varying vec3 vTrack;
 varying vec3 vTrackPos;
-
-float tHash(vec2 p) {
-  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-float tNoise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(tHash(i), tHash(i + vec2(1, 0)), u.x), mix(tHash(i + vec2(0, 1)), tHash(i + vec2(1, 1)), u.x), u.y);
-}
+${GROUND_TEX_GLSL}
+vec3 tLin(vec3 c) { return pow(c, vec3(2.2)); }
 `
 
 const SHADER_MAIN = /* glsl */ `
-  float across = abs(vTrackUv.x);
+  // vTrack: x = metres from the centre line, y = metres along, z = half width.
   vec2 tp = vTrackPos.xz;
-  float fine = tNoise(tp * 3.1);
-  float patches = tNoise(tp * 0.45 + 13.0);
-  // Ragged, uneven edges instead of a ruler-straight border.
-  float edge = across + (tNoise(tp * 1.3 + 7.0) - 0.5) * 0.35;
-  vec3 col = diffuse * (0.86 + 0.2 * fine + 0.12 * patches);
-  float alpha = trackOpacity * (1.0 - smoothstep(trackFade, 1.0, edge));
-  if (trackKind == 2) {
-    // Vehicle track: two bare ruts; the ground shows in the middle and at the sides.
-    float rut = smoothstep(0.15, 0.32, edge) * (1.0 - smoothstep(0.62, 0.85, edge));
-    alpha = trackOpacity * rut;
-  } else if (trackKind >= 6) {
-    // Water: sky reflection grows towards grazing angles; small ripples break it up.
+  vec2 uv = tp / 3.2;
+  float hw = vTrack.z;
+  float am = abs(vTrack.x);
+  float fine = gtNoise(tp * 3.1);
+  float patches = gtNoise(tp * 0.45 + 13.0);
+  // Signed distance to the track's edge, ragged.
+  float e = am - hw + (gtNoise(tp * 0.9) - 0.5) * 0.22 + (gtNoise(tp * 3.7) - 0.5) * 0.08;
+  vec3 surf;
+  float core;
+  // The worn (or damp) ground beside the track: darkened, partly covering.
+  vec3 besideCol = tLin(vec3(0.25, 0.2, 0.14));
+  float beside = (1.0 - smoothstep(0.0, 1.2, e)) * 0.3;
+
+  if (trackKind == 0) {
+    // Asphalt with a gravel shoulder.
+    surf = gtx(GT_ASPHALT, uv * 1.3);
+    core = 1.0 - smoothstep(-0.05, 0.05, e);
+    besideCol = gtx(GT_GRAVEL, uv * 2.4) * 0.9;
+    beside = (1.0 - smoothstep(0.1, 0.6, e)) * 0.95;
+  } else if (trackKind == 1) {
+    // Gravel road, sometimes a grassy strip in the middle.
+    // Fine gravel worn into the soil.
+    surf = mix(gtx(GT_GRAVEL, uv * 2.4), gtx(GT_SOIL, uv), 0.3);
+    float mid = (1.0 - smoothstep(0.15, 0.4, am)) * smoothstep(0.55, 0.8, gtNoise(tp * 0.3));
+    surf = mix(surf, gtx(GT_GRASS, uv) * 0.85, mid * 0.6);
+    core = 1.0 - smoothstep(-0.2, 0.1, e);
+  } else if (trackKind == 2) {
+    // Vehicle track: two bare wheel ruts, grass between them and at the sides.
+    float u = am / max(hw, 0.1) + (fine - 0.5) * 0.12;
+    float rut = smoothstep(0.12, 0.3, u) * (1.0 - smoothstep(0.62, 0.86, u));
+    surf = mix(gtx(GT_SOIL, uv), gtx(GT_GRAVEL, uv * 2.4), 0.3) * (0.85 + 0.25 * smoothstep(0.3, 0.55, abs(u - 0.57) * 4.0));
+    core = rut * 0.92;
+  } else if (trackKind <= 5) {
+    // Footpaths: trodden earth with roots worn smooth and small stones sticking up.
+    float narrow = trackKind == 3 ? 0.7 : 1.0;
+    surf = gtx(GT_SOIL, uv);
+    float nr = gtNoise(tp * 0.7 + vec2(gtNoise(tp * 0.23) * 2.3, 0.0)) * 0.65 + gtNoise(tp * 1.9 + 3.1) * 0.35;
+    float rootLine = 1.0 - smoothstep(0.016, 0.034, abs(nr - 0.5));
+    float rootPatch = smoothstep(0.32, 0.62, gtNoise(tp * 0.11 + 5.0)) * narrow;
+    float rl = rootLine * rootPatch * smoothstep(0.5, 0.66, gtNoise(tp * 1.1 + 9.0));
+    vec3 rootCol = mix(tLin(vec3(0.24, 0.16, 0.11)), tLin(vec3(0.44, 0.33, 0.24)), smoothstep(0.008, 0.0, abs(nr - 0.5)));
+    surf = mix(surf * (1.0 - 0.35 * (1.0 - smoothstep(0.03, 0.06, abs(nr - 0.5))) * rootPatch), rootCol, rl);
+    vec2 sc = tp * 2.5;
+    vec2 ci = floor(sc);
+    vec2 f = fract(sc) - 0.5;
+    vec2 o = (vec2(gtHash(ci + 1.3), gtHash(ci + 7.1)) - 0.5) * 0.45;
+    float rad = 0.13 + 0.22 * gtHash(ci + 3.7);
+    float ds = length((f - o) * vec2(1.0, 1.25));
+    float stoneP = (0.04 + 0.2 * smoothstep(0.4, 0.8, gtNoise(tp * 0.17 + 11.0))) * narrow;
+    if (gtHash(ci + 17.0) < stoneP) {
+      float st = 1.0 - smoothstep(rad * 0.82, rad, ds);
+      float rim = (1.0 - smoothstep(rad, rad * 1.35, ds)) * (1.0 - st);
+      float lit = 0.75 + 0.4 * clamp(dot(normalize(f - o + 1e-4), vec2(-0.55, -0.83)), -1.0, 1.0) * smoothstep(0.0, rad, ds);
+      vec3 sCol = gtx(GT_ROCK, uv * 3.0) * (0.55 + 0.3 * gtHash(ci + 9.1)) * lit;
+      // Half buried: the soil covers the stone's edge.
+      st *= smoothstep(0.0, 0.5, gtNoise((f - o) * 9.0 + ci) + 0.4);
+      surf = mix(surf * (1.0 - 0.4 * rim), sCol, st);
+    }
+    // Grass and moss creep in at the sides; faint paths are broken up by it.
+    float strength = trackKind == 3 ? 1.0 : trackKind == 4 ? 0.9 : 0.7;
+    core = (1.0 - smoothstep(-0.12, 0.08, e)) * strength;
+    if (trackKind == 5) core *= smoothstep(0.2, 0.55, patches + 0.3 * fine);
+    beside *= strength;
+  } else if (trackKind <= 7) {
+    // Streams: water over a stony bed, wet stones and mud on the banks.
+    vec3 stones = mix(gtx(GT_GRAVEL, uv * 1.9), gtx(GT_ROCK, uv * 1.1), smoothstep(0.35, 0.65, gtNoise(tp * 2.2))) * vec3(0.4, 0.37, 0.3);
+    vec3 mud = gtx(GT_SOIL, uv * 1.3) * vec3(0.55, 0.5, 0.42);
+    float inBed = 1.0 - smoothstep(-0.05, 0.35, e);
+    float wetBank = 1.0 - smoothstep(0.05, 0.6, e);
     vec3 viewDir = normalize(cameraPosition - vTrackPos);
-    vec2 ripple = (vec2(tNoise(tp * 6.0), tNoise(tp * 6.0 + 4.0)) - 0.5) * 0.12;
-    float fresnel = 0.05 + 0.95 * pow(1.0 - max(dot(viewDir, normalize(vec3(ripple.x, 1.0, ripple.y))), 0.0), 5.0);
-    vec3 sky = vec3(0.45, 0.58, 0.72);
-    float water = trackKind == 8 ? 1.0 - smoothstep(0.12, 0.3, edge + (fine - 0.5) * 0.2) : 1.0;
-    col = mix(col, mix(diffuse, sky, fresnel), water);
-    if (trackKind == 8) alpha *= 0.85 + 0.15 * water;
-  } else if (trackKind >= 3) {
-    // Footpaths: the trodden middle is barest; patches of the ground show through.
-    alpha *= 0.75 + 0.25 * smoothstep(0.25, 0.6, patches + 0.3 * fine);
+    // Ripples drift downstream.
+    vec2 flow = vec2(vTrack.y * 1.5 - uTime * 1.2, vTrack.x * 4.0);
+    vec2 ripple = (vec2(gtNoise(flow), gtNoise(flow * 1.7 + 4.0)) - 0.5) * 0.16;
+    float fresnel = 0.04 + 0.96 * pow(1.0 - max(dot(viewDir, normalize(vec3(ripple.x, 1.0, ripple.y))), 0.0), 5.0);
+    vec3 sky = tLin(vec3(0.62, 0.72, 0.84));
+    float water = 1.0 - smoothstep(-0.25, -0.05, e);
+    vec3 wet = mix(stones * 0.45, sky, fresnel * 0.85);
+    surf = mix(mix(mud, stones, 0.15), stones, inBed);
+    surf = mix(surf, wet, water);
+    core = max(wetBank * 0.85, inBed);
+    besideCol = tLin(vec3(0.2, 0.21, 0.15));
+    beside = (1.0 - smoothstep(0.4, 2.0, e)) * 0.35;
+  } else {
+    // Water channel: a wet, muddy ditch with a thin trickle in the middle.
+    vec3 mud = gtx(GT_SOIL, uv * 1.3) * vec3(0.6, 0.55, 0.46);
+    float trickle = 1.0 - smoothstep(0.08, 0.2, am + (fine - 0.5) * 0.1);
+    vec3 viewDir = normalize(cameraPosition - vTrackPos);
+    float fresnel = 0.04 + 0.96 * pow(1.0 - max(viewDir.y, 0.0), 5.0);
+    surf = mix(mud, tLin(vec3(0.55, 0.65, 0.76)) * fresnel + mud * 0.3, trickle * 0.8);
+    core = 1.0 - smoothstep(-0.15, 0.1, e);
+    besideCol = tLin(vec3(0.2, 0.21, 0.15));
+    beside = (1.0 - smoothstep(0.0, 1.0, e)) * 0.3;
   }
+  surf *= 0.9 + 0.2 * fine;
+  core = clamp(core, 0.0, 1.0);
+  float alpha = core + (1.0 - core) * beside;
+  vec3 col = (surf * core + besideCol * beside * (1.0 - core)) / max(alpha, 1e-4);
   diffuseColor = vec4(col, clamp(alpha, 0.0, 1.0));
 `
 
-function createTrackMaterial(kind: string): THREE.MeshLambertMaterial {
+function createTrackMaterial(kind: string, gfx: Gfx): THREE.MeshLambertMaterial {
   const style = STYLES[kind] ?? STYLES['path']!
   const material = new THREE.MeshLambertMaterial({
-    color: new THREE.Color(style.colour),
     transparent: true,
     depthWrite: false,
     polygonOffset: true,
@@ -93,16 +160,16 @@ function createTrackMaterial(kind: string): THREE.MeshLambertMaterial {
   })
   material.onBeforeCompile = shader => {
     shader.uniforms['trackKind'] = { value: style.id }
-    shader.uniforms['trackOpacity'] = { value: style.opacity }
-    shader.uniforms['trackFade'] = { value: style.fade }
+    shader.uniforms['groundTex'] = { value: gfx.groundArray }
+    shader.uniforms['uTime'] = gfx.time
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
-        '#include <common>\nattribute vec2 trackUv;\nvarying vec2 vTrackUv;\nvarying vec3 vTrackPos;',
+        '#include <common>\nattribute vec3 trackUv;\nvarying vec3 vTrack;\nvarying vec3 vTrackPos;',
       )
       .replace(
         '#include <project_vertex>',
-        `vTrackUv = trackUv;
+        `vTrack = trackUv;
         vec4 trackWorld = modelMatrix * vec4(transformed, 1.0);
         vTrackPos = trackWorld.xyz;
         // Coarse distant terrain can rise above the strip; lift it a little with distance.
@@ -113,7 +180,7 @@ function createTrackMaterial(kind: string): THREE.MeshLambertMaterial {
       .replace('#include <common>', '#include <common>\n' + SHADER_COMMON)
       .replace('#include <map_fragment>', SHADER_MAIN)
   }
-  material.customProgramCacheKey = () => 'otest-track'
+  material.customProgramCacheKey = () => 'otest-track-v2'
   return material
 }
 
@@ -124,10 +191,10 @@ class StripBuilder {
   readonly uvs: number[] = []
   readonly indices: number[] = []
 
-  vertex(x: number, y: number, z: number, normal: THREE.Vector3, u: number, v: number): number {
+  vertex(x: number, y: number, z: number, normal: THREE.Vector3, across: number, along: number, half: number): number {
     this.positions.push(x, y, z)
     this.normals.push(normal.x, normal.y, normal.z)
-    this.uvs.push(u, v)
+    this.uvs.push(across, along, half)
     return this.positions.length / 3 - 1
   }
 
@@ -135,7 +202,7 @@ class StripBuilder {
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.positions, 3))
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.normals, 3))
-    g.setAttribute('trackUv', new THREE.Float32BufferAttribute(this.uvs, 2))
+    g.setAttribute('trackUv', new THREE.Float32BufferAttribute(this.uvs, 3))
     g.setIndex(this.indices)
     g.computeBoundingSphere()
     return g
@@ -171,49 +238,82 @@ function resample(points: [number, number][]): { x: number; z: number; d: number
   return out
 }
 
-/** Roads and paths drawn as soft strips on the terrain, plus a lookup for "is this on a path". */
+interface Segment {
+  x0: number
+  z0: number
+  x1: number
+  z1: number
+  half: number
+  kind: string
+}
+
+/** A footbridge where a path crosses a stream. */
+interface Bridge {
+  x: number
+  z: number
+  /** Unit vector along the path. */
+  ux: number
+  uz: number
+  halfLength: number
+  width: number
+  deck: number
+  /** Just a few logs side by side (over minor water channels), no planks. */
+  logs: boolean
+}
+
+/** Roads, paths and streams drawn as soft strips on the terrain, with footbridges. */
 export class Tracks {
   readonly group = new THREE.Group()
   private readonly heights: HeightField
-  private readonly index = new Map<number, [number, number, number, number, number][]>()
+  private readonly gfx: Gfx
+  private readonly index = new Map<number, Segment[]>()
   private readonly normal = new THREE.Vector3()
+  private readonly bridges: Bridge[] = []
 
-  private constructor(heights: HeightField) {
+  private constructor(heights: HeightField, gfx: Gfx) {
     this.heights = heights
+    this.gfx = gfx
     this.group.name = 'tracks'
   }
 
-  static async load(world: World, heights: HeightField): Promise<Tracks | null> {
+  static async load(world: World, heights: HeightField, gfx: Gfx): Promise<Tracks | null> {
     const info = world.manifest.tracks
     if (!info) return null
     const response = await fetch(world.url(info.path))
     if (!response.ok) return null
-    const tracks = new Tracks(heights)
-    tracks.build((await response.json()) as TrackRecord[])
+    const tracks = new Tracks(heights, gfx)
+    const records = (await response.json()) as TrackRecord[]
+    tracks.build(records)
+    tracks.buildBridges(records)
     return tracks
   }
 
   /** Add a vertex on the ground at (x, z), lit like the terrain there. */
-  private ground(b: StripBuilder, x: number, z: number, u: number, v: number): number {
+  private ground(b: StripBuilder, x: number, z: number, across: number, along: number, half: number): number {
     const h = this.heights
     const y = h.heightAt(x, z) + LIFT_M
     this.normal.set(h.heightAt(x - 1, z) - h.heightAt(x + 1, z), 2, h.heightAt(x, z - 1) - h.heightAt(x, z + 1)).normalize()
-    return b.vertex(x, y, z, this.normal, u, v)
+    return b.vertex(x, y, z, this.normal, across, along, half)
   }
 
   private build(records: TrackRecord[]) {
-    const builders = new Map<string, StripBuilder>()
+    // One mesh per kind and tile, so tracks out of view are culled.
+    const builders = new Map<string, { kind: string; builder: StripBuilder }>()
     for (const record of records) {
       if (record.points.length < 2) continue
-      let builder = builders.get(record.kind)
-      if (!builder) builders.set(record.kind, (builder = new StripBuilder()))
-      this.addStrip(builder, record)
+      const [x, z] = record.points[Math.floor(record.points.length / 2)]!
+      const key = `${record.kind}:${Math.floor(x / TILE_M)}_${Math.floor(z / TILE_M)}`
+      let entry = builders.get(key)
+      if (!entry) builders.set(key, (entry = { kind: record.kind, builder: new StripBuilder() }))
+      this.addStrip(entry.builder, record)
       this.addToIndex(record)
     }
-    for (const [kind, builder] of builders) {
-      const mesh = new THREE.Mesh(builder.build(), createTrackMaterial(kind))
+    const materials = new Map<string, THREE.Material>()
+    for (const { kind, builder } of builders.values()) {
+      let material = materials.get(kind)
+      if (!material) materials.set(kind, (material = createTrackMaterial(kind, this.gfx)))
+      const mesh = new THREE.Mesh(builder.build(), material)
       mesh.receiveShadow = true
-      // Paths are drawn after (on top of) the roads they cross.
       mesh.renderOrder = (STYLES[kind] ?? STYLES['path']!).order
       this.group.add(mesh)
     }
@@ -221,9 +321,10 @@ export class Tracks {
 
   private addStrip(b: StripBuilder, record: TrackRecord) {
     const half = record.width / 2
+    const outer = half + (STYLES[record.kind] ?? STYLES['path']!).margin
     const samples = resample(record.points)
     if (samples[samples.length - 1]!.d <= 0) return // no length
-    const columns = Math.max(2, 2 * Math.ceil(record.width / (2 * ACROSS_M)))
+    const columns = Math.max(2, 2 * Math.ceil(outer / ACROSS_M))
     let previous: number[] | null = null
     let lastNormal: [number, number] = [0, 1]
     samples.forEach((s, i) => {
@@ -243,11 +344,11 @@ export class Tracks {
       nx /= len
       nz /= len
       const cos = n1 && n2 ? Math.max(nx * m1[0] + nz * m1[1], 1 / MAX_MITER) : 1
-      const w = half / cos
+      const w = outer / cos
       const row: number[] = []
       for (let k = 0; k <= columns; k++) {
         const u = -1 + (2 * k) / columns
-        row.push(this.ground(b, s.x - nx * w * u, s.z - nz * w * u, u, s.d))
+        row.push(this.ground(b, s.x - nx * w * u, s.z - nz * w * u, u * outer, s.d, half))
       }
       if (previous) {
         for (let k = 0; k < columns; k++) {
@@ -258,8 +359,8 @@ export class Tracks {
       previous = row
     })
     // Rounded ends (half discs beyond the end only, so nothing is drawn twice).
-    this.addCap(b, samples[0]!, samples[1]!, half)
-    this.addCap(b, samples[samples.length - 1]!, samples[samples.length - 2]!, half)
+    this.addCap(b, samples[0]!, samples[1]!, outer, half)
+    this.addCap(b, samples[samples.length - 1]!, samples[samples.length - 2]!, outer, half)
   }
 
   private segmentNormal(a: { x: number; z: number }, b: { x: number; z: number }): [number, number] | null {
@@ -270,16 +371,22 @@ export class Tracks {
   }
 
   /** Half disc at `end`, bulging away from `inner`. */
-  private addCap(b: StripBuilder, end: { x: number; z: number; d: number }, inner: { x: number; z: number }, radius: number) {
+  private addCap(
+    b: StripBuilder,
+    end: { x: number; z: number; d: number },
+    inner: { x: number; z: number },
+    radius: number,
+    half: number,
+  ) {
     const ox = end.x - inner.x
     const oz = end.z - inner.z
     const len = Math.hypot(ox, oz) || 1
     const out = Math.atan2(oz / len, ox / len)
-    const centre = this.ground(b, end.x, end.z, 0, end.d)
+    const centre = this.ground(b, end.x, end.z, 0, end.d, half)
     const rim: number[] = []
     for (let k = 0; k <= CAP_SEGMENTS; k++) {
       const a = out - Math.PI / 2 + (k / CAP_SEGMENTS) * Math.PI
-      rim.push(this.ground(b, end.x + Math.cos(a) * radius, end.z + Math.sin(a) * radius, 1, end.d))
+      rim.push(this.ground(b, end.x + Math.cos(a) * radius, end.z + Math.sin(a) * radius, radius, end.d, half))
     }
     for (let k = 0; k < CAP_SEGMENTS; k++) {
       // Face up whichever way the rim runs.
@@ -303,7 +410,7 @@ export class Tracks {
     for (let i = 0; i + 1 < record.points.length; i++) {
       const [x0, z0] = record.points[i]!
       const [x1, z1] = record.points[i + 1]!
-      const segment: [number, number, number, number, number] = [x0, z0, x1, z1, half]
+      const segment: Segment = { x0, z0, x1, z1, half, kind: record.kind }
       const pad = half + 2
       for (let gx = Math.floor((Math.min(x0, x1) - pad) / INDEX_CELL); gx <= Math.floor((Math.max(x0, x1) + pad) / INDEX_CELL); gx++) {
         for (let gz = Math.floor((Math.min(z0, z1) - pad) / INDEX_CELL); gz <= Math.floor((Math.max(z0, z1) + pad) / INDEX_CELL); gz++) {
@@ -316,16 +423,199 @@ export class Tracks {
     }
   }
 
-  /** True if (x, z) is on a road or path, or within `margin` metres of its edge. */
+  private static distance(s: Segment, x: number, z: number): number {
+    const dx = s.x1 - s.x0
+    const dz = s.z1 - s.z0
+    const t = Math.max(0, Math.min(1, ((x - s.x0) * dx + (z - s.z0) * dz) / (dx * dx + dz * dz || 1)))
+    return Math.hypot(x - (s.x0 + dx * t), z - (s.z0 + dz * t))
+  }
+
+  /** True if (x, z) is on a road, path or stream, or within `margin` metres of its edge. */
   near(x: number, z: number, margin: number): boolean {
     const list = this.index.get(this.cellKey(Math.floor(x / INDEX_CELL), Math.floor(z / INDEX_CELL)))
     if (!list) return false
-    for (const [x0, z0, x1, z1, half] of list) {
-      const dx = x1 - x0
-      const dz = z1 - z0
-      const t = Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / (dx * dx + dz * dz || 1)))
-      if (Math.hypot(x - (x0 + dx * t), z - (z0 + dz * t)) <= half + margin) return true
-    }
+    for (const s of list) if (Tracks.distance(s, x, z) <= s.half + margin) return true
     return false
+  }
+
+  /** Distance from (x, z) to the edge of the nearest track within 2 m, and its kind. */
+  edgeDistance(x: number, z: number): { distance: number; kind: string } | null {
+    const list = this.index.get(this.cellKey(Math.floor(x / INDEX_CELL), Math.floor(z / INDEX_CELL)))
+    if (!list) return null
+    let best: { distance: number; kind: string } | null = null
+    for (const s of list) {
+      const d = Tracks.distance(s, x, z) - s.half
+      if (d < 2 && (!best || d < best.distance)) best = { distance: d, kind: s.kind }
+    }
+    return best
+  }
+
+  /** Find where footpaths cross streams and put a footbridge there. */
+  private buildBridges(records: TrackRecord[]) {
+    const water = records.filter(r => BRIDGED_WATER.has(r.kind))
+    const paths = records.filter(r => FOOTPATHS.has(r.kind))
+    const found: (Bridge & { order: number })[] = []
+    for (const p of paths) {
+      for (let i = 0; i + 1 < p.points.length; i++) {
+        const [ax, az] = p.points[i]!
+        const [bx, bz] = p.points[i + 1]!
+        for (const w of water) {
+          for (let j = 0; j + 1 < w.points.length; j++) {
+            const [cx, cz] = w.points[j]!
+            const [dx, dz] = w.points[j + 1]!
+            const rx = bx - ax
+            const rz = bz - az
+            const sx = dx - cx
+            const sz = dz - cz
+            const den = rx * sz - rz * sx
+            if (Math.abs(den) < 1e-9) continue
+            const t = ((cx - ax) * sz - (cz - az) * sx) / den
+            const u = ((cx - ax) * rz - (cz - az) * rx) / den
+            if (t < 0 || t > 1 || u < 0 || u > 1) continue
+            const len = Math.hypot(rx, rz)
+            const ux = rx / len
+            const uz = rz / len
+            // The channel is longer along the path when it is crossed at a slant.
+            const sin = Math.max(0.45, Math.abs(ux * sz - uz * sx) / Math.hypot(sx, sz))
+            const logs = w.kind === 'water_channel'
+            const halfLength = (w.width / 2 + (logs ? 0.7 : 1.0)) / sin
+            const x = ax + rx * t
+            const z = az + rz * t
+            const bank = Math.max(
+              this.heights.heightAt(x + ux * (halfLength + 0.6), z + uz * (halfLength + 0.6)),
+              this.heights.heightAt(x - ux * (halfLength + 0.6), z - uz * (halfLength + 0.6)),
+              this.heights.heightAt(x, z) + (logs ? 0.15 : 0.45),
+            )
+            found.push({
+              x,
+              z,
+              ux,
+              uz,
+              halfLength,
+              width: logs ? 0.6 : p.kind === 'path' ? 1.1 : 0.8,
+              deck: bank + (logs ? 0.08 : 0.12),
+              logs,
+              order: p.kind === 'path' ? 2 : 1,
+            })
+          }
+        }
+      }
+    }
+    // One bridge per crossing, the widest path's.
+    found.sort((a, b) => b.order - a.order)
+    for (const c of found) {
+      if (!this.bridges.some(k => Math.hypot(k.x - c.x, k.z - c.z) < 5)) this.bridges.push(c)
+    }
+    if (this.bridges.length) this.group.add(this.bridgeMeshes())
+  }
+
+  /** Planks across two log beams, with a hand rail on longer spans; or just logs. */
+  private bridgeMeshes(): THREE.Group {
+    const group = new THREE.Group()
+    group.name = 'footbridges'
+    const t = this.gfx.textures
+    const planks = new THREE.MeshLambertMaterial({ map: t.boards, color: new THREE.Color(0.55, 0.45, 0.35) })
+    const bark = new THREE.MeshLambertMaterial({ map: t.bark.spruce, color: new THREE.Color(0.75, 0.68, 0.6) })
+    const plankGeo = new THREE.BoxGeometry(0.2, 0.05, 1)
+    const beamGeo = new THREE.CylinderGeometry(0.1, 0.11, 1, 8)
+    beamGeo.rotateZ(Math.PI / 2)
+    const postGeo = new THREE.BoxGeometry(0.08, 0.95, 0.08)
+    const railGeo = new THREE.BoxGeometry(1, 0.07, 0.07)
+    const parts: { geo: THREE.BufferGeometry; mat: THREE.Material; m: THREE.Matrix4; tint: number }[] = []
+    const quat = new THREE.Quaternion()
+    const up = new THREE.Vector3(0, 1, 0)
+    const rnd = (k: number, salt: number) => {
+      const h = Math.sin(k * 12.9898 + salt * 78.233) * 43758.5453
+      return h - Math.floor(h)
+    }
+    this.bridges.forEach((c, bi) => {
+      const yaw = -Math.atan2(c.uz, c.ux)
+      const length = c.halfLength * 2 + 0.4
+      const along = (s: number, side: number, y: number) =>
+        new THREE.Vector3(c.x + c.ux * s - c.uz * side, y, c.z + c.uz * s + c.ux * side)
+      if (c.logs) {
+        // Three logs side by side, a little askew.
+        for (let k = -1; k <= 1; k++) {
+          quat.setFromAxisAngle(up, yaw + (rnd(bi * 31 + k, 5) - 0.5) * 0.08)
+          const m = new THREE.Matrix4().compose(
+            along((rnd(bi * 31 + k, 6) - 0.5) * 0.3, k * 0.2, c.deck - 0.1),
+            quat,
+            new THREE.Vector3(length + 0.4 * rnd(bi * 31 + k, 7), 1, 1),
+          )
+          parts.push({ geo: beamGeo, mat: bark, m, tint: 0.85 + 0.25 * rnd(bi * 31 + k, 8) })
+        }
+        return
+      }
+      const n = Math.max(3, Math.round(length / 0.24))
+      for (let k = 0; k < n; k++) {
+        const s = -length / 2 + ((k + 0.5) * length) / n
+        quat.setFromAxisAngle(up, yaw + (rnd(bi * 97 + k, 1) - 0.5) * 0.06)
+        const m = new THREE.Matrix4().compose(
+          along(s, 0, c.deck - 0.025 + (rnd(bi * 97 + k, 2) - 0.5) * 0.015),
+          quat,
+          new THREE.Vector3(1, 1, c.width * (0.95 + 0.1 * rnd(bi * 97 + k, 3))),
+        )
+        parts.push({ geo: plankGeo, mat: planks, m, tint: 0.8 + 0.35 * rnd(bi * 97 + k, 4) })
+      }
+      quat.setFromAxisAngle(up, yaw)
+      for (const side of [-1, 1]) {
+        const m = new THREE.Matrix4().compose(
+          along(0, side * c.width * 0.32, c.deck - 0.15),
+          quat,
+          new THREE.Vector3(length + 0.6, 1, 1),
+        )
+        parts.push({ geo: beamGeo, mat: bark, m, tint: 1 })
+      }
+      if (length > 4.2) {
+        const side = c.width / 2 + 0.05
+        parts.push({
+          geo: railGeo,
+          mat: bark,
+          m: new THREE.Matrix4().compose(along(0, side, c.deck + 0.9), quat, new THREE.Vector3(length, 1, 1)),
+          tint: 1,
+        })
+        for (let s = -length / 2 + 0.2; s <= length / 2; s += 1.8) {
+          parts.push({
+            geo: postGeo,
+            mat: bark,
+            m: new THREE.Matrix4().compose(along(s, side, c.deck + 0.45), quat, new THREE.Vector3(1, 1, 1)),
+            tint: 1,
+          })
+        }
+      }
+    })
+    // One instanced mesh per (geometry, material).
+    const groups = new Map<string, typeof parts>()
+    for (const p of parts) {
+      const key = `${p.geo.uuid}:${p.mat.uuid}`
+      let list = groups.get(key)
+      if (!list) groups.set(key, (list = []))
+      list.push(p)
+    }
+    const color = new THREE.Color()
+    for (const list of groups.values()) {
+      const mesh = new THREE.InstancedMesh(list[0]!.geo, list[0]!.mat, list.length)
+      list.forEach((p, i) => {
+        mesh.setMatrixAt(i, p.m)
+        mesh.setColorAt(i, color.setScalar(p.tint))
+      })
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      group.add(mesh)
+    }
+    return group
+  }
+
+  /** Height of a bridge deck at (x, z), or null. */
+  deckAt(x: number, z: number): number | null {
+    for (const c of this.bridges) {
+      const dx = x - c.x
+      const dz = z - c.z
+      if (dx * dx + dz * dz > (c.halfLength + 1) ** 2) continue
+      const u = dx * c.ux + dz * c.uz
+      const v = -dx * c.uz + dz * c.ux
+      if (Math.abs(u) <= c.halfLength + 0.2 && Math.abs(v) <= c.width / 2 + 0.1) return c.deck
+    }
+    return null
   }
 }

@@ -4,7 +4,8 @@ import { Sky } from 'three/addons/objects/Sky.js'
 const SKY_SCALE = 20000
 const FOG_COLOR = new THREE.Color(0xc7d6e2)
 
-export type Quality = 'high' | 'medium' | 'low'
+import type { Quality } from './gfx'
+
 const SHADOW_SIZE: Record<Quality, number> = { high: 4096, medium: 2048, low: 0 }
 // Half-size of the area around the player that gets sun shadows.
 const SHADOW_EXTENT = 90
@@ -53,6 +54,11 @@ export class Environment {
 
     scene.fog = new THREE.Fog(FOG_COLOR, 400, 6000)
     scene.background = FOG_COLOR
+  }
+
+  /** Unit vector towards the sun. */
+  get sunDirection(): THREE.Vector3 {
+    return this.sunDir.clone()
   }
 
   setQuality(quality: Quality) {

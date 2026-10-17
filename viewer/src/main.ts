@@ -4,7 +4,8 @@ import { loadBuildings } from './buildings'
 import { beep, CourseRun, loadCourse } from './course'
 import { Environment } from './environment'
 import { MapFeatures } from './features'
-import { Forest, LOD2_DISTANCE } from './forest'
+import { FAR_DISTANCE, Forest } from './forest'
+import { Gfx, QUALITY } from './gfx'
 import { asLayerTexture } from './groundMaterial'
 import { HeightField } from './heightfield'
 import { Hud } from './hud'
@@ -90,6 +91,11 @@ async function main() {
   const environment = new Environment(scene, renderer)
   const quality = new URLSearchParams(location.search).get('quality')
   if (quality === 'high' || quality === 'medium' || quality === 'low') environment.setQuality(quality)
+  setStatus('Painting textures …')
+  await new Promise(resolve => setTimeout(resolve, 0))
+  const gfx = new Gfx(renderer)
+  gfx.setQuality(QUALITY[environment.quality])
+  gfx.buildImpostors(renderer, environment.sunDirection)
 
   const layerInfo = world.manifest.layers
   const layers = layerInfo ? new LayerStore(world, layerInfo) : undefined
@@ -103,21 +109,26 @@ async function main() {
     layers,
     layerOverview,
     maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
-    canopyFade: [LOD2_DISTANCE * 0.7, LOD2_DISTANCE],
+    canopyFade: [FAR_DISTANCE * 0.7, FAR_DISTANCE],
+    groundTex: gfx.groundArray,
   })
   scene.add(terrain.group)
 
-  const treeInfo = world.manifest.trees
-  const forest = treeInfo ? new Forest(world, treeInfo, heights) : null
-  if (forest) scene.add(forest.group)
-  const tracks = await Tracks.load(world, heights)
+  const tracks = await Tracks.load(world, heights, gfx)
   if (tracks) scene.add(tracks.group)
-  const undergrowth = layers ? new Undergrowth(layers, heights) : null
+  const treeInfo = world.manifest.trees
+  const forest = treeInfo ? new Forest(world, treeInfo, heights, gfx, QUALITY[environment.quality]) : null
+  if (forest) {
+    forest.tracks = tracks
+    forest.shadows = environment.quality !== 'low'
+    scene.add(forest.group)
+  }
+  const undergrowth = layers ? new Undergrowth(layers, heights, gfx, QUALITY[environment.quality]) : null
   if (undergrowth) undergrowth.tracks = tracks
   if (undergrowth) scene.add(undergrowth.group)
   const buildings = await loadBuildings(world)
   if (buildings) scene.add(buildings)
-  const features = await MapFeatures.load(world, heights)
+  const features = await MapFeatures.load(world, heights, gfx)
   if (features) scene.add(features.group)
 
   const player = new Player(camera, renderer.domElement, heights, world.sceneSize)
@@ -134,6 +145,7 @@ async function main() {
       if (features) p = features.collide(p[0], p[1], r)
       return p
     },
+    deckAt: (x, z) => tracks?.deckAt(x, z) ?? null,
   }
   const [sx, sz] = world.toScene(...world.manifest.spawn)
   player.placeAt(sx, sz)
@@ -141,9 +153,10 @@ async function main() {
   const run = new CourseRun(world, heights, loadCourse(world))
   scene.add(run.group)
   run.punchListener = () => beep()
-  const hud = new Hud(document.getElementById('hud')!, world, player, run, () =>
-    `${(forest?.drawn ?? 0).toLocaleString('en')} trees · ${environment.quality} quality`,
-  )
+  const hud = new Hud(document.getElementById('hud')!, world, player, run, () => {
+    const trees = forest?.drawn ?? { near: 0, total: 0 }
+    return `${trees.near.toLocaleString('en')} near / ${trees.total.toLocaleString('en')} trees · ${environment.quality} quality`
+  })
   // The map window gets the mouse when it opens. Pressing on the terrain takes it back
   // for steering (the map stays open), and Esc gives it to the map again.
   const resume = document.getElementById('resume')!
@@ -189,6 +202,11 @@ async function main() {
     if (e.code === 'KeyG') {
       const order = ['high', 'medium', 'low'] as const
       environment.setQuality(order[(order.indexOf(environment.quality) + 1) % order.length]!)
+      const settings = QUALITY[environment.quality]
+      gfx.setQuality(settings)
+      if (forest) forest.shadows = environment.quality !== 'low'
+      forest?.setQuality(settings)
+      undergrowth?.setQuality(settings)
     }
   })
 
@@ -221,10 +239,14 @@ async function main() {
     renderer.setSize(window.innerWidth, window.innerHeight)
   })
 
+  // For poking at the scene from the browser console while developing.
+  if (import.meta.env.DEV) Object.assign(window, { otest: { THREE, renderer, scene, camera, gfx, forest, undergrowth, player } })
+
   const timer = new THREE.Timer()
   renderer.setAnimationLoop(() => {
     timer.update()
     const dt = Math.min(timer.getDelta(), 0.1)
+    gfx.time.value += dt
     player.update(dt)
     terrain.update(camera.position)
     forest?.update(camera.position)

@@ -18,6 +18,8 @@ export interface Surroundings {
   speedAt(x: number, z: number): number | null
   /** Push a position of a body with `radius` out of obstacles. */
   collide(x: number, z: number, radius: number): [number, number]
+  /** Height of something to walk on above the terrain (a bridge deck), or null. */
+  deckAt?(x: number, z: number): number | null
 }
 
 /** First-person walking (or flying) on the terrain, with mouse look. */
@@ -137,7 +139,8 @@ export class Player {
       }
       this.speed = move.length() / Math.max(dt, 1e-6)
 
-      const ground = this.heights.heightAt(pos.x, pos.z) + EYE_HEIGHT
+      const deck = this.surroundings?.deckAt?.(pos.x, pos.z) ?? null
+      const ground = Math.max(this.heights.heightAt(pos.x, pos.z), deck ?? -Infinity) + EYE_HEIGHT
       this.verticalSpeed -= GRAVITY * dt
       pos.y += this.verticalSpeed * dt
       // Follow the ground when walking downhill instead of falling in small hops.

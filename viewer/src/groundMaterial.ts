@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { GROUND_TEX_GLSL } from './gfx'
 
 // Ground classes (must match otest.process.symbols.Ground).
 const GLSL = /* glsl */ `
@@ -9,29 +10,14 @@ uniform vec2 layerSize;
 uniform float canopyUnit;
 uniform vec2 canopyFade;
 varying vec3 vGroundPos;
-
-float gHash(vec2 p) {
-  p = fract(p * vec2(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
-}
-
-float gNoise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  float a = gHash(i);
-  float b = gHash(i + vec2(1.0, 0.0));
-  float c = gHash(i + vec2(0.0, 1.0));
-  float d = gHash(i + vec2(1.0, 1.0));
-  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
-}
-
+varying vec3 vGroundNormal;
+${GROUND_TEX_GLSL}
+float gNoise(vec2 p) { return gtNoise(p); }
 float gFbm(vec2 p) {
   float s = 0.0;
   float a = 0.5;
   for (int i = 0; i < 4; i++) {
-    s += a * gNoise(p);
+    s += a * gtNoise(p);
     p = p * 2.03 + 17.0;
     a *= 0.5;
   }
@@ -40,63 +26,31 @@ float gFbm(vec2 p) {
 
 vec3 lin(vec3 c) { return pow(c, vec3(2.2)); }
 
-// n1: fine detail (decimetres), n2: patches (metres), n3: large variation.
-vec3 groundColor(int cls, vec2 p, float n1, float n2, float n3) {
-  if (cls == 2) { // open land: grass
-    return mix(lin(vec3(0.40, 0.50, 0.21)), lin(vec3(0.55, 0.57, 0.29)), n2) * (0.8 + 0.4 * n1);
-  }
+// Ground texture of a class. uv: position / 3.2 m; n1..n3 as below.
+vec3 groundColor(int cls, vec2 uv, float n1, float n2, float n3) {
+  if (cls == 2) return gtx(GT_GRASS, uv); // open land
   if (cls == 3) { // rough open: heather, long grass, clear-cut
-    vec3 heather = mix(lin(vec3(0.38, 0.33, 0.22)), lin(vec3(0.45, 0.36, 0.30)), n1);
-    vec3 grass = lin(vec3(0.50, 0.48, 0.28));
-    return mix(heather, grass, smoothstep(0.35, 0.65, n2)) * (0.85 + 0.3 * n3);
+    return mix(gtx(GT_GRASS, uv) * vec3(1.08, 1.0, 0.82), gtx(GT_FOREST, uv), 0.35 + 0.3 * n2);
   }
-  if (cls == 4) { // marsh
-    vec3 moss = mix(lin(vec3(0.55, 0.52, 0.30)), lin(vec3(0.62, 0.50, 0.32)), n2);
-    vec3 wet = lin(vec3(0.24, 0.27, 0.18));
-    return mix(moss, wet, smoothstep(0.55, 0.75, n1 * 0.5 + n2 * 0.5));
-  }
-  if (cls == 5) { // bare rock with lichen
-    vec3 rock = mix(lin(vec3(0.42, 0.42, 0.40)), lin(vec3(0.56, 0.56, 0.52)), n1);
-    return mix(rock, lin(vec3(0.62, 0.64, 0.55)), smoothstep(0.6, 0.8, n2) * 0.6);
-  }
-  if (cls == 6) { // cultivated field with rows
-    float rows = 0.5 + 0.5 * sin(p.x * 2.4 + n3 * 6.0);
-    return mix(lin(vec3(0.50, 0.56, 0.25)), lin(vec3(0.60, 0.62, 0.32)), rows * 0.5 + n2 * 0.5);
-  }
-  if (cls == 7) { // paved
-    return lin(vec3(0.22, 0.22, 0.23)) * (0.9 + 0.2 * n1);
-  }
-  if (cls == 8) { // gravel road
-    return mix(lin(vec3(0.46, 0.42, 0.34)), lin(vec3(0.56, 0.51, 0.42)), n1);
-  }
-  if (cls == 9) { // dirt path
-    return mix(lin(vec3(0.36, 0.29, 0.20)), lin(vec3(0.46, 0.38, 0.27)), n1);
-  }
-  if (cls == 10) { // water
-    return lin(vec3(0.10, 0.17, 0.21)) * (0.9 + 0.2 * n3);
-  }
-  if (cls == 11) { // lawn and gardens
-    return mix(lin(vec3(0.33, 0.50, 0.18)), lin(vec3(0.42, 0.56, 0.22)), n2) * (0.9 + 0.2 * n1);
-  }
+  if (cls == 4) return gtx(GT_MARSH, uv);
+  if (cls == 5) return mix(gtx(GT_GRAVEL, uv), gtx(GT_ROCK, uv * 0.5), 0.7); // bare rock
+  if (cls == 6) return mix(gtx(GT_GRASS, uv) * vec3(1.05, 1.05, 0.85), gtx(GT_FIELD, uv), 0.25); // cultivated: mostly ley
+  if (cls == 7) return gtx(GT_ASPHALT, uv);
+  if (cls == 8 || cls == 14) return gtx(GT_GRAVEL, uv * 2.4);
+  if (cls == 9) return gtx(GT_SOIL, uv);
+  if (cls == 10) return gtx(GT_MARSH, uv) * 0.6; // lake bed
+  if (cls == 11) return gtx(GT_GRASS, uv) * vec3(0.88, 0.95, 0.8); // lawn
   if (cls == 12) { // stony ground
-    vec3 stones = mix(lin(vec3(0.40, 0.40, 0.36)), lin(vec3(0.55, 0.54, 0.50)), n1);
-    return mix(lin(vec3(0.30, 0.33, 0.18)), stones, smoothstep(0.4, 0.6, n1 * 0.7 + n2 * 0.3));
+    return mix(gtx(GT_FOREST, uv), gtx(GT_GRAVEL, uv * 0.8), smoothstep(0.35, 0.65, n1 * 0.6 + n2 * 0.4));
   }
-  if (cls == 13) { // sand
-    return mix(lin(vec3(0.66, 0.60, 0.45)), lin(vec3(0.74, 0.68, 0.52)), n1);
-  }
-  if (cls == 14) { // under buildings
-    return lin(vec3(0.33, 0.31, 0.29));
-  }
-  // forest floor: moss, blueberry, needles
-  vec3 moss = mix(lin(vec3(0.24, 0.31, 0.13)), lin(vec3(0.32, 0.38, 0.16)), n1);
-  vec3 needles = lin(vec3(0.33, 0.27, 0.17));
-  vec3 berry = lin(vec3(0.20, 0.27, 0.14));
-  vec3 c = mix(moss, needles, smoothstep(0.45, 0.7, n2));
-  return mix(c, berry, smoothstep(0.55, 0.75, n3) * 0.6);
+  if (cls == 13) return gtx(GT_SOIL, uv) * vec3(1.5, 1.4, 1.2); // sand
+  // Forest floor: moss, blueberry, needles.
+  return gtx(GT_FOREST, uv);
 }
 
 int layerClass(vec4 t) { return int(t.r * 255.0 + 0.5); }
+// Undergrowth level, the high four bits of blue.
+float shrubLevel(vec4 t) { return floor(t.b * 255.0 / 16.0 + 0.01); }
 `
 
 const MAIN = /* glsl */ `
@@ -118,10 +72,16 @@ const MAIN = /* glsl */ `
   vec4 t01 = texelFetch(layerMap, clamp(i0 + ivec2(0, 1), ivec2(0), maxI), 0);
   vec4 t11 = texelFetch(layerMap, clamp(i0 + ivec2(1, 1), ivec2(0), maxI), 0);
 
-  vec3 c00 = groundColor(layerClass(t00), gp, n1, n2, n3);
-  vec3 c10 = groundColor(layerClass(t10), gp, n1, n2, n3);
-  vec3 c01 = groundColor(layerClass(t01), gp, n1, n2, n3);
-  vec3 c11 = groundColor(layerClass(t11), gp, n1, n2, n3);
+  vec2 uv = gp / 3.2;
+  int k00 = layerClass(t00);
+  int k10 = layerClass(t10);
+  int k01 = layerClass(t01);
+  int k11 = layerClass(t11);
+  // Most pixels have one class at all four corners; texture it once.
+  vec3 c00 = groundColor(k00, uv, n1, n2, n3);
+  vec3 c10 = k10 == k00 ? c00 : groundColor(k10, uv, n1, n2, n3);
+  vec3 c01 = k01 == k00 ? c00 : k01 == k10 ? c10 : groundColor(k01, uv, n1, n2, n3);
+  vec3 c11 = k11 == k00 ? c00 : k11 == k10 ? c10 : k11 == k01 ? c01 : groundColor(k11, uv, n1, n2, n3);
   vec3 groundCol = mix(mix(c00, c10, w.x), mix(c01, c11, w.x), w.y);
 
   // Water reflects the sky, more so at grazing angles; small ripples break it up.
@@ -140,7 +100,15 @@ const MAIN = /* glsl */ `
   }
 
   float canopy = mix(mix(t00.g, t10.g, w.x), mix(t01.g, t11.g, w.x), w.y) * 255.0 * canopyUnit;
-  groundCol *= mix(1.0, 0.85, smoothstep(2.0, 12.0, canopy));
+  groundCol *= mix(1.0, 0.8, smoothstep(2.0, 12.0, canopy));
+  // Undergrowth: greener, lusher floor.
+  float shrubs = mix(mix(shrubLevel(t00), shrubLevel(t10), w.x), mix(shrubLevel(t01), shrubLevel(t11), w.x), w.y);
+  groundCol = mix(groundCol, groundCol * vec3(0.85, 1.05, 0.75), smoothstep(3.0, 9.0, shrubs) * 0.5);
+  // Steep ground shows bare rock.
+  float steep = 1.0 - smoothstep(0.66, 0.84, normalize(vGroundNormal).y);
+  groundCol = mix(groundCol, gtx(GT_ROCK, uv * 0.6) * 0.95, steep * 0.85);
+  // Large-scale variation.
+  groundCol *= (0.82 + 0.36 * gtNoise(gp * 0.017)) * (0.9 + 0.2 * gtNoise(gp * 0.11 + 3.0));
 
   // Beyond the distance where trees are drawn, paint the forest canopy instead.
   float dist = length(vGroundPos - cameraPosition);
@@ -174,6 +142,7 @@ export function createGroundMaterial(
   source: GroundLayerSource,
   canopyUnit: number,
   canopyFade: [number, number],
+  groundTex: THREE.Texture,
 ): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial()
   const uniforms = {
@@ -183,20 +152,22 @@ export function createGroundMaterial(
     layerSize: { value: new THREE.Vector2(...source.size) },
     canopyUnit: { value: canopyUnit },
     canopyFade: { value: new THREE.Vector2(...canopyFade) },
+    groundTex: { value: groundTex },
   }
   material.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, uniforms)
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vGroundPos;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGroundPos;\nvarying vec3 vGroundNormal;')
       .replace(
         '#include <project_vertex>',
-        '#include <project_vertex>\nvGroundPos = (modelMatrix * vec4(transformed, 1.0)).xyz;',
+        '#include <project_vertex>\nvGroundPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\n' +
+          'vGroundNormal = normalize(mat3(modelMatrix) * objectNormal);',
       )
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\n' + GLSL)
       .replace('#include <map_fragment>', MAIN)
   }
   // All ground materials share one program; only the uniforms differ.
-  material.customProgramCacheKey = () => 'otest-ground'
+  material.customProgramCacheKey = () => 'otest-ground-v2'
   return material
 }

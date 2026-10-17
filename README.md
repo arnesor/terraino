@@ -31,8 +31,12 @@ and run through it in the browser like in a first-person game.
 - Boulders, cliffs, stone walls, fences, power lines and towers from the map.
 - Roads and paths drawn as their own soft-edged strips on the terrain,
   with distinct junctions joined and nothing growing on them.
+  Footpaths show roots and stones; footbridges and log crossings carry them over streams.
 - Browser viewer (Three.js): walk, run and fly, with shadows, runnability,
   a compass, the orienteering map with your position, and courses with timing.
+- Textured spruce, pine and birch that sway in the wind, with impostors for distant trees,
+  ground textures by ground type, and ground cover (blueberry, heather, fern, grass, sedge),
+  bushes, fallen logs and twigs near the player.
 
 ## Requirements
 
@@ -99,7 +103,7 @@ Maps must be georeferenced in UTM zone 32, 33 or 35 (ETRS89 or WGS 84).
 | L           | Copy a link to the course                         |
 | T           | Go to the start; R restarts the run               |
 | O           | Orienteering map on the ground on/off             |
-| G           | Graphics quality (shadows)                        |
+| G           | Graphics quality: high, medium, low               |
 | Esc         | Pause                                             |
 
 The map window frees the mouse so you can drag, zoom and double click in it,
@@ -176,6 +180,12 @@ If you encounter any problems, please [file an issue] along with a detailed desc
 ## Credits
 
 This project was generated with the [Python uv project template].
+
+The procedural textures and the tree,
+bush and rock models in `viewer/src/vendor` come from [Orienteering 3D]
+(MIT licence, see `viewer/src/vendor/LICENSE`).
+
+[orienteering 3d]: https://claude.ai/artifact/A8dqe89rvxzyN29Az3W29D
 
 [python uv project template]: https://github.com/arnesor/uv-template
 [file an issue]: https://github.com/arnesor/otest/issues

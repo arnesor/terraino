@@ -80,6 +80,8 @@ export interface TerrainOptions {
   maxAnisotropy: number
   /** Distances over which the ground turns into painted canopy (trees fade out). */
   canopyFade: [number, number]
+  /** Ground textures (gfx.groundArray). */
+  groundTex: THREE.Texture
 }
 
 export class Terrain {
@@ -112,6 +114,7 @@ export class Terrain {
         },
         layerInfo.canopyUnit,
         options.canopyFade,
+        options.groundTex,
       )
     }
     this.modeValue = this.overviewGround ? 'ground' : 'map'
@@ -275,6 +278,7 @@ export class Terrain {
           },
           layerInfo.canopyUnit,
           this.options.canopyFade,
+          this.options.groundTex,
         )
       }
       this.applyMaterial(chunk)

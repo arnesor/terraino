@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { type Gfx, rockMaterial } from './gfx'
 import type { HeightField } from './heightfield'
 import type { World } from './world'
 
@@ -78,49 +79,25 @@ function alongLine(pts: THREE.Vector3[], spacing: number): THREE.Vector3[] {
   return out
 }
 
-/** An irregular rock: a noisy icosahedron of radius 1. */
-function rockGeometry(seed: number): THREE.BufferGeometry {
-  const g = new THREE.IcosahedronGeometry(1, 1)
-  const pos = g.getAttribute('position') as THREE.BufferAttribute
-  const v = new THREE.Vector3()
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos, i)
-    const k = 0.75 + 0.45 * rand(Math.round(v.x * 10) + seed, Math.round(v.y * 10 + v.z * 7), seed)
-    v.multiplyScalar(k)
-    if (v.y < -0.2) v.y = -0.2 - (v.y + 0.2) * 0.3 // flatter bottom
-    pos.setXYZ(i, v.x, v.y, v.z)
-  }
-  const nonIndexed = g.index ? g.toNonIndexed() : g
-  nonIndexed.computeVertexNormals()
-  // Lichen on top, bare rock on the sides.
-  const colors = new Float32Array(nonIndexed.getAttribute('position').count * 3)
-  const p = nonIndexed.getAttribute('position')
-  const c = new THREE.Color()
-  for (let i = 0; i < p.count; i++) {
-    c.copy(ROCK).lerp(LICHEN, THREE.MathUtils.clamp(p.getY(i) * 0.8 + 0.2 * rand(i, seed, 3), 0, 1))
-    colors.set([c.r, c.g, c.b], i * 3)
-  }
-  nonIndexed.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-  nonIndexed.deleteAttribute('uv')
-  return nonIndexed
-}
-
 /** Rocks, cliffs, walls, fences, power lines and small structures from the map. */
 export class MapFeatures {
   readonly group = new THREE.Group()
   private readonly obstacles = new Map<number, [number, number, number][]>()
 
-  private constructor() {
+  private readonly gfx: Gfx
+
+  private constructor(gfx: Gfx) {
+    this.gfx = gfx
     this.group.name = 'features'
   }
 
-  static async load(world: World, heights: HeightField): Promise<MapFeatures | null> {
+  static async load(world: World, heights: HeightField, gfx: Gfx): Promise<MapFeatures | null> {
     const info = world.manifest.features
     if (!info) return null
     const response = await fetch(world.url(info.path))
     if (!response.ok) return null
     const data = (await response.json()) as FeatureFile
-    const features = new MapFeatures()
+    const features = new MapFeatures(gfx)
     features.build(data, heights)
     return features
   }
@@ -158,9 +135,9 @@ export class MapFeatures {
     const ground = (x: number, z: number) => heights.heightAt(x, z)
 
     // Rocks are instanced: a few shapes, many sizes.
-    const rockShapes = [rockGeometry(1), rockGeometry(2), rockGeometry(3)]
+    const rockShapes = this.gfx.models.rocks
     const rocks = data.points.filter(p => data.kinds[p[0]] === 'boulder' || data.kinds[p[0]] === 'stone')
-    const material = new THREE.MeshLambertMaterial({ vertexColors: true })
+    const material = rockMaterial(this.gfx, true)
     const matrix = new THREE.Matrix4()
     const quat = new THREE.Quaternion()
     const scale = new THREE.Vector3()
@@ -171,9 +148,10 @@ export class MapFeatures {
       const mesh = new THREE.InstancedMesh(shape, material, Math.max(mine.length, 1))
       mine.forEach(([, x, z, size, angle], i) => {
         const half = size / 2
-        pos.set(x, ground(x, z) + half * 0.45, z)
+        // The models are about 2 wide and 1 high, with a flat bottom a quarter below 0.
+        pos.set(x, ground(x, z) + half * 0.1, z)
         quat.setFromAxisAngle(up, angle)
-        scale.set(half * (1.1 + 0.3 * rand(x, z, 1)), half, half * (0.9 + 0.3 * rand(x, z, 2)))
+        scale.set(half * (1.0 + 0.3 * rand(x, z, 1)), half * 1.3, half * (0.85 + 0.3 * rand(x, z, 2)))
         mesh.setMatrixAt(i, matrix.compose(pos, quat, scale))
         const t = 0.85 + 0.3 * rand(x, z, 4)
         mesh.setColorAt(i, new THREE.Color(t, t, t))
