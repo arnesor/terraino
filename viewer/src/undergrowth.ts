@@ -9,13 +9,11 @@ const REBUILD_DISTANCE = 8
 const MAX_BUSHES = 12000
 const MAX_TUFTS = 30000
 
-// Chance of a bush per square metre, before the map's undergrowth is added.
+// Chance of a bush per square metre on the forest floor, where the laser cannot see
+// below the canopy. Elsewhere bushes stand only where the undergrowth layer has them:
+// from the map's undergrowth symbols or low vegetation found in the laser data.
 const BUSH_BASE: Partial<Record<number, number>> = {
   [Ground.forest]: 0.025,
-  [Ground.rough]: 0.04,
-  [Ground.marsh]: 0.015,
-  [Ground.open]: 0.004,
-  [Ground.lawn]: 0.004,
 }
 // Grass tufts per square metre.
 const TUFTS: Partial<Record<number, number>> = {

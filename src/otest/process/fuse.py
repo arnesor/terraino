@@ -12,17 +12,26 @@ from shapely.geometry.base import BaseGeometry
 
 from otest.fetch.osm import OsmFeature
 from otest.ingest.georef import Extent
-from otest.process.layers import TREES_KEEP, TREES_NONE, TREES_SCATTERED, GroundLayers
+from otest.process.layers import TREES_KEEP, TREES_LIDAR, TREES_NONE, GroundLayers
 from otest.process.symbols import Ground
 
 FOREST_CANOPY_M = 3.0
+# Undergrowth level given to low vegetation found in the laser data.
+LIDAR_UNDERGROWTH = 0.6
+_NO_UNDERGROWTH = [
+    Ground.WATER,
+    Ground.BUILDING,
+    Ground.PAVED,
+    Ground.GRAVEL,
+    Ground.PATH,
+]
 BUILDING_CLEARANCE_M = 0.8
 
 # Tree rule and running speed for each AR5 land type outside the map.
 _LAND_COVER_RULES = {
-    Ground.FIELD: (TREES_NONE, 0.6),
-    Ground.OPEN: (TREES_SCATTERED, 0.95),
-    Ground.LAWN: (TREES_SCATTERED, 0.9),
+    Ground.FIELD: (TREES_LIDAR, 0.6),
+    Ground.OPEN: (TREES_LIDAR, 0.95),
+    Ground.LAWN: (TREES_LIDAR, 0.9),
     Ground.PAVED: (TREES_NONE, 1.0),
     Ground.WATER: (TREES_NONE, 0.0),
     Ground.MARSH: (TREES_KEEP, 0.7),
@@ -68,6 +77,23 @@ def fill_unknown_ground(layers: GroundLayers, canopy: npt.NDArray[np.float32]) -
     forest = canopy >= FOREST_CANOPY_M
     layers.ground[unknown & forest] = Ground.FOREST
     layers.ground[unknown & ~forest] = Ground.OPEN
+
+
+def add_low_vegetation(layers: GroundLayers, found: npt.NDArray[np.bool_]) -> None:
+    """Put undergrowth where the laser data found bushes or young trees.
+
+    Examples:
+        >>> from otest.process.layers import GroundLayers
+        >>> z = np.zeros((1, 3), dtype=np.float32)
+        >>> layers = GroundLayers(
+        ...     ground=np.array([[2, 2, 10]], np.uint8), speed=z + 1, young=z, shrubs=z,
+        ...     tree_rule=np.zeros((1, 3), np.uint8), clear=z > 0, in_map=z == 0)
+        >>> add_low_vegetation(layers, np.array([[True, False, True]]))
+        >>> layers.shrubs.tolist()
+        [[0.6000000238418579, 0.0, 0.0]]
+    """
+    cells = found & ~layers.clear & ~np.isin(layers.ground, _NO_UNDERGROWTH)
+    layers.shrubs[cells] = np.maximum(layers.shrubs[cells], LIDAR_UNDERGROWTH)
 
 
 def apply_land_cover(layers: GroundLayers, land_cover: npt.NDArray[np.uint8]) -> None:

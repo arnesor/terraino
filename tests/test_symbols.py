@@ -45,3 +45,14 @@ def test_detect_symbol_set() -> None:
     assert detect_symbol_set({"521", "520"}) == "isom2017"
     assert detect_symbol_set({"526", "521"}) == "isom2000"
     assert detect_symbol_set(set()) == "isom2000"
+
+
+@pytest.mark.parametrize("key", ["isom2000", "isom2017"])
+def test_rough_open_land_has_no_trees(key: str) -> None:
+    symbols = SymbolSet.load(key)
+    rough = symbols.rule("403")
+    scattered = symbols.rule("404")
+    assert rough is not None
+    assert scattered is not None
+    assert rough.trees == "none"
+    assert scattered.trees == "lidar"

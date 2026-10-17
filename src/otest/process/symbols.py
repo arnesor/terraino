@@ -13,7 +13,7 @@ from enum import IntEnum
 from importlib import resources
 from typing import Any, Literal
 
-TreeRule = Literal["keep", "none", "scattered"]
+TreeRule = Literal["keep", "none", "lidar"]
 FEATURES = frozenset(
     {
         "boulder",
@@ -72,6 +72,8 @@ class SymbolRule:
         order: Drawing order; higher values are painted on top.
         feature: 3D object placed for the symbol (see FEATURES), or None.
         size: Size of the feature in metres, or None for its default.
+        overprint: The symbol is drawn on top of other areas (undergrowth patterns):
+            it adds its shrubs and speed but keeps the ground and trees below.
     """
 
     ground: Ground | None = None
@@ -84,6 +86,7 @@ class SymbolRule:
     order: int = 0
     feature: str | None = None
     size: float | None = None
+    overprint: bool = False
 
     @classmethod
     def from_table(cls, entry: Mapping[str, Any]) -> SymbolRule:
@@ -99,7 +102,7 @@ class SymbolRule:
         if values.get("feature") is not None and values["feature"] not in FEATURES:
             msg = f"Unknown feature {values['feature']!r}"
             raise ValueError(msg)
-        if values.get("trees", "keep") not in ("keep", "none", "scattered"):
+        if values.get("trees", "keep") not in ("keep", "none", "lidar"):
             msg = f"Unknown trees rule {values['trees']!r}"
             raise ValueError(msg)
         return cls(**values)

@@ -31,20 +31,20 @@ name = "ISOM 2017-2"
 "310" = { ground = "marsh", speed = 0.85, order = 39 }
 
 # Vegetation
-"401" = { ground = "open", trees = "none", speed = 1.0, order = 10 }
-"402" = { ground = "open", trees = "scattered", speed = 1.0, order = 10 }
+"401" = { ground = "open", trees = "lidar", speed = 1.0, order = 10 }
+"402" = { ground = "open", trees = "lidar", speed = 1.0, order = 10 }
 "403" = { ground = "rough", trees = "none", speed = 0.85, order = 11 }
-"404" = { ground = "rough", trees = "scattered", speed = 0.85, order = 11 }
+"404" = { ground = "rough", trees = "lidar", speed = 0.85, order = 11 }
 "405" = { ground = "forest", speed = 1.0, order = 12 }
 "406" = { ground = "forest", young = 3, speed = 0.75, order = 20 }
-"407" = { ground = "forest", shrubs = 0.45, speed = 0.75, order = 20 }
+"407" = { overprint = true, shrubs = 0.45, speed = 0.75, order = 20 }
 "408" = { ground = "forest", young = 8, speed = 0.5, order = 21 }
-"409" = { ground = "forest", shrubs = 0.8, speed = 0.5, order = 21 }
+"409" = { overprint = true, shrubs = 0.8, speed = 0.5, order = 21 }
 "410" = { ground = "forest", young = 15, speed = 0.25, order = 22 }
 "411" = { ground = "forest", young = 20, speed = 0.05, order = 23 }
-"412" = { ground = "field", trees = "none", speed = 0.6, order = 15 }
-"413" = { ground = "lawn", trees = "scattered", speed = 0.9, order = 15 }
-"414" = { ground = "field", trees = "none", speed = 0.7, order = 15 }
+"412" = { ground = "field", trees = "lidar", speed = 0.6, order = 15 }
+"413" = { ground = "lawn", trees = "lidar", speed = 0.9, order = 15 }
+"414" = { ground = "field", trees = "lidar", speed = 0.7, order = 15 }
 
 # Roads, paths and other man-made features
 "501" = { ground = "paved", trees = "none", speed = 1.0, order = 85 }
@@ -65,7 +65,7 @@ name = "ISOM 2017-2"
 "516" = { feature = "fence", size = 1.2 }
 "517" = { feature = "ruined_fence", size = 1.0 }
 "518" = { feature = "fence", size = 2.2 }
-"520" = { ground = "lawn", trees = "scattered", speed = 0.9, order = 50 }
+"520" = { ground = "lawn", trees = "lidar", speed = 0.9, order = 50 }
 "521" = { ground = "building", trees = "none", speed = 0, order = 90 }
 "523" = { feature = "ruin", size = 0.6 }
 "524" = { feature = "tower", size = 10 }

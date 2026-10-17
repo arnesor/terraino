@@ -3,8 +3,9 @@
 Canopy trees are found as local maxima of the canopy height model (surface minus
 terrain). Trees below the canopy cannot be seen from above, so smaller trees are added
 under it until each 16 m cell has as many trees as SR16 reports (or a typical number).
-The orienteering map then decides where trees may stand, thins them on open land, and
-adds young trees where the map shows dense forest. Species come from SR16, mixed a
+The orienteering map then decides where trees may stand: in forest the canopy is filled
+up as above, on open land, farmland and gardens only the trees the laser finds stand,
+and young trees are added where the map shows dense forest. Species come from SR16, mixed a
 little, because SR16 only gives the dominant species per 16 m cell.
 """
 
@@ -17,7 +18,7 @@ import numpy.typing as npt
 from scipy import ndimage
 
 from otest.fetch.nibio import Species
-from otest.process.layers import TREES_NONE, TREES_SCATTERED, GroundLayers
+from otest.process.layers import TREES_KEEP, TREES_LIDAR, TREES_NONE, GroundLayers
 from otest.process.symbols import Ground
 
 MIN_TREE_HEIGHT_M = 2.5
@@ -30,8 +31,11 @@ DEFAULT_TREES_PER_HA = 750.0
 # Never more than one tree per this many square metres of canopy.
 MIN_AREA_PER_TREE_M2 = 4.0
 UNDERSTOREY_HEIGHT = (0.45, 0.9)
-# Share of canopy trees kept on open land with scattered trees.
-SCATTERED_KEEP = 0.12
+# Low vegetation (bushes, young trees) in the laser data: height range in metres, how
+# much it must rise above the median of a LOW_VEGETATION_WINDOW wide neighbourhood.
+LOW_VEGETATION_M = (0.5, MIN_TREE_HEIGHT_M)
+LOW_VEGETATION_PROMINENCE_M = 0.4
+LOW_VEGETATION_WINDOW = 9
 YOUNG_HEIGHT_M = (1.2, 4.5)
 
 # Probability of each species given SR16's dominant species (spruce, pine, deciduous).
@@ -225,16 +229,16 @@ def place_trees(
     rows, cols, heights = rows[keep], cols[keep], heights[keep]
 
     ur, uc = understorey_cells(
-        chm, allowed_cells & (layers.tree_rule == 0), (rows, cols), trees_per_ha, rng
+        chm,
+        allowed_cells & (layers.tree_rule == TREES_KEEP),
+        (rows, cols),
+        trees_per_ha,
+        rng,
     )
     uh = chm[ur, uc] * rng.uniform(*UNDERSTOREY_HEIGHT, size=len(ur)).astype(np.float32)
     rows = np.concatenate([rows, ur])
     cols = np.concatenate([cols, uc])
     heights = np.concatenate([heights, uh]).astype(np.float32)
-
-    scattered = layers.tree_rule[rows, cols] == TREES_SCATTERED
-    keep = ~scattered | (rng.random(len(rows)) < SCATTERED_KEEP)
-    rows, cols, heights = rows[keep], cols[keep], heights[keep]
 
     # Young trees where the map shows dense forest: Bernoulli draw per 1 m cell.
     young_p = layers.young / 100.0
@@ -261,11 +265,33 @@ def place_trees(
     )
 
 
+def low_vegetation(chm: npt.NDArray[np.float32]) -> npt.NDArray[np.bool_]:
+    """Cells with bushes or young trees: low vegetation that stands out around it.
+
+    The vegetation must be between LOW_VEGETATION_M high and stand at least
+    LOW_VEGETATION_PROMINENCE_M above the median of its surroundings, so an even crop
+    on a field does not count, but a bush or a small tree in the field does.
+
+    Examples:
+        >>> chm = np.zeros((20, 20), dtype=np.float32)
+        >>> chm[10, 10] = 1.2  # a bush in a mown field
+        >>> chm[0:5, :] = 0.8  # an even grain field
+        >>> veg = low_vegetation(chm)
+        >>> bool(veg[10, 10]), bool(veg[2, 10])
+        (True, False)
+    """
+    low, high = LOW_VEGETATION_M
+    surroundings = ndimage.median_filter(chm, size=LOW_VEGETATION_WINDOW)
+    stands_out = chm - surroundings >= LOW_VEGETATION_PROMINENCE_M
+    found: npt.NDArray[np.bool_] = (chm >= low) & (chm < high) & stands_out
+    return found
+
+
 def effective_canopy(
     chm: npt.NDArray[np.float32], layers: GroundLayers
 ) -> npt.NDArray[np.float32]:
     """Canopy height where the map allows trees, 0 elsewhere (for distant shading)."""
     canopy = chm.copy()
-    canopy[(layers.tree_rule != 0) | layers.clear] = 0
+    canopy[~np.isin(layers.tree_rule, [TREES_KEEP, TREES_LIDAR]) | layers.clear] = 0
     canopy[np.isin(layers.ground, [Ground.WATER, Ground.BUILDING, Ground.PAVED])] = 0
     return canopy

@@ -29,12 +29,22 @@ from otest.process.features import (
     measure_cliffs,
     paint_cliffs,
 )
-from otest.process.fuse import apply_land_cover, apply_osm, fill_unknown_ground
+from otest.process.fuse import (
+    add_low_vegetation,
+    apply_land_cover,
+    apply_osm,
+    fill_unknown_ground,
+)
 from otest.process.heights import fill_missing
 from otest.process.layers import GroundLayers, rasterize_map
 from otest.process.maparea import find_map_area
 from otest.process.symbols import Ground, SymbolSet, detect_symbol_set
-from otest.process.trees import canopy_height, effective_canopy, place_trees
+from otest.process.trees import (
+    canopy_height,
+    effective_canopy,
+    low_vegetation,
+    place_trees,
+)
 
 log = logging.getLogger(__name__)
 
@@ -308,6 +318,8 @@ def _add_nature_and_buildings(
             len(objects.lines),
             len(objects.cliffs),
         )
+
+    add_low_vegetation(layers, low_vegetation(chm))
 
     forest = nibio.fetch_forest(source.epsg, extent, cache, options.sr16_dir)
     trees = place_trees(

@@ -11,7 +11,7 @@ from otest.fetch.osm import OsmFeature, parse_overpass
 from otest.ingest.georef import Extent
 from otest.process.buildings import building_kind, collect_footprints, measure_buildings
 from otest.process.fuse import apply_land_cover, apply_osm, road_style
-from otest.process.layers import TREES_NONE, GroundLayers
+from otest.process.layers import TREES_LIDAR, GroundLayers
 from otest.process.symbols import Ground, SymbolSet
 
 EXTENT = Extent(0, 0, 100, 100)
@@ -95,7 +95,7 @@ def test_land_cover_only_outside_map() -> None:
     apply_land_cover(layers, land_cover)
     assert layers.ground[cell(25, 50)] == Ground.FOREST
     assert layers.ground[cell(75, 50)] == Ground.FIELD
-    assert layers.tree_rule[cell(75, 50)] == TREES_NONE
+    assert layers.tree_rule[cell(75, 50)] == TREES_LIDAR
     assert layers.speed[cell(75, 50)] == pytest.approx(0.6)
 
 

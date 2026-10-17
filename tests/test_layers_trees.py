@@ -7,12 +7,13 @@ from shapely import Polygon, box
 
 from otest.ingest.georef import Extent
 from otest.process.fuse import fill_unknown_ground
-from otest.process.layers import TREES_NONE, GroundLayers, rasterize_map
+from otest.process.layers import TREES_LIDAR, TREES_NONE, GroundLayers, rasterize_map
 from otest.process.symbols import Ground, SymbolSet
 from otest.process.trees import (
     canopy_height,
     effective_canopy,
     find_tree_tops,
+    low_vegetation,
     place_trees,
     understorey_cells,
 )
@@ -70,7 +71,8 @@ def test_overprinting_marsh_keeps_vegetation(layers: GroundLayers) -> None:
 
 
 def test_tree_rules_and_clear_strips(layers: GroundLayers) -> None:
-    assert layers.tree_rule[cell(30, 30)] == TREES_NONE
+    assert layers.tree_rule[cell(30, 30)] == TREES_LIDAR
+    assert layers.tree_rule[cell(25, 65)] == TREES_NONE
     assert layers.clear[cell(50, 45)]
     assert not layers.clear[cell(50, 50)]
     assert layers.in_map[cell(50, 50)]
@@ -140,7 +142,11 @@ def test_place_trees_respects_map(layers: GroundLayers) -> None:
     rows = trees.row.astype(int)
     cols = trees.col.astype(int)
     ground = layers.ground[rows, cols]
-    assert not np.isin(ground, [Ground.WATER, Ground.PATH, Ground.OPEN]).any()
+    assert not np.isin(ground, [Ground.WATER, Ground.PATH]).any()
+    # On open land only the laser's tree tops stand (18 m cones), nothing is added.
+    on_open = ground == Ground.OPEN
+    assert on_open.any()
+    assert (trees.height[on_open] > 15).all()
     assert not layers.clear[rows, cols].any()
     # Young trees make the difficult forest (30 x 30 m) denser than plain forest.
     dense = (layers.young[rows, cols] > 0).sum() / 900
@@ -163,9 +169,36 @@ def test_place_trees_is_deterministic(layers: GroundLayers) -> None:
     np.testing.assert_array_equal(a.species, b.species)
 
 
-def test_effective_canopy_removes_open_land(layers: GroundLayers) -> None:
+def test_effective_canopy_keeps_lidar_trees(layers: GroundLayers) -> None:
     chm = np.full(layers.ground.shape, 10.0, dtype=np.float32)
     canopy = effective_canopy(chm, layers)
-    assert canopy[cell(30, 30)] == 0
+    assert canopy[cell(25, 65)] == 0  # lake
+    assert canopy[cell(30, 30)] == 10  # open land keeps the trees the laser found
     assert canopy[cell(50, 45)] == 0
     assert canopy[cell(15, 85)] == 10
+
+
+def test_low_vegetation_ignores_even_crops() -> None:
+    chm = np.zeros((40, 40), dtype=np.float32)
+    chm[:, :20] = 0.9  # grain
+    chm[30, 30] = 1.5  # a bush in a mown field
+    chm[10, 10] = 2.0  # a bush in the grain
+    found = low_vegetation(chm)
+    assert found[30, 30]
+    assert found[10, 10]
+    assert not found[5:15, 2:8].any()
+
+
+def test_undergrowth_overprint_keeps_rough_open_land() -> None:
+    features = [
+        area(0, "403.0", box(20, 20, 60, 60)),  # rough open land, no trees
+        area(1, "407.0", box(30, 30, 50, 50)),  # undergrowth pattern on top
+        area(2, "407.0", box(70, 70, 85, 85)),  # undergrowth in white forest
+    ]
+    layers = rasterize_map(features, ISOM, EXTENT, MAP_AREA)
+    assert layers.ground[cell(40, 40)] == Ground.ROUGH
+    assert layers.tree_rule[cell(40, 40)] == TREES_NONE
+    assert layers.shrubs[cell(40, 40)] == pytest.approx(0.45)
+    assert layers.speed[cell(40, 40)] == pytest.approx(0.75)
+    assert layers.ground[cell(78, 78)] == Ground.FOREST
+    assert layers.shrubs[cell(78, 78)] == pytest.approx(0.45)

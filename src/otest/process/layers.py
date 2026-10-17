@@ -24,8 +24,9 @@ MIN_RASTER_WIDTH_M = 1.2
 
 TREES_KEEP = 0
 TREES_NONE = 1
-TREES_SCATTERED = 2
-TREE_RULES = {"keep": TREES_KEEP, "none": TREES_NONE, "scattered": TREES_SCATTERED}
+# Only the trees found in the laser data; nothing is added below the canopy.
+TREES_LIDAR = 2
+TREE_RULES = {"keep": TREES_KEEP, "none": TREES_NONE, "lidar": TREES_LIDAR}
 
 # Overprinting areas (marsh, stony ground) do not change the vegetation below them.
 _OVERPRINT = {Ground.MARSH, Ground.STONY}
@@ -40,7 +41,7 @@ class GroundLayers:
         speed: Running speed factor, 1 = easy forest.
         young: Young trees to add per 100 m².
         shrubs: Undergrowth density, 0..1.
-        tree_rule: TREES_KEEP, TREES_NONE or TREES_SCATTERED.
+        tree_rule: TREES_KEEP, TREES_NONE or TREES_LIDAR.
         clear: True where no trees may stand (roads, paths, streams, power lines).
         in_map: True inside the mapped area.
     """
@@ -78,7 +79,7 @@ def _shapes(
         if geometry is None:
             continue
         if isinstance(geometry, Polygon | MultiPolygon):
-            if rule.ground is not None:
+            if rule.ground is not None or rule.overprint:
                 shapes.append(_Shape(geometry, rule, is_area=True))
         elif isinstance(geometry, LineString | MultiLineString):
             if rule.ground is not None and rule.width is not None:
@@ -150,12 +151,23 @@ def rasterize_map(
         1.0,
         np.float32,
     )
-    vegetation = [s for s in shapes if s.is_area and s.rule.ground not in _OVERPRINT]
+    # Vegetation areas set young trees, shrubs and the tree rule; overprinting areas
+    # (marsh, stony ground, undergrowth patterns) leave what is below them.
+    vegetation = [
+        s
+        for s in shapes
+        if s.is_area and not s.rule.overprint and s.rule.ground not in _OVERPRINT
+    ]
     young = _paint(
         [(s.geometry, s.rule.young) for s in vegetation], extent, 0.0, np.float32
     )
+    undergrowth = [
+        s
+        for s in shapes
+        if s.is_area and (s.rule.overprint or s.rule.ground not in _OVERPRINT)
+    ]
     shrubs = _paint(
-        [(s.geometry, s.rule.shrubs) for s in vegetation], extent, 0.0, np.float32
+        [(s.geometry, s.rule.shrubs) for s in undergrowth], extent, 0.0, np.float32
     )
     tree_rule = _paint(
         [(s.geometry, TREE_RULES[s.rule.trees]) for s in vegetation],

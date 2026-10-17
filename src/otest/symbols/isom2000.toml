@@ -3,7 +3,8 @@
 # Keys (all optional):
 #   ground  ground class: forest open rough marsh rock field paved gravel path water
 #           lawn stony sand building (see otest.process.symbols.Ground)
-#   trees   "keep" (use the laser canopy), "none" or "scattered" (at most a few per ha)
+#   trees   "keep" (laser canopy trees, plus smaller trees below the canopy up to the
+#           SR16 count), "lidar" (only the trees the laser finds) or "none"
 #   young   young trees added per 100 m², making the forest denser
 #   shrubs  undergrowth density, 0..1
 #   speed   running speed factor, 1 = easy forest floor, 0 = impassable
@@ -14,6 +15,8 @@
 #           stones, cliff, rock_face, stone_wall, ruined_wall, fence, ruined_fence,
 #           power_line, pylon_line, tower, cairn, fodder_rack, ruin, footbridge
 #   size    size of the feature in metres (boulder height, tower height, wall height)
+#   overprint  true for a pattern drawn on top of other areas (undergrowth): it only adds
+#           its shrubs and speed, and keeps the ground and trees of the area below
 #
 # A symbol "406.1" uses the entry "406.1" if there is one, otherwise "406".
 # The white map background is forest with easy running.
@@ -46,20 +49,22 @@ name = "ISOM 2000"
 "311" = { ground = "marsh", speed = 0.85, order = 39 }
 
 # Vegetation
-"401" = { ground = "open", trees = "none", speed = 1.0, order = 10 }
-"402" = { ground = "open", trees = "scattered", speed = 1.0, order = 10 }
+"401" = { ground = "open", trees = "lidar", speed = 1.0, order = 10 }
+"402" = { ground = "open", trees = "lidar", speed = 1.0, order = 10 }
+# Rough open land: felled areas, heath and new plantations, no trees above about 1 m
+# (scattered trees are mapped with 404).
 "403" = { ground = "rough", trees = "none", speed = 0.85, order = 11 }
-"404" = { ground = "rough", trees = "scattered", speed = 0.85, order = 11 }
+"404" = { ground = "rough", trees = "lidar", speed = 0.85, order = 11 }
 "405" = { ground = "forest", speed = 1.0, order = 12 }
 "406" = { ground = "forest", young = 3, speed = 0.75, order = 20 }
-"407" = { ground = "forest", shrubs = 0.45, speed = 0.75, order = 20 }
+"407" = { overprint = true, shrubs = 0.45, speed = 0.75, order = 20 }
 "408" = { ground = "forest", young = 8, speed = 0.5, order = 21 }
-"409" = { ground = "forest", shrubs = 0.8, speed = 0.5, order = 21 }
+"409" = { overprint = true, shrubs = 0.8, speed = 0.5, order = 21 }
 "410" = { ground = "forest", young = 15, speed = 0.25, order = 22 }
 "411" = { ground = "forest", young = 20, speed = 0.05, order = 23 }
-"412" = { ground = "lawn", trees = "scattered", speed = 0.9, order = 15 }
-"413" = { ground = "field", trees = "none", speed = 0.7, order = 15 }
-"415" = { ground = "field", trees = "none", speed = 0.6, order = 15 }
+"412" = { ground = "lawn", trees = "lidar", speed = 0.9, order = 15 }
+"413" = { ground = "field", trees = "lidar", speed = 0.7, order = 15 }
+"415" = { ground = "field", trees = "lidar", speed = 0.6, order = 15 }
 
 # Roads, paths and other man-made features
 "501" = { ground = "paved", trees = "none", width = 12, clear = 20, order = 82 }
@@ -84,8 +89,8 @@ name = "ISOM 2000"
 "523" = { feature = "ruined_fence", size = 1.0 }
 "524" = { feature = "fence", size = 2.2 }
 "526" = { ground = "building", trees = "none", speed = 0, order = 90 }
-"527" = { ground = "lawn", trees = "scattered", speed = 0.9, order = 50 }
-"528" = { ground = "lawn", trees = "scattered", speed = 0.9, order = 50 }
+"527" = { ground = "lawn", trees = "lidar", speed = 0.9, order = 50 }
+"528" = { ground = "lawn", trees = "lidar", speed = 0.9, order = 50 }
 "529" = { ground = "paved", trees = "none", speed = 1.0, order = 85 }
 "530" = { feature = "ruin", size = 0.6 }
 "535" = { feature = "tower", size = 10 }
