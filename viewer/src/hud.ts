@@ -1,6 +1,7 @@
 import { type Course, type CourseRun, encodeCourse, formatTime } from './course'
 import { describe, drawDescriptionTable, tableRows } from './descriptions/table'
 import { formatNumber, t, type TextKey } from './i18n'
+import { fitRectangle, legIndices } from './mapview'
 import type { ImportedCourse } from './ocad/courses'
 import type { Player } from './player'
 import type { World } from './world'
@@ -14,6 +15,38 @@ const BUTTON_ZOOM = 1.4
 const ROTATE_STEP = Math.PI / 12
 // Box size of the description panel, in CSS pixels.
 const PANEL_BOX = 24
+// The leg view: at least this much ground across, and how the map moves to it.
+const LEGS_MIN_SPAN_M = 150
+const TRANSITION_S = 1
+const SMOOTHING_S = 0.3
+// Compass in the map's top-right corner, in CSS pixels.
+const COMPASS_RADIUS = 34
+const COMPASS_INSET = 46
+const PREFERENCES_KEY = 'otest.map'
+
+/**
+ * What the map window shows: the leg you are on and the next one, the runner at the
+ * chosen zoom, or wherever it was dragged.
+ */
+type MapView = 'legs' | 'follow' | 'free'
+
+interface MapPreferences {
+  auto: boolean
+  legs: boolean
+  position: boolean
+}
+
+function loadPreferences(): MapPreferences {
+  const defaults = { auto: false, legs: true, position: true }
+  try {
+    const stored = JSON.parse(localStorage.getItem(PREFERENCES_KEY) ?? '{}') as Partial<MapPreferences>
+    return { ...defaults, ...stored }
+  } catch {
+    return defaults
+  }
+}
+
+const easeInOut = (k: number) => (k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2)
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, parent: HTMLElement) {
   const e = document.createElement(tag)
@@ -52,9 +85,9 @@ export class Hud {
   private readonly mapCanvas: HTMLCanvasElement
   private readonly mapTitle: HTMLSpanElement
   private readonly mapHelp: HTMLDivElement
-  private readonly north: HTMLDivElement
   private readonly editButton: HTMLButtonElement
   private readonly autoButton: HTMLButtonElement
+  private readonly legsButton: HTMLButtonElement
   private readonly positionBox: HTMLInputElement
   private readonly runPanel: HTMLDivElement
   private readonly descriptions: HTMLDivElement
@@ -72,8 +105,16 @@ export class Hud {
   private rotation = 0
   /** Rotate the map so the running direction is up. */
   private auto = false
-  /** True while the map centre follows the runner. */
-  private follow = true
+  private view: MapView = 'follow'
+  /** Show the legs when a course is set or the map opens (the Legs button's choice). */
+  private legsWanted = true
+  /** The leg points last shown, to glide to new ones when a control is punched. */
+  private legKey = ''
+  /** A glide from `from` to the leg view, `k` running from 0 to 1. */
+  private transition: { centre: [number, number]; zoom: number; k: number } | null = null
+  /** Jump straight to the leg view on the next frame (the map was hidden). */
+  private snap = false
+  private shownCourse: Course | null = null
   private drag: { x: number; y: number; moved: number } | null = null
   private frames = 0
   private fpsTime = 0
@@ -121,7 +162,7 @@ export class Hud {
     this.descriptionCanvas = el('canvas', 'hud-descriptions-table', this.descriptions)
     this.descriptionText = el('div', 'hud-descriptions-text', this.descriptions)
 
-    // The map window: title bar, map with a north arrow, tool bar and help line.
+    // The map window: title bar, map with a compass, tool bar and help line.
     this.mapWindow = el('div', 'hud-map', root)
     this.mapWindow.hidden = true
     const head = el('div', 'hud-map-head', this.mapWindow)
@@ -129,8 +170,6 @@ export class Hud {
     button(head, '✕', t('closeMap'), () => this.toggleMap(false)).classList.add('close')
     const body = el('div', 'hud-map-body', this.mapWindow)
     this.mapCanvas = el('canvas', 'hud-map-canvas', body)
-    this.north = el('div', 'hud-map-north', body)
-    el('span', '', this.north).textContent = 'N'
 
     const tools = el('div', 'hud-map-tools', this.mapWindow)
     const rotate = el('div', 'hud-map-group', tools)
@@ -142,8 +181,11 @@ export class Hud {
     button(zoom, '−', t('zoomOut'), () => this.zoomAt(1 / BUTTON_ZOOM))
     button(zoom, '+', t('zoomIn'), () => this.zoomAt(BUTTON_ZOOM))
     button(zoom, t('whole'), t('wholeTitle'), () => this.showWhole())
-    button(zoom, t('me'), t('meTitle'), () => {
-      this.follow = true
+    button(zoom, t('me'), t('meTitle'), () => this.setView('follow'))
+    this.legsButton = button(zoom, t('legs'), t('legsTitle'), () => {
+      this.legsWanted = this.view !== 'legs'
+      this.setView(this.legsWanted ? 'legs' : 'follow')
+      this.savePreferences()
     })
     const more = el('div', 'hud-map-group', tools)
     const positionLabel = el('label', 'hud-map-check', more)
@@ -151,6 +193,7 @@ export class Hud {
     this.positionBox.type = 'checkbox'
     this.positionBox.checked = true
     positionLabel.append(` ${t('position')}`)
+    this.positionBox.addEventListener('change', () => this.savePreferences())
     this.editButton = button(more, t('setCourse'), t('setCourseTitle'), () => this.setEditing(!this.editing))
     this.mapHelp = el('div', 'hud-map-help', this.mapWindow)
     this.mapImage.src = world.url(world.manifest.map.image)
@@ -179,6 +222,11 @@ export class Hud {
       { passive: false },
     )
     this.updateHelp()
+
+    const preferences = loadPreferences()
+    this.legsWanted = preferences.legs
+    this.positionBox.checked = preferences.position
+    this.setAuto(preferences.auto)
   }
 
   get mapOpen(): boolean {
@@ -190,8 +238,9 @@ export class Hud {
     if (open === this.mapOpen) return
     this.mapWindow.hidden = !open
     if (open) {
-      this.follow = true
       if (this.zoom === 0) this.zoom = 1
+      this.setView(this.legsWanted && this.hasCourse ? 'legs' : 'follow')
+      this.snap = true
     } else if (this.editing) {
       this.setEditing(false)
     }
@@ -200,7 +249,10 @@ export class Hud {
 
   private onKey(e: KeyboardEvent) {
     if (e.code === 'KeyM') this.toggleMap()
-    if (e.code === 'KeyP') this.positionBox.checked = !this.positionBox.checked
+    if (e.code === 'KeyP') {
+      this.positionBox.checked = !this.positionBox.checked
+      this.savePreferences()
+    }
     if (e.code === 'Equal' || e.code === 'NumpadAdd') this.zoomAt(BUTTON_ZOOM)
     if (e.code === 'Minus' || e.code === 'NumpadSubtract') this.zoomAt(1 / BUTTON_ZOOM)
     if (e.code === 'KeyE' && this.mapOpen) this.setEditing(!this.editing)
@@ -234,11 +286,111 @@ export class Hud {
     this.auto = auto
     this.autoButton.classList.toggle('active', auto)
     if (!auto) this.rotation = 0
+    this.savePreferences()
   }
 
+  /** Turn the map by hand; it keeps the turn it had (also from Auto) and adds to it. */
   private rotate(delta: number) {
+    const current = this.rotation
     this.setAuto(false)
-    this.rotation += delta
+    this.rotation = current + delta
+  }
+
+  private get hasCourse(): boolean {
+    return this.run.course.controls.length >= 2
+  }
+
+  /** Switch what the map shows; the leg view is reached by gliding there. */
+  private setView(view: MapView) {
+    if (view === 'legs' && this.view !== 'legs') {
+      this.transition = { centre: [...this.centre], zoom: this.zoom, k: 0 }
+      this.legKey = this.currentLegKey()
+    }
+    if (view !== 'legs') this.transition = null
+    this.view = view
+    this.legsButton.classList.toggle('active', view === 'legs')
+  }
+
+  private savePreferences() {
+    try {
+      const preferences: MapPreferences = { auto: this.auto, legs: this.legsWanted, position: this.positionBox.checked }
+      localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences))
+    } catch {
+      // Not remembered; the map still works.
+    }
+  }
+
+  /** Changes when the leg points change: a punch, the start or a new course. */
+  private currentLegKey(): string {
+    return `${this.run.state}\t${this.run.next}\t${this.run.course.controls.length}`
+  }
+
+  /**
+   * Points the leg view must show: the controls of the current and the next leg with their
+   * numbers, and the runner while running.
+   */
+  private legView(): [number, number][] {
+    const course = this.run.course
+    const points: [number, number][] = []
+    for (const i of legIndices(course.controls.length, this.run.state, this.run.next)) {
+      points.push(course.controls[i]!)
+      const number = course.imported?.controls[i]?.numberAt
+      if (number) {
+        // The number's text box, from its anchor (bottom left) up and to the right.
+        const size = course.imported!.numberSizeM
+        points.push(number, [number[0] + String(i).length * size * 0.6, number[1] + size * 0.75])
+      }
+    }
+    if (this.run.state === 'running') points.push(this.runnerPosition())
+    return points
+  }
+
+  /** Move the map toward the leg view: a glide after a punch, light smoothing otherwise. */
+  private updateLegs(dt: number) {
+    const size = this.canvasSize()
+    const scale = this.world.manifest.map.scale ?? 10000
+    const points = this.legView()
+    // Keep the compass corner free: a band along the top or a column on the right,
+    // whichever leaves the legs larger.
+    const free = 2 * COMPASS_INSET
+    const fit = (top: number, right: number) =>
+      fitRectangle(points, this.rotation, size, (CIRCLE_MM * scale) / 1000, LEGS_MIN_SPAN_M, {
+        top,
+        right,
+        bottom: 0,
+        left: 0,
+      })
+    const [byTop, byRight] = [fit(free, 0), fit(0, free)]
+    const target = byTop.zoom >= byRight.zoom ? byTop : byRight
+    const targetZoom = Math.min(Math.max(target.zoom, this.fitZoom()), MAX_ZOOM)
+    const key = this.currentLegKey()
+    if (this.snap) {
+      this.snap = false
+      this.transition = null
+      this.legKey = key
+      this.centre = target.centre
+      this.zoom = targetZoom
+      return
+    }
+    if (key !== this.legKey) {
+      this.legKey = key
+      this.transition = { centre: [...this.centre], zoom: this.zoom, k: 0 }
+    }
+    let from: [number, number] = this.centre
+    let fromZoom = this.zoom
+    let k: number
+    if (this.transition) {
+      this.transition.k = Math.min(this.transition.k + dt / TRANSITION_S, 1)
+      from = this.transition.centre
+      fromZoom = this.transition.zoom
+      k = easeInOut(this.transition.k)
+      if (this.transition.k >= 1) this.transition = null
+    } else {
+      k = 1 - Math.exp(-dt / SMOOTHING_S)
+    }
+    // Zoom moves evenly in scale (log space), the centre in metres.
+    this.centre = [from[0] + (target.centre[0] - from[0]) * k, from[1] + (target.centre[1] - from[1]) * k]
+    this.zoom = Math.exp(Math.log(fromZoom) + (Math.log(targetZoom) - Math.log(fromZoom)) * k)
   }
 
   private flash(text: string) {
@@ -276,7 +428,7 @@ export class Hud {
 
   private showWhole() {
     const [x0, y0, x1, y1] = this.world.manifest.extent
-    this.follow = false
+    this.setView('free')
     this.centre = [(x0 + x1) / 2, (y0 + y1) / 2]
     this.zoom = this.fitZoom()
   }
@@ -309,8 +461,8 @@ export class Hud {
     const y = sy ?? h / 2
     const before = this.toProjected(x, y)
     this.zoom = Math.min(Math.max(this.zoom * factor, this.fitZoom()), MAX_ZOOM)
-    if (sx !== undefined) this.follow = false
-    if (!this.follow) {
+    if (sx !== undefined || this.view === 'legs') this.setView('free')
+    if (this.view === 'free') {
       const after = this.toProjected(x, y)
       this.centre = [this.centre[0] + before[0] - after[0], this.centre[1] + before[1] - after[1]]
     }
@@ -330,7 +482,7 @@ export class Hud {
     this.drag.x = e.clientX
     this.drag.y = e.clientY
     if (this.drag.moved > 4) {
-      this.follow = false
+      this.setView('free')
       const [de, dn] = this.screenToGround(dx, dy)
       this.centre = [this.centre[0] - de, this.centre[1] - dn]
     }
@@ -352,7 +504,7 @@ export class Hud {
     const [x0, y0, x1, y1] = this.world.manifest.extent
     if (east < x0 || east > x1 || north < y0 || north > y1) return
     this.onTeleport(east, north)
-    this.follow = true
+    if (this.view === 'free') this.setView('follow')
   }
 
   update(dt: number) {
@@ -381,7 +533,8 @@ export class Hud {
 
     this.updateRunPanel()
     this.updateDescriptions()
-    if (this.mapOpen) this.drawMap(heading)
+    this.legsButton.disabled = !this.hasCourse
+    if (this.mapOpen) this.drawMap(heading, dt)
   }
 
   private updateRunPanel() {
@@ -435,7 +588,7 @@ export class Hud {
     this.descriptionText.textContent = next > 0 ? describe(course, next) : ''
   }
 
-  private drawMap(heading: number) {
+  private drawMap(heading: number, dt: number) {
     const canvas = this.mapCanvas
     const [w, h] = this.canvasSize()
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
@@ -446,9 +599,17 @@ export class Hud {
     const ctx = canvas.getContext('2d')
     if (!ctx || w === 0 || h === 0) return
     this.zoom = Math.min(Math.max(this.zoom, this.fitZoom()), MAX_ZOOM)
-    if (this.follow) this.centre = this.runnerPosition()
     const headingRad = (heading * Math.PI) / 180
     if (this.auto) this.rotation = -headingRad
+    // A new course (opened or set by hand) is shown leg by leg, if that is wanted.
+    if (this.run.course !== this.shownCourse) {
+      this.shownCourse = this.run.course
+      // Glide to the new course's legs even if they look like the old ones.
+      this.legKey = ''
+      if (this.legsWanted && this.hasCourse) this.setView('legs')
+    }
+    if (this.view === 'legs' && this.hasCourse) this.updateLegs(dt)
+    else if (this.view !== 'free') this.centre = this.runnerPosition()
 
     const zoom = this.zoom
     const [ce, cn] = this.centre
@@ -503,7 +664,76 @@ export class Hud {
     ctx.font = '600 11px system-ui, sans-serif'
     ctx.fillText(`${metres} m`, 20, h - 22)
 
-    this.north.style.transform = `rotate(${this.rotation}rad)`
+    this.drawCompass(ctx, w - COMPASS_INSET, COMPASS_INSET, headingRad)
+  }
+
+  /**
+   * A compass at (cx, cy), held as you look: the needle points north in the terrain, so it
+   * turns as you turn (looking due west, it points to the right). The dial turns with the map,
+   * so its N points to map north. Turning the map until the dial's N and the meridians lie
+   * along the needle orients the map to the terrain; Auto keeps it oriented.
+   */
+  private drawCompass(ctx: CanvasRenderingContext2D, cx: number, cy: number, headingRad: number) {
+    const r = COMPASS_RADIUS
+    ctx.save()
+    ctx.translate(cx, cy)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
+    ctx.strokeStyle = '#26221d'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.arc(0, 0, r, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+
+    // Screen position at `radius` in compass direction `deg` (clockwise from north on the dial).
+    const at = (deg: number, radius: number): [number, number] => {
+      const a = (deg * Math.PI) / 180 + this.rotation
+      return [Math.sin(a) * radius, -Math.cos(a) * radius]
+    }
+    ctx.lineWidth = 1
+    for (let deg = 0; deg < 360; deg += 10) {
+      const length = deg % 30 === 0 ? 6 : 3
+      ctx.beginPath()
+      ctx.moveTo(...at(deg, r - 2))
+      ctx.lineTo(...at(deg, r - 2 - length))
+      ctx.stroke()
+    }
+    ctx.font = '700 11px system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    const letters: [number, TextKey][] = [
+      [0, 'compassN'],
+      [90, 'compassE'],
+      [180, 'compassS'],
+      [270, 'compassW'],
+    ]
+    for (const [deg, key] of letters) {
+      ctx.fillStyle = deg === 0 ? '#c21b1b' : '#26221d'
+      ctx.fillText(t(key), ...at(deg, r - 16))
+    }
+
+    // The needle: red toward north in the terrain, seen with the view direction up.
+    ctx.rotate(-headingRad)
+    const length = r - 6
+    ctx.fillStyle = '#e8222a'
+    ctx.beginPath()
+    ctx.moveTo(0, -length)
+    ctx.lineTo(4, 0)
+    ctx.lineTo(-4, 0)
+    ctx.closePath()
+    ctx.fill()
+    ctx.fillStyle = '#b9b4aa'
+    ctx.beginPath()
+    ctx.moveTo(0, length)
+    ctx.lineTo(4, 0)
+    ctx.lineTo(-4, 0)
+    ctx.closePath()
+    ctx.fill()
+    ctx.fillStyle = '#26221d'
+    ctx.beginPath()
+    ctx.arc(0, 0, 2, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
   }
 
   private drawCourse(ctx: CanvasRenderingContext2D, local: (e: number, n: number) => [number, number], zoom: number) {

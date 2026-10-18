@@ -145,6 +145,14 @@ and you can keep running with W A S D. Click the terrain to steer with the mouse
 while the map stays open, and press Esc to give the mouse back to the map.
 Auto turns the map with your running direction; ⟲, ⟳ and N↑ turn it by hand.
 Close the map with M or ✕.
+With a course, **Legs** (on by default) zooms the map to the leg you are on and the next one,
+and glides on to the next legs when you punch a control;
+dragging or zooming the map turns it off until you press Legs again.
+The compass in the map's corner is held as you look: its needle points north in the terrain,
+and its dial turns with the map.
+Turn the map (⟲ ⟳) until the dial's N and the meridians lie along the needle,
+and the map matches the terrain; Auto keeps it that way.
+Auto, Legs and Position are remembered.
 
 To run a course from an OCAD course setting file
 (OCAD 12 or newer),

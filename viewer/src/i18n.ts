@@ -92,6 +92,8 @@ const STRINGS = {
   whole: { en: 'Whole', nb: 'Hele' },
   wholeTitle: { en: 'Show the whole map', nb: 'Vis hele kartet' },
   me: { en: 'Me', nb: 'Meg' },
+  legs: { en: 'Legs', nb: 'Strekk' },
+  legsTitle: { en: 'Show the leg you are on and the next one', nb: 'Vis strekket du er på og det neste' },
   meTitle: { en: 'Centre on your position', nb: 'Midtstill på der du er' },
   position: { en: 'Position', nb: 'Posisjon' },
   setCourse: { en: 'Set course', nb: 'Legg løype' },
