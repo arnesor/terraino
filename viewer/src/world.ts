@@ -18,6 +18,8 @@ export interface HeightInfo {
   min: number
   max: number
   path: string
+  /** Chunks away from the map, stored with only every `step`-th sample (format 3). */
+  coarse?: { step: number; chunks: number[] }
 }
 
 export interface LayerInfo {
@@ -66,7 +68,7 @@ export interface Manifest {
   tracks?: { path: string; count: number }
 }
 
-export const SUPPORTED_FORMATS = [1, 2]
+export const SUPPORTED_FORMATS = [1, 2, 3]
 
 export class World {
   readonly base: string

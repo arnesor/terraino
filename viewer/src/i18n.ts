@@ -42,6 +42,8 @@ const STRINGS = {
   paintingTextures: { en: 'Painting textures …', nb: 'Maler teksturer …' },
   preparingTerrain: { en: 'Preparing terrain …', nb: 'Klargjør terrenget …' },
   plantingTrees: { en: 'Planting trees …', nb: 'Planter trær …' },
+  buildingWorld: { en: 'Laying out roads, buildings and rocks …', nb: 'Legger veier, bygninger og steiner …' },
+  compilingShaders: { en: 'Preparing graphics …', nb: 'Klargjør grafikken …' },
   error: { en: 'Error: {message}', nb: 'Feil: {message}' },
 
   // Course files.

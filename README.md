@@ -100,6 +100,8 @@ Useful build options (see `uv run otest build --help`):
 
 - `--offset DX DY` shifts the map east/north if its georeferencing is off.
 - `--margin` sets how much terrain to include around the map (default 300 m).
+  Terrain more than 100 m from the map is stored at 4 m instead of 1 m,
+  which halves what the viewer downloads before it starts.
 - `--sr16-dir` points to SR16 GeoTIFFs downloaded from Geonorge (or set `OTEST_SR16_DIR`);
   they add the number of trees per hectare to the species from the SR16 web map.
 - `--symbols` sets the symbol standard of an OCAD map if the guess is wrong.
@@ -135,7 +137,7 @@ Maps must be georeferenced in UTM zone 32, 33 or 35 (ETRS89 or WGS 84).
 | K           | Control descriptions on/off                       |
 | E           | With the map open: set a course by clicking (or Set course) |
 | L           | Copy a link to the course                         |
-| T           | Go to the start; R restarts the run               |
+| T           | Go to the start, behind the start banner; R restarts the run |
 | O           | Orienteering map on the ground on/off             |
 | G           | Graphics quality: high, medium, low               |
 | Esc         | Pause                                             |
@@ -160,6 +162,7 @@ press **Open course file …** on the start screen, choose the `.ocd` file and p
 You are put a few metres behind the start, looking at the start banner and the start control.
 All the controls in the file stand in the terrain, not only those on your course,
 so check the code before you punch.
+The course is not kept when you reload the page: open the file again, or use a link to it (L).
 The control description table is drawn on the map where the course setter placed it,
 and shown on screen while you run (K turns it on and off), with the next control highlighted.
 Each flag stands where its description says: column G

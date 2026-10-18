@@ -29,7 +29,8 @@ export interface OtherControl {
 
 const PUNCH_DISTANCE = 2.5
 const START_LEAVE_DISTANCE = 3
-const STORAGE_PREFIX = 'otest.course.'
+// Earlier versions kept the last course per world under this key; it is removed on start.
+const OLD_STORAGE_PREFIX = 'otest.course.'
 const ORANGE = new THREE.Color(0xf26a1b)
 const WHITE = new THREE.Color(0xf4f4f0)
 const STAND = new THREE.Color(0x777777)
@@ -66,25 +67,18 @@ export function decodeCourse(text: string): Course | null {
   return controls.length ? { controls } : null
 }
 
+/**
+ * The course to start with: the one in the URL (?course=), or none. A course is not kept
+ * between visits; open the course file again, or use a link to the course (L).
+ */
 export function loadCourse(world: World): Course {
+  try {
+    localStorage.removeItem(OLD_STORAGE_PREFIX + world.manifest.name)
+  } catch {
+    // Storage can be unavailable (private mode); nothing to remove then.
+  }
   const fromUrl = new URLSearchParams(location.search).get('course')
-  const decoded = fromUrl ? decodeCourse(fromUrl) : null
-  if (decoded) return decoded
-  try {
-    const stored = localStorage.getItem(STORAGE_PREFIX + world.manifest.name)
-    if (stored) return JSON.parse(stored) as Course
-  } catch {
-    // Storage can be unavailable (private mode); start with an empty course.
-  }
-  return { controls: [] }
-}
-
-export function saveCourse(world: World, course: Course) {
-  try {
-    localStorage.setItem(STORAGE_PREFIX + world.manifest.name, JSON.stringify(course))
-  } catch {
-    // Not saved, but the course still works for this session.
-  }
+  return (fromUrl ? decodeCourse(fromUrl) : null) ?? { controls: [] }
 }
 
 /** Orange and white control flag on a stand: three panels forming a prism. */
@@ -241,7 +235,6 @@ export class CourseRun {
 
   setCourse(course: Course) {
     this.course = course
-    saveCourse(this.world, course)
     this.reset()
     this.rebuild()
   }

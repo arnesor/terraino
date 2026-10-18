@@ -34,6 +34,11 @@ const courseSelect = document.getElementById('course-select') as HTMLSelectEleme
 applyTranslations()
 setupLanguageSelect(langSelect)
 
+/** Let the browser draw and handle input between heavy startup steps. */
+function pause(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, 0))
+}
+
 function setStatus(text: string) {
   status.textContent = text
 }
@@ -179,6 +184,8 @@ async function main() {
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.0
+  // Reading every shader's log makes the browser wait for each compile; keep that for development.
+  if (import.meta.env.PROD) renderer.debug.checkShaderErrors = false
   app.appendChild(renderer.domElement)
 
   const scene = new THREE.Scene()
@@ -187,7 +194,7 @@ async function main() {
   const quality = new URLSearchParams(location.search).get('quality')
   if (quality === 'high' || quality === 'medium' || quality === 'low') environment.setQuality(quality)
   setStatus(t('paintingTextures'))
-  await new Promise(resolve => setTimeout(resolve, 0))
+  await pause()
   const gfx = new Gfx(renderer)
   gfx.setQuality(QUALITY[environment.quality])
   gfx.buildImpostors(renderer, environment.sunDirection)
@@ -209,6 +216,8 @@ async function main() {
   })
   scene.add(terrain.group)
 
+  setStatus(t('buildingWorld'))
+  await pause()
   const tracks = await Tracks.load(world, heights, gfx)
   if (tracks) scene.add(tracks.group)
   const treeInfo = world.manifest.trees
@@ -223,8 +232,10 @@ async function main() {
     : null
   if (undergrowth) undergrowth.tracks = tracks
   if (undergrowth) scene.add(undergrowth.group)
+  await pause()
   const buildings = await loadBuildings(world, gfx)
   if (buildings) scene.add(buildings.group)
+  await pause()
   const features = await MapFeatures.load(world, heights, gfx)
   if (features && undergrowth) undergrowth.setStumps(features.stumps)
   if (features) scene.add(features.group)
@@ -303,14 +314,26 @@ async function main() {
     if (!hud.mapOpen) overlay.hidden = false
     updateResume()
   })
+  /**
+   * Put the runner at the start, ready to run: a few metres behind the start banner, looking
+   * at it and the start control, as when a course is opened (T does the same).
+   */
+  const goToStart = () => {
+    if (!run.course.controls.length) return
+    if (player.flying) player.toggleFlying()
+    run.reset()
+    const view = run.startView()
+    if (view) {
+      player.placeAt(view.x, view.z)
+      player.camera.rotation.set(THREE.MathUtils.degToRad(-4), -view.heading, 0, 'YXZ')
+    } else {
+      const start = run.scenePosition(0)
+      player.placeAt(start.x, start.z)
+    }
+  }
   window.addEventListener('keydown', e => {
     if (e.code === 'KeyO') terrain.setMode(terrain.mode === 'ground' ? 'map' : 'ground')
-    if (e.code === 'KeyT' && run.course.controls.length) {
-      const start = run.scenePosition(0)
-      if (player.flying) player.toggleFlying()
-      player.placeAt(start.x, start.z)
-      run.reset()
-    }
+    if (e.code === 'KeyT') goToStart()
     if (e.code === 'KeyR') run.reset()
     if (e.code === 'KeyG') {
       const order = ['high', 'medium', 'low'] as const
@@ -330,17 +353,16 @@ async function main() {
     await forest.prepare(camera.position)
   }
   undergrowth?.update(camera.position)
+  // Compile the shaders now, in parallel where the browser can, instead of all at once
+  // (and waiting for each) when the first frame is drawn.
+  setStatus(t('compilingShaders'))
+  await pause()
+  await renderer.compileAsync(scene, camera)
 
   setupCourseImport(world, placement, course => {
     run.setCourse(course)
     hud.showDescriptions(true)
-    // Stand a few metres behind the start, looking at the banner and the start control.
-    const view = run.startView()
-    if (view) {
-      if (player.flying) player.toggleFlying()
-      player.placeAt(view.x, view.z)
-      player.camera.rotation.set(THREE.MathUtils.degToRad(-4), -view.heading, 0, 'YXZ')
-    }
+    goToStart()
   })
   startButton.hidden = false
   if (new URLSearchParams(location.search).has('start')) overlay.hidden = true

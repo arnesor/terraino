@@ -3,7 +3,8 @@
 Layout of a world folder::
 
     manifest.json               everything the viewer needs to know (see write_world)
-    height/{cx}_{cy}.bin        uint16 little-endian height samples, (CHUNK+1)^2 per chunk
+    height/{cx}_{cy}.bin        uint16 little-endian height samples, (CHUNK+1)^2 per chunk,
+                                or (CHUNK/COARSE_STEP+1)^2 for chunks away from the map
     layers/{cx}_{cy}.png        ground layers per height sample, (CHUNK+1)^2 RGB pixels
     layers_overview.png         ground layers of the whole world at LAYER_OVERVIEW_STEP m
     trees/{cx}_{cy}.bin         the trees standing in a chunk, TREE_DTYPE records
@@ -18,6 +19,8 @@ Layout of a world folder::
 Height samples sit at the centres of the 1 m DTM cells. Chunk (cx, cy) holds rows
 ``cy*CHUNK .. cy*CHUNK+CHUNK`` and the same columns, counted from the north-west sample,
 so neighbouring chunks share their edge samples. Samples beyond the grid repeat the edge.
+Chunks more than DETAIL_MARGIN_M from the map's outline keep only every COARSE_STEP-th
+sample in both directions; the manifest lists them (``height.coarse``).
 
 Layer pixels match the height samples one to one. Their channels are:
 
@@ -43,7 +46,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 from PIL import Image
-from shapely import Polygon
+from shapely import Polygon, box
 
 from otest.ingest.georef import Extent
 from otest.process.buildings import Building
@@ -53,9 +56,12 @@ from otest.process.symbols import Ground
 from otest.process.tracks import Track
 from otest.process.trees import Trees
 
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
 CHUNK = 256
 HEIGHT_STEP_M = 1.0
+# Height chunks this far from the map keep full detail; the others every COARSE_STEP-th sample.
+DETAIL_MARGIN_M = 100.0
+COARSE_STEP = 4
 OVERVIEW_MAX_PX = 4096
 JPEG_QUALITY = 88
 UINT16_MAX = 65535
@@ -170,15 +176,44 @@ def _chunk_counts(shape: tuple[int, ...]) -> tuple[int, int]:
     return math.ceil((cols - 1) / CHUNK), math.ceil((rows - 1) / CHUNK)
 
 
+def coarse_chunks(
+    extent: Extent, shape: tuple[int, ...], map_area: Polygon
+) -> list[int]:
+    """Indices (``cy * chunksX + cx``) of height chunks away from the map.
+
+    A chunk keeps full detail if it lies within DETAIL_MARGIN_M of the map's outline:
+    that is where the runner goes. The others are only seen from a distance.
+    """
+    nx, ny = _chunk_counts(shape)
+    near = map_area.buffer(DETAIL_MARGIN_M)
+    west = extent.x0 + HEIGHT_STEP_M / 2
+    north = extent.y1 - HEIGHT_STEP_M / 2
+    size = CHUNK * HEIGHT_STEP_M
+    coarse = []
+    for cy in range(ny):
+        for cx in range(nx):
+            x0 = west + cx * size
+            y1 = north - cy * size
+            if not near.intersects(box(x0, y1 - size, x0 + size, y1)):
+                coarse.append(cy * nx + cx)
+    return coarse
+
+
 def _write_heights(
-    out_dir: Path, dtm: npt.NDArray[np.float32], encoding: HeightEncoding
+    out_dir: Path,
+    dtm: npt.NDArray[np.float32],
+    encoding: HeightEncoding,
+    coarse: set[int],
 ) -> tuple[int, int]:
     nx, ny = _chunk_counts(dtm.shape)
     folder = out_dir / "height"
     folder.mkdir(parents=True, exist_ok=True)
     for cy in range(ny):
         for cx in range(nx):
-            data = encoding.encode(_chunk(dtm, cx, cy))
+            chunk = _chunk(dtm, cx, cy)
+            if cy * nx + cx in coarse:
+                chunk = chunk[::COARSE_STEP, ::COARSE_STEP]
+            data = encoding.encode(chunk)
             (folder / f"{cx}_{cy}.bin").write_bytes(data.tobytes())
     return nx, ny
 
@@ -426,7 +461,8 @@ def write_world(out_dir: Path, world: WorldData) -> Path:
 
     low, high = float(dtm.min()), float(dtm.max())
     encoding = HeightEncoding.for_range(low, high)
-    chunks = _write_heights(out_dir, dtm, encoding)
+    coarse = coarse_chunks(world.extent, dtm.shape, world.map_area)
+    chunks = _write_heights(out_dir, dtm, encoding, set(coarse))
     tile_px = _write_drape(out_dir, world.drape_png, world.drape_px_per_m, chunks)
     map_size = _write_map_image(out_dir, world.map_png)
 
@@ -457,6 +493,7 @@ def write_world(out_dir: Path, world: WorldData) -> Path:
             "min": low,
             "max": high,
             "path": "height/{x}_{y}.bin",
+            "coarse": {"step": COARSE_STEP, "chunks": coarse},
         },
         "drape": {
             "path": "drape/{x}_{y}.jpg",

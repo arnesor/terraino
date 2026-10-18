@@ -8,7 +8,15 @@ import pytest
 from PIL import Image
 from shapely import Polygon
 
-from otest.export import CHUNK, TREE_DTYPE, HeightEncoding, WorldData, write_world
+from otest.export import (
+    CHUNK,
+    COARSE_STEP,
+    TREE_DTYPE,
+    HeightEncoding,
+    WorldData,
+    coarse_chunks,
+    write_world,
+)
 from otest.ingest.georef import Extent
 from otest.process.layers import GroundLayers
 from otest.process.trees import Trees
@@ -173,3 +181,56 @@ def test_rejects_dtm_with_holes(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="missing"):
         write_world(tmp_path, data)
+
+
+def test_chunks_away_from_the_map_are_coarse() -> None:
+    # Four chunks by four (1024 m); the map is a small square in the north-west chunk.
+    extent = Extent(0, 0, 1024, 1024)
+    map_area = Polygon([(20, 900), (120, 900), (120, 1000), (20, 1000)])
+    coarse = coarse_chunks(extent, extent.raster_shape(1), map_area)
+    # Within 100 m of the map: chunk (0, 0) only; every other chunk is coarse.
+    assert coarse == [i for i in range(16) if i != 0]
+    # A map reaching into the next chunk to the east keeps that one detailed too.
+    wide = Polygon([(20, 900), (300, 900), (300, 1000), (20, 1000)])
+    assert 1 not in coarse_chunks(extent, extent.raster_shape(1), wide)
+
+
+def test_coarse_chunks_hold_every_fourth_sample(tmp_path: Path) -> None:
+    # Two chunks by one; the map lies in the west chunk, so the east one is coarse.
+    extent = Extent(0, 0, 512, 256)
+    rows, cols = extent.raster_shape(1)
+    yy, xx = np.mgrid[0:rows, 0:cols]
+    dtm = (100 + xx * 0.1 + yy * 0.05).astype(np.float32)
+    drape = tmp_path / "drape.png"
+    Image.new("RGB", (cols * 2, rows * 2), "green").save(drape)
+    map_png = tmp_path / "map.png"
+    Image.new("RGB", (cols, rows), "white").save(map_png)
+    data = WorldData(
+        name="coarse",
+        epsg=25832,
+        extent=extent,
+        dtm=dtm,
+        drape_png=drape,
+        drape_px_per_m=2,
+        map_png=map_png,
+        map_scale=10000,
+        map_area=Polygon([(20, 20), (100, 20), (100, 200), (20, 200)]),
+        omap_features=[],
+        spawn=(50.0, 100.0),
+        attribution=["test data"],
+    )
+    out = tmp_path / "world"
+    manifest = json.loads(write_world(out, data).read_text())
+    h = manifest["height"]
+    assert manifest["format"] == 3
+    assert h["coarse"] == {"step": COARSE_STEP, "chunks": [1]}
+    raw = np.fromfile(out / "height" / "1_0.bin", dtype="<u2")
+    n = CHUNK // COARSE_STEP + 1
+    assert raw.size == n * n
+    heights = (h["offset"] + raw * h["scale"]).reshape(n, n)
+    full = read_chunk(out, manifest, 0, 0)
+    # Every fourth sample of the east chunk, sharing its west edge with the detailed chunk.
+    rows_ = np.clip(np.arange(0, CHUNK + 1, COARSE_STEP), 0, rows - 1)
+    cols_ = np.clip(np.arange(CHUNK, 2 * CHUNK + 1, COARSE_STEP), 0, cols - 1)
+    np.testing.assert_allclose(heights, dtm[np.ix_(rows_, cols_)], atol=0.006)
+    np.testing.assert_allclose(heights[:, 0], full[::COARSE_STEP, -1], atol=1e-6)
