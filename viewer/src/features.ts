@@ -4,7 +4,7 @@ import { type Gfx, rockMaterial } from './gfx'
 import type { HeightField } from './heightfield'
 import type { World } from './world'
 
-interface FeatureFile {
+export interface FeatureFile {
   kinds: string[]
   /** [kind index, x, z, size, angle] */
   points: [number, number, number, number, number][]
@@ -108,6 +108,8 @@ export class MapFeatures {
   readonly group = new THREE.Group()
   /** Stumps of felled trees, as x, z, diameter; drawn near the player by Undergrowth. */
   readonly stumps: number[] = []
+  /** The features as read from features.json, for placing control flags. */
+  data: FeatureFile = { kinds: [], points: [], lines: [], cliffs: [] }
   private readonly obstacles = new Map<number, [number, number, number][]>()
 
   private readonly gfx: Gfx
@@ -124,6 +126,7 @@ export class MapFeatures {
     if (!response.ok) return null
     const data = (await response.json()) as FeatureFile
     const features = new MapFeatures(gfx)
+    features.data = data
     features.build(data, heights)
     return features
   }

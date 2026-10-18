@@ -47,6 +47,11 @@ and run through it in the browser like in a first-person game.
   Footpaths show roots and stones; footbridges and log crossings carry them over streams.
 - Browser viewer (Three.js): walk, run and fly, with shadows, runnability,
   a compass, the orienteering map with your position, and courses with timing.
+- Courses from OCAD course setting files, with the IOF control description table
+  on the map and on screen, each flag placed where its description says
+  (north side of the boulder, west foot of the hill),
+  and start and finish banners.
+- English and Norwegian user interface.
 - Textured spruce, pine and birch that sway in the wind, with impostors for distant trees,
   ground textures by ground type, and ground cover (blueberry, heather, fern, grass, sedge),
   bushes, fallen logs and twigs near the player.
@@ -127,6 +132,7 @@ Maps must be georeferenced in UTM zone 32, 33 or 35 (ETRS89 or WGS 84).
 | Space       | Jump (fly up)                                     |
 | F           | Fly on/off, C flies down                          |
 | M           | Map window: drag to move, wheel to zoom, double click to go there |
+| K           | Control descriptions on/off                       |
 | E           | With the map open: set a course by clicking (or Set course) |
 | L           | Copy a link to the course                         |
 | T           | Go to the start; R restarts the run               |
@@ -140,17 +146,37 @@ while the map stays open, and press Esc to give the mouse back to the map.
 Auto turns the map with your running direction; ⟲, ⟳ and N↑ turn it by hand.
 Close the map with M or ✕.
 
-To run a course, open the map (M), press E
+To run a course from an OCAD course setting file
+(OCAD 12 or newer),
+press **Open course file …** on the start screen, choose the `.ocd` file and pick a course.
+You are put a few metres behind the start, looking at the start banner and the start control.
+All the controls in the file stand in the terrain, not only those on your course,
+so check the code before you punch.
+The control description table is drawn on the map where the course setter placed it,
+and shown on screen while you run (K turns it on and off), with the next control highlighted.
+Each flag stands where its description says: column G
+(north side, west foot, south-east corner …)
+puts it on that side of the feature from column D
+(boulder, building, cliff, wall, hill …) found in the 3D world.
+Each control shows its code on plates on both sides of the stand, readable from a few metres,
+and the start and finish have a control and a banner.
+
+To set a course yourself, open the map (M), press E
 (or Set course) and click the start, the controls and the finish.
 The clock starts when you leave the start triangle,
 and each control is punched when you get within 2.5 m of the flag.
+
+The start screen has a language choice (English or Norwegian); the keys are the same in both.
+All texts are in `viewer/src/i18n.ts`: to add a language, add it to `LANGS`,
+and `npm run typecheck --prefix viewer` lists the texts that still need translating.
 
 The URL can hold a viewpoint and a course,
 for example `?world=langvatnet&at=665560,6644900,150&look=0,-20`: `at` is easting,
 northing and an optional height above ground
 (which turns on flying),
 `look` is the compass heading and pitch in degrees,
-and `course` is a list of `easting,northing` pairs separated by `;`.
+`course` is a list of `easting,northing` pairs separated by `;`, and `lang` is the language
+(`en` or `nb`).
 
 ## Development
 
@@ -163,6 +189,7 @@ uv run mypy src tests
 uv run deptry .
 uv run pytest
 npm run typecheck --prefix viewer
+npm test --prefix viewer
 ```
 
 `uv run pytest -m network` also runs an end-to-end build that downloads data.
@@ -172,6 +199,12 @@ Git hooks run outside the uv environment unless it is active,
 so commit with `uv run git commit` or activate `.venv` first.
 
 How the map symbols become 3D is set in `src/otest/symbols/*.toml`, one table per symbol standard.
+
+The control description symbols in `viewer/src/descriptions/symbols.json` are converted from
+[Purple Pen]'s `symbols.xml` with
+`uv run scripts/convert_symbols.py symbols.xml viewer/src/descriptions/symbols.json`.
+How OCAD's description codes map to IOF symbols
+and directions is in `viewer/src/descriptions/codes.ts`.
 
 ## Data sources and licences
 
@@ -189,10 +222,15 @@ How the map symbols become 3D is set in `src/otest/symbols/*.toml`, one table pe
 The OCAD reader in `tools/ocad-export` uses [ocad2geojson], which is licensed under AGPL-3.0,
 and so is that tool.
 The Python package runs it as a separate program.
+The viewer reads course setting files with its own reader (`viewer/src/ocad`).
+
+The control description symbols come from [Purple Pen]
+(© Peter Golde, BSD licence, see `viewer/src/descriptions/LICENSE-PurplePen.txt`).
 
 Not used yet: road widths from NVDB.
 
 [ocad2geojson]: https://github.com/perliedman/ocad2geojson
+[Purple Pen]: https://github.com/petergolde/PurplePen
 
 ## Contributing
 

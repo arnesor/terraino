@@ -99,6 +99,7 @@ def test_manifest_describes_grid(world: World) -> None:
     assert (h["rows"], h["cols"]) == dtm.shape
     assert (h["chunksX"], h["chunksY"]) == (2, 3)
     assert manifest["drape"]["tilePx"] == 2 * CHUNK
+    assert manifest["map"]["offset"] == [0.0, 0.0]
 
 
 def test_chunks_hold_dtm_values_and_share_edges(world: World) -> None:

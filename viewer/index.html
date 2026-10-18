@@ -9,24 +9,31 @@
   <body>
     <div id="app"></div>
     <div id="hud"></div>
-    <div id="resume" hidden>Click the terrain to steer with the mouse · Esc to use the map · W A S D to run</div>
+    <div id="resume" hidden data-i18n="resumeHint">Click the terrain to steer with the mouse · Esc to use the map · W A S D to run</div>
     <div id="overlay">
       <div class="panel">
         <h1>otest</h1>
-        <label>World <select id="world-select"></select></label>
-        <pre id="status">Starting …</pre>
-        <button id="start" hidden>Click to start</button>
+        <label><span data-i18n="worldLabel">Map</span> <select id="world-select"></select></label>
+        <label><span data-i18n="languageLabel">Language</span> <select id="lang-select"></select></label>
+        <div class="course-row">
+          <button id="course-file-button" class="secondary" disabled data-i18n="courseFileButton" data-i18n-title="courseFileTitle">Open course file …</button>
+          <input id="course-file" type="file" accept=".ocd" hidden />
+          <label id="course-label" hidden><span data-i18n="courseLabel">Course</span> <select id="course-select"></select></label>
+        </div>
+        <pre id="status" data-i18n="starting">Starting …</pre>
+        <button id="start" hidden data-i18n="startButton">Click to start</button>
         <table class="keys">
-          <tr><td>W A S D</td><td>move</td></tr>
-          <tr><td>Mouse</td><td>look around</td></tr>
-          <tr><td>Shift</td><td>run (fly fast)</td></tr>
-          <tr><td>Space</td><td>jump (fly up)</td></tr>
-          <tr><td>F</td><td>fly on/off · C: fly down</td></tr>
-          <tr><td>M</td><td>map: drag, wheel zoom, double click to go there</td></tr>
-          <tr><td>T</td><td>go to the start · R restart the run</td></tr>
-          <tr><td>O</td><td>orienteering map on the ground on/off</td></tr>
-          <tr><td>G</td><td>graphics quality (shadows)</td></tr>
-          <tr><td>Esc</td><td>pause</td></tr>
+          <tr><td>W A S D</td><td data-i18n="keyMove">move</td></tr>
+          <tr><td data-i18n="keyNameMouse">Mouse</td><td data-i18n="keyLook">look around</td></tr>
+          <tr><td>Shift</td><td data-i18n="keyRun">run (fly fast)</td></tr>
+          <tr><td data-i18n="keyNameSpace">Space</td><td data-i18n="keyJump">jump (fly up)</td></tr>
+          <tr><td>F</td><td data-i18n="keyFly">fly on/off · C: fly down</td></tr>
+          <tr><td>M</td><td data-i18n="keyMap">map: drag, wheel zoom, double click to go there</td></tr>
+          <tr><td>K</td><td data-i18n="keyDescriptions">control descriptions on/off</td></tr>
+          <tr><td>T</td><td data-i18n="keyStart">go to the start · R restart the run</td></tr>
+          <tr><td>O</td><td data-i18n="keyGroundMap">orienteering map on the ground on/off</td></tr>
+          <tr><td>G</td><td data-i18n="keyQuality">graphics quality (shadows)</td></tr>
+          <tr><td>Esc</td><td data-i18n="keyPause">pause</td></tr>
         </table>
       </div>
     </div>

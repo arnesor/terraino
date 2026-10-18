@@ -294,6 +294,7 @@ def build_world(map_path: Path, out_dir: Path, options: BuildOptions) -> Path:
         omap_features=source.omap,
         spawn=(spawn.x, spawn.y),
         attribution=[kartverket.ATTRIBUTION, OMAP_ATTRIBUTION],
+        map_offset=options.offset,
     )
     if options.forest:
         _add_nature_and_buildings(world, source, dtm, options)

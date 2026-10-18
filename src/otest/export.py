@@ -120,6 +120,8 @@ class WorldData:
         drape_px_per_m: Resolution of ``drape_png``.
         map_png: Orienteering map image covering ``extent``.
         map_scale: Map scale denominator, or None if unknown.
+        map_offset: Shift ``(dx, dy)`` in metres that was applied to the map's
+            georeference; the viewer applies it to courses read from OCAD files.
         map_area: Outline of the mapped area.
         omap_features: The map's terrain objects (GeoJSON features).
         spawn: Start position ``(easting, northing)``.
@@ -152,6 +154,7 @@ class WorldData:
     features: Features | None = None
     tracks: Sequence[Track] | None = None
     lidar: bool = False
+    map_offset: tuple[float, float] = (0.0, 0.0)
 
 
 def _chunk(grid: npt.NDArray[Any], cx: int, cy: int) -> npt.NDArray[Any]:
@@ -460,7 +463,12 @@ def write_world(out_dir: Path, world: WorldData) -> Path:
             "tilePx": tile_px,
             "overview": "drape_overview.jpg",
         },
-        "map": {"image": "map.jpg", "size": list(map_size), "scale": world.map_scale},
+        "map": {
+            "image": "map.jpg",
+            "size": list(map_size),
+            "scale": world.map_scale,
+            "offset": list(world.map_offset),
+        },
         "mapArea": [list(p) for p in world.map_area.exterior.simplify(5).coords],
         "spawn": list(world.spawn),
         "attribution": list(world.attribution),

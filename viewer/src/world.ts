@@ -54,7 +54,8 @@ export interface Manifest {
   extent: [number, number, number, number]
   height: HeightInfo
   drape: { path: string; tilePx: number; overview: string }
-  map: { image: string; size: [number, number]; scale: number | null }
+  /** offset: shift the map was built with (--offset), applied to courses from OCAD files. */
+  map: { image: string; size: [number, number]; scale: number | null; offset?: [number, number] }
   mapArea: [number, number][]
   spawn: [number, number]
   attribution: string[]
