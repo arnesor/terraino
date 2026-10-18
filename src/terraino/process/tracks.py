@@ -15,10 +15,10 @@ from shapely import LineString, MultiLineString, Point, Polygon, STRtree
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, nearest_points
 
-from otest.fetch.osm import OsmFeature
-from otest.process.fuse import road_style
-from otest.process.geometry import to_geometry
-from otest.process.symbols import Ground, SymbolSet
+from terraino.fetch.osm import OsmFeature
+from terraino.process.fuse import road_style
+from terraino.process.geometry import to_geometry
+from terraino.process.symbols import Ground, SymbolSet
 
 # Path ends closer than this to another path are joined to it.
 SNAP_M = 1.5
@@ -37,7 +37,7 @@ class Track:
     """A road or path.
 
     Attributes:
-        kind: Style (otest.process.symbols.TRACKS).
+        kind: Style (terraino.process.symbols.TRACKS).
         width: Drawn width in metres.
         coords: Line vertices in projected coordinates.
     """

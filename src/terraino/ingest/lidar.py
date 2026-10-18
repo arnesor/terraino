@@ -31,7 +31,7 @@ import numpy.typing as npt
 from pyproj import Transformer
 from scipy import ndimage
 
-from otest.ingest.georef import Extent
+from terraino.ingest.georef import Extent
 
 log = logging.getLogger(__name__)
 # laspy cannot decode the Norwegian letters in the tiles' CRS description; harmless.

@@ -1,1 +1,1 @@
-"""Test suite for the otest package."""
+"""Test suite for the terraino package."""

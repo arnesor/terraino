@@ -1,8 +1,8 @@
 {
-  "name": "otest-viewer",
+  "name": "terraino-viewer",
   "version": "0.1.0",
   "private": true,
-  "description": "Walk through otest world packages in the browser",
+  "description": "Walk through Terrain-O worlds in the browser",
   "license": "MIT",
   "type": "module",
   "scripts": {

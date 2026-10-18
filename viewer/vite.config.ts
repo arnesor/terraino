@@ -47,7 +47,7 @@ const serveWorlds: Connect.NextHandleFunction = (req, res, next) => {
 
 function worldsPlugin(): Plugin {
   return {
-    name: 'otest-worlds',
+    name: 'terraino-worlds',
     configureServer(server) {
       server.middlewares.use(serveWorlds)
     },

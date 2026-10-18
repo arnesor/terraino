@@ -1,16 +1,18 @@
-# Otest
+# Terrain-O
 
-[![Tests](https://github.com/arnesor/otest/actions/workflows/tests.yml/badge.svg)][tests]
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=arnesor_otest&metric=coverage)][sonarcov]
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=arnesor_otest&metric=alert_status)][sonarquality]
+_Orienteering in real terrain, in 3D on your computer._
+
+[![Tests](https://github.com/arnesor/terraino/actions/workflows/tests.yml/badge.svg)][tests]
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=arnesor_terraino&metric=coverage)][sonarcov]
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=arnesor_terraino&metric=alert_status)][sonarquality]
 
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)][pre-commit]
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 
-[tests]: https://github.com/arnesor/otest/actions?workflow=Tests
-[sonarcov]: https://sonarcloud.io/summary/overall?id=arnesor_otest
-[sonarquality]: https://sonarcloud.io/summary/overall?id=arnesor_otest
+[tests]: https://github.com/arnesor/terraino/actions?workflow=Tests
+[sonarcov]: https://sonarcloud.io/summary/overall?id=arnesor_terraino
+[sonarquality]: https://sonarcloud.io/summary/overall?id=arnesor_terraino
 [pre-commit]: https://github.com/pre-commit/pre-commit
 
 Build a walkable 3D world from a Norwegian orienteering map,
@@ -76,7 +78,7 @@ uv run pre-commit install
 Build a world from a map, then start the viewer:
 
 ```console
-uv run otest build path/to/map.ocd
+uv run terraino build path/to/map.ocd
 npm run dev --prefix viewer
 ```
 
@@ -89,20 +91,20 @@ a JPG or PNG needs a world file (`.jgw`/`.pgw`) next to it
 and the coordinate system given with `--epsg`:
 
 ```console
-uv run otest build map.jpg --epsg 25832
+uv run terraino build map.jpg --epsg 25832
 ```
 
 Image maps are read by their colours, which works well for areas
 (forest, open land, green, water, marsh, fields)
 but cannot find boulders, cliffs and other point features.
 
-Useful build options (see `uv run otest build --help`):
+Useful build options (see `uv run terraino build --help`):
 
 - `--offset DX DY` shifts the map east/north if its georeferencing is off.
 - `--margin` sets how much terrain to include around the map (default 300 m).
   Terrain more than 100 m from the map is stored at 4 m instead of 1 m,
   which halves what the viewer downloads before it starts.
-- `--sr16-dir` points to SR16 GeoTIFFs downloaded from Geonorge (or set `OTEST_SR16_DIR`);
+- `--sr16-dir` points to SR16 GeoTIFFs downloaded from Geonorge (or set `TERRAINO_SR16_DIR`);
   they add the number of trees per hectare to the species from the SR16 web map.
 - `--symbols` sets the symbol standard of an OCAD map if the guess is wrong.
 - `--no-forest` builds the terrain only.
@@ -116,10 +118,10 @@ Download the projects covering the map (LAZ, "Punktsky") and unpack each into it
 Give the folders with `--lidar`, the densest first; each place uses the first one that covers it:
 
 ```console
-uv run otest build map.ocd --lidar ~/hoydedata/5pkt-2016 --lidar ~/hoydedata/2pkt-2016
+uv run terraino build map.ocd --lidar ~/hoydedata/5pkt-2016 --lidar ~/hoydedata/2pkt-2016
 ```
 
-Or set `OTEST_LIDAR_DIRS` to the folders separated by `:`.
+Or set `TERRAINO_LIDAR_DIRS` to the folders separated by `:`.
 Reading them takes about a minute; the result is cached in `data-cache/lidar/`.
 
 Maps must be georeferenced in UTM zone 32, 33 or 35 (ETRS89 or WGS 84).
@@ -204,12 +206,14 @@ npm test --prefix viewer
 ```
 
 `uv run pytest -m network` also runs an end-to-end build that downloads data.
-It and the OCAD tests use the map in `OTEST_TEST_MAP` and are skipped if that file does not exist.
+It and the OCAD tests use the map in `TERRAINO_TEST_MAP` and are skipped if
+that file does not exist.
 
 Git hooks run outside the uv environment unless it is active,
 so commit with `uv run git commit` or activate `.venv` first.
 
-How the map symbols become 3D is set in `src/otest/symbols/*.toml`, one table per symbol standard.
+How the map symbols become 3D is set in `src/terraino/symbols/*.toml`,
+one table per symbol standard.
 
 The control description symbols in `viewer/src/descriptions/symbols.json` are converted from
 [Purple Pen]'s `symbols.xml` with
@@ -250,7 +254,8 @@ To learn more, see the [Contributor Guide].
 
 ## License
 
-Distributed under the terms of the [MIT license][license], _Otest_ is free and open source software.
+Distributed under the terms of the [MIT license][license],
+_Terrain-O_ is free and open source software.
 
 ## Issues
 
@@ -267,8 +272,8 @@ bush and rock models in `viewer/src/vendor` come from [Orienteering 3D]
 [orienteering 3d]: https://claude.ai/artifact/A8dqe89rvxzyN29Az3W29D
 
 [python uv project template]: https://github.com/arnesor/uv-template
-[file an issue]: https://github.com/arnesor/otest/issues
+[file an issue]: https://github.com/arnesor/terraino/issues
 <!-- github-only -->
 
-[license]: https://github.com/arnesor/otest/blob/main/LICENSE
-[contributor guide]: https://github.com/arnesor/otest/blob/main/CONTRIBUTING.md
+[license]: https://github.com/arnesor/terraino/blob/main/LICENSE
+[contributor guide]: https://github.com/arnesor/terraino/blob/main/CONTRIBUTING.md

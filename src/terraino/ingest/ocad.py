@@ -14,9 +14,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from otest.ingest.georef import Extent, etrs89_utm_epsg
+from terraino.ingest.georef import Extent, etrs89_utm_epsg
 
-EXPORTER_ENV = "OTEST_OCAD_EXPORT"
+EXPORTER_ENV = "TERRAINO_OCAD_EXPORT"
 
 # Symbol type codes used by OCAD.
 POINT_SYMBOL = 1
@@ -133,7 +133,7 @@ class OcadExport:
 def find_exporter() -> Path:
     """Return the path of ``export.mjs``, checking that its dependencies are installed.
 
-    The location can be overridden with the ``OTEST_OCAD_EXPORT`` environment variable.
+    The location can be overridden with the ``TERRAINO_OCAD_EXPORT`` environment variable.
     """
     override = os.environ.get(EXPORTER_ENV)
     if override:

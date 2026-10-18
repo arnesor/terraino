@@ -13,9 +13,9 @@ from rasterio.features import rasterize
 from shapely import LineString, MultiLineString, MultiPolygon, Polygon
 from shapely.geometry.base import BaseGeometry
 
-from otest.ingest.georef import Extent
-from otest.process.geometry import to_geometry
-from otest.process.symbols import Ground, SymbolRule, SymbolSet
+from terraino.ingest.georef import Extent
+from terraino.process.geometry import to_geometry
+from terraino.process.symbols import Ground, SymbolRule, SymbolSet
 
 log = logging.getLogger(__name__)
 

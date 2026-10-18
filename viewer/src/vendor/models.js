@@ -1,8 +1,8 @@
 /*
  * Vendored from "Orienteering 3D" (https://claude.ai/artifact/A8dqe89rvxzyN29Az3W29D),
- * MIT licensed, see LICENSE in this folder. Changes for otest: an ES module instead of a
+ * MIT licensed, see LICENSE in this folder. Changes for Terrain-O: an ES module instead of a
  * window global, the colour space API of current three.js, and a spruce top with a leader
- * shoot instead of a tuft (marked otest:).
+ * shoot instead of a tuft (marked terraino:).
  */
 /* Procedural tree, bush and rock geometry for the Steinshøgda world.
  * Trees are built at unit height (y 0..1) and scaled per instance.
@@ -116,7 +116,7 @@
           for (let i = 0; i < nb; i++) {
             const a = rot + (i / nb) * 6.283 + (R() - 0.5) * 0.4;
             const dx = Math.cos(a), dz = Math.sin(a);
-            // otest: young branches near the top point upwards; lower ones level out and droop
+            // terraino: young branches near the top point upwards; lower ones level out and droop
             const rise = 0.12 - tt * 0.25 + Math.max(0, tt - 0.65) * 1.4 + (R() - 0.5) * 0.1;
             const dl = Math.hypot(1, rise);
             const d = [dx / dl, rise / dl, dz / dl];
@@ -128,7 +128,7 @@
             }
           }
         }
-        // otest: the top is a slim leader shoot over a few short, upturned whorls (a tuft of
+        // terraino: the top is a slim leader shoot over a few short, upturned whorls (a tuft of
         // crossed cards here showed as a lump on top of the narrow crown)
         for (let k = 0; k < 3; k++) {
           const y = 0.932 + k * 0.017, L = 0.028 - k * 0.006, rot = R() * 6.283;

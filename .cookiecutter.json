@@ -13,11 +13,11 @@
   "copyright_owner": "Arne Sørli",
   "copyright_year": "2026",
   "email": "arne.sorli@kongsberg.frisurf.no",
-  "friendly_name": "Otest",
+  "friendly_name": "Terrain-O",
   "github_organization": "arnesor",
   "license": "MIT",
-  "package_name": "otest",
-  "project_name": "otest",
+  "package_name": "terraino",
+  "project_name": "terraino",
   "script_support": "project-local",
   "version": "0.0.0"
 }

@@ -5,11 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from otest.ingest import ocad
-from otest.ingest.georef import Extent
+from terraino.ingest import ocad
+from terraino.ingest.georef import Extent
 
 TEST_MAP = Path(
-    os.environ.get("OTEST_TEST_MAP", "/home/arneso/tmp/langvatnet_260521_ocad2018.ocd")
+    os.environ.get(
+        "TERRAINO_TEST_MAP", "/home/arneso/tmp/langvatnet_260521_ocad2018.ocd"
+    )
 )
 
 
@@ -66,7 +68,7 @@ def test_exporter_without_node_modules_is_reported(
 def test_missing_node_is_reported(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setattr("otest.ingest.ocad.shutil.which", lambda name: None)
+    monkeypatch.setattr("terraino.ingest.ocad.shutil.which", lambda name: None)
     with pytest.raises(ocad.OcadExportError, match=r"Node\.js"):
         ocad.export_ocad(tmp_path / "map.ocd", tmp_path / "out")
 
@@ -81,7 +83,7 @@ def exporter_available() -> bool:
 
 needs_test_map = pytest.mark.skipif(
     not (TEST_MAP.is_file() and exporter_available()),
-    reason="needs the test map (OTEST_TEST_MAP) and the installed OCAD exporter",
+    reason="needs the test map (TERRAINO_TEST_MAP) and the installed OCAD exporter",
 )
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from otest import __main__
+from terraino import __main__
 
 
 @pytest.fixture

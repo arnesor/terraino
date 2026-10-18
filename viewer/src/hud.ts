@@ -1,6 +1,6 @@
 import { type Course, type CourseRun, encodeCourse, formatTime } from './course'
 import { describe, drawDescriptionTable, tableRows } from './descriptions/table'
-import { formatNumber, t, type TextKey } from './i18n'
+import { formatNumber, renameStoredKey, t, type TextKey } from './i18n'
 import { fitRectangle, legIndices } from './mapview'
 import type { ImportedCourse } from './ocad/courses'
 import type { Player } from './player'
@@ -22,7 +22,8 @@ const SMOOTHING_S = 0.3
 // Compass in the map's top-right corner, in CSS pixels.
 const COMPASS_RADIUS = 34
 const COMPASS_INSET = 46
-const PREFERENCES_KEY = 'otest.map'
+const PREFERENCES_KEY = 'terraino.map'
+renameStoredKey('otest.map', PREFERENCES_KEY)
 
 /**
  * What the map window shows: the leg you are on and the next one, the runner at the

@@ -461,6 +461,6 @@ export function rockMaterial(gfx: Gfx, moss: boolean): THREE.MeshLambertMaterial
         diffuseColor.rgb *= rc;`,
       )
   }
-  material.customProgramCacheKey = () => `otest-rock${moss ? '-moss' : ''}`
+  material.customProgramCacheKey = () => `terraino-rock${moss ? '-moss' : ''}`
   return material
 }

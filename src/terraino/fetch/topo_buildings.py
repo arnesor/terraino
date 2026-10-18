@@ -25,10 +25,10 @@ from scipy import ndimage
 from shapely import Polygon
 from shapely.geometry import shape
 
-from otest.fetch.cache import DownloadError
-from otest.fetch.topo import ATTRIBUTION as ATTRIBUTION
-from otest.fetch.topo import read_layer
-from otest.ingest.georef import Extent
+from terraino.fetch.cache import DownloadError
+from terraino.fetch.topo import ATTRIBUTION as ATTRIBUTION
+from terraino.fetch.topo import read_layer
+from terraino.ingest.georef import Extent
 
 log = logging.getLogger(__name__)
 # rasterio's shapes() warns about a missing geotransform although it is given and used.

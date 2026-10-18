@@ -16,9 +16,9 @@ import numpy.typing as npt
 from scipy import ndimage
 from shapely import Point, Polygon
 
-from otest.fetch.cache import DownloadError
-from otest.fetch.topo import read_layer
-from otest.ingest.georef import Extent
+from terraino.fetch.cache import DownloadError
+from terraino.fetch.topo import read_layer
+from terraino.ingest.georef import Extent
 
 log = logging.getLogger(__name__)
 

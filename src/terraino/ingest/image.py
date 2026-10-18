@@ -17,7 +17,7 @@ from pyproj import Transformer
 from rasterio.transform import Affine
 from rasterio.warp import Resampling, reproject
 
-from otest.ingest.georef import Extent, etrs89_utm_epsg
+from terraino.ingest.georef import Extent, etrs89_utm_epsg
 
 # Image maps are large, and come from the user.
 Image.MAX_IMAGE_PIXELS = None

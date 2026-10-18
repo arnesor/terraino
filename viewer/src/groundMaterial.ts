@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { GROUND_TEX_GLSL } from './gfx'
 
-// Ground classes (must match otest.process.symbols.Ground).
+// Ground classes (must match terraino.process.symbols.Ground).
 const GLSL = /* glsl */ `
 uniform sampler2D layerMap;
 uniform vec2 layerOrigin;
@@ -168,6 +168,6 @@ export function createGroundMaterial(
       .replace('#include <map_fragment>', MAIN)
   }
   // All ground materials share one program; only the uniforms differ.
-  material.customProgramCacheKey = () => 'otest-ground-v2'
+  material.customProgramCacheKey = () => 'terraino-ground-v2'
   return material
 }

@@ -5,10 +5,10 @@ from pathlib import Path
 
 import click
 
-from otest.build import BuildOptions, build_world
+from terraino.build import BuildOptions, build_world
 
-SR16_DIR_ENV = "OTEST_SR16_DIR"
-LIDAR_DIRS_ENV = "OTEST_LIDAR_DIRS"
+SR16_DIR_ENV = "TERRAINO_SR16_DIR"
+LIDAR_DIRS_ENV = "TERRAINO_LIDAR_DIRS"
 
 
 @click.group()
@@ -118,4 +118,4 @@ def build(
 
 
 if __name__ == "__main__":
-    main(prog_name="otest")  # pragma: no cover
+    main(prog_name="terraino")  # pragma: no cover

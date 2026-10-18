@@ -17,17 +17,17 @@ from rasterio.warp import Resampling
 from shapely import LineString, Polygon
 from shapely.geometry import mapping
 
-from otest.export import WorldData, write_world
-from otest.fetch import ar5, kartverket, matrikkel, nibio, osm, topo_buildings
-from otest.fetch.masts import fetch_masts
-from otest.ingest.georef import Extent
-from otest.ingest.image import ImageMap, read_image_map
-from otest.ingest.lidar import ATTRIBUTION as LIDAR_ATTRIBUTION
-from otest.ingest.lidar import coarse_canopy, filled_canopy, load_lidar
-from otest.ingest.ocad import AREA_SYMBOL, export_ocad
-from otest.process.buildings import collect_footprints, measure_buildings
-from otest.process.classify import classify_map
-from otest.process.features import (
+from terraino.export import WorldData, write_world
+from terraino.fetch import ar5, kartverket, matrikkel, nibio, osm, topo_buildings
+from terraino.fetch.masts import fetch_masts
+from terraino.ingest.georef import Extent
+from terraino.ingest.image import ImageMap, read_image_map
+from terraino.ingest.lidar import ATTRIBUTION as LIDAR_ATTRIBUTION
+from terraino.ingest.lidar import coarse_canopy, filled_canopy, load_lidar
+from terraino.ingest.ocad import AREA_SYMBOL, export_ocad
+from terraino.process.buildings import collect_footprints, measure_buildings
+from terraino.process.classify import classify_map
+from terraino.process.features import (
     POLE_SPACING_M,
     Features,
     PointFeature,
@@ -38,19 +38,24 @@ from otest.process.features import (
     paint_cliffs,
     place_poles,
 )
-from otest.process.fuse import (
+from terraino.process.fuse import (
     add_lidar_undergrowth,
     add_low_vegetation,
     apply_land_cover,
     apply_osm,
     fill_unknown_ground,
 )
-from otest.process.heights import fill_missing
-from otest.process.layers import GroundLayers, rasterize_map
-from otest.process.maparea import find_map_area
-from otest.process.symbols import Ground, SymbolSet, detect_symbol_set, is_helper_symbol
-from otest.process.tracks import collect_tracks
-from otest.process.trees import (
+from terraino.process.heights import fill_missing
+from terraino.process.layers import GroundLayers, rasterize_map
+from terraino.process.maparea import find_map_area
+from terraino.process.symbols import (
+    Ground,
+    SymbolSet,
+    detect_symbol_set,
+    is_helper_symbol,
+)
+from terraino.process.tracks import collect_tracks
+from terraino.process.trees import (
     TreeTops,
     canopy_height,
     effective_canopy,

@@ -38,9 +38,15 @@ body {
 }
 
 .panel h1 {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 22px;
   color: #e0701d;
+}
+
+.panel .tagline {
+  margin: 2px 0 12px;
+  font-size: 13px;
+  color: #6b6658;
 }
 
 .panel pre {

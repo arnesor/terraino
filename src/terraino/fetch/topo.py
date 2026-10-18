@@ -2,7 +2,7 @@
 
 The map is drawn from Kartverket's national data, including the detailed base map, and
 single layers can be requested alone on a transparent background. Buildings
-(otest.fetch.topo_buildings) and masts of power lines (otest.fetch.masts) are read back
+(terraino.fetch.topo_buildings) and masts of power lines (terraino.fetch.masts) are read back
 from such renderings.
 """
 
@@ -18,8 +18,8 @@ import numpy.typing as npt
 from PIL import Image
 from shapely import Polygon, box
 
-from otest.fetch.cache import cached_download
-from otest.ingest.georef import Extent
+from terraino.fetch.cache import cached_download
+from terraino.ingest.georef import Extent
 
 log = logging.getLogger(__name__)
 

@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 from shapely import box
 
-from otest.ingest.georef import Extent
-from otest.process.features import (
+from terraino.ingest.georef import Extent
+from terraino.process.features import (
     CLIFF_FACE_M,
     CLIFF_TAPER_M,
     LineFeature,
@@ -16,8 +16,8 @@ from otest.process.features import (
     paint_cliffs,
     place_poles,
 )
-from otest.process.layers import GroundLayers
-from otest.process.symbols import Ground, SymbolSet
+from terraino.process.layers import GroundLayers
+from terraino.process.symbols import Ground, SymbolSet
 
 EXTENT = Extent(0, 0, 100, 100)
 ISOM = SymbolSet.load("isom2000")

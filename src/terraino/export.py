@@ -24,7 +24,7 @@ sample in both directions; the manifest lists them (``height.coarse``).
 
 Layer pixels match the height samples one to one. Their channels are:
 
-- R: ground class (otest.process.symbols.Ground)
+- R: ground class (terraino.process.symbols.Ground)
 - G: canopy height in units of CANOPY_UNIT_M
 - B: undergrowth level (0..15) in the high nibble, running speed level (0..15,
   speed = level / 15) in the low nibble
@@ -48,13 +48,13 @@ import numpy.typing as npt
 from PIL import Image
 from shapely import Polygon, box
 
-from otest.ingest.georef import Extent
-from otest.process.buildings import Building
-from otest.process.features import Features
-from otest.process.layers import GroundLayers
-from otest.process.symbols import Ground
-from otest.process.tracks import Track
-from otest.process.trees import Trees
+from terraino.ingest.georef import Extent
+from terraino.process.buildings import Building
+from terraino.process.features import Features
+from terraino.process.layers import GroundLayers
+from terraino.process.symbols import Ground
+from terraino.process.tracks import Track
+from terraino.process.trees import Trees
 
 FORMAT_VERSION = 3
 CHUNK = 256
@@ -224,8 +224,8 @@ def encode_layers(
     """Pack ground layers into an RGB image (see the module docstring).
 
     Examples:
-        >>> from otest.process.layers import GroundLayers
-    from otest.process.tracks import Track
+        >>> from terraino.process.layers import GroundLayers
+    from terraino.process.tracks import Track
         >>> one = np.ones((1, 1), dtype=np.float32)
         >>> layers = GroundLayers(
         ...     ground=np.full((1, 1), 4, np.uint8), speed=one * 0.6, young=one * 0,

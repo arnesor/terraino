@@ -21,8 +21,8 @@ import rasterio
 from pyproj import Transformer
 from rasterio.warp import Resampling, reproject
 
-from otest.fetch.cache import DownloadError, cached_download
-from otest.ingest.georef import Extent
+from terraino.fetch.cache import DownloadError, cached_download
+from terraino.ingest.georef import Extent
 
 log = logging.getLogger(__name__)
 

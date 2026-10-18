@@ -12,7 +12,7 @@ import requests
 log = logging.getLogger(__name__)
 
 USER_AGENT = (
-    "otest/0.0 (orienteering 3D world builder; https://github.com/arnesor/otest)"
+    "terraino/0.0 (orienteering 3D world builder; https://github.com/arnesor/terraino)"
 )
 TIMEOUT_S = 120
 RETRIES = 5

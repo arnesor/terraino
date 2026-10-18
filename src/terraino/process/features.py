@@ -14,10 +14,10 @@ from rasterio.features import rasterize
 from shapely import LineString, MultiLineString, MultiPolygon, Point, Polygon, STRtree
 from shapely.geometry.base import BaseGeometry
 
-from otest.ingest.georef import Extent
-from otest.process.geometry import to_geometry
-from otest.process.layers import GroundLayers
-from otest.process.symbols import Ground, SymbolSet
+from terraino.ingest.georef import Extent
+from terraino.process.geometry import to_geometry
+from terraino.process.layers import GroundLayers
+from terraino.process.symbols import Ground, SymbolSet
 
 LINE_STEP_M = 2.0
 CLIFF_STEP_M = 1.5
@@ -50,7 +50,7 @@ class PointFeature:
     """An object at a point, in projected coordinates.
 
     Attributes:
-        kind: Feature kind (see otest.process.symbols.FEATURES), or "stone".
+        kind: Feature kind (see terraino.process.symbols.FEATURES), or "stone".
         x: Easting.
         y: Northing.
         size: Size in metres.
@@ -285,7 +285,7 @@ def carve_waterholes(
     fills it with water to just below the rim. Nothing grows in it.
 
     Examples:
-        >>> from otest.process.layers import GroundLayers
+        >>> from terraino.process.layers import GroundLayers
         >>> dtm = np.full((20, 20), 100.0, dtype=np.float32)
         >>> z = np.zeros((20, 20), dtype=np.float32)
         >>> layers = GroundLayers(ground=np.ones((20, 20), np.uint8), speed=z + 1,

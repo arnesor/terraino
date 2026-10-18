@@ -1,6 +1,6 @@
 """What orienteering map symbols mean for the 3D world.
 
-The meaning of each symbol is kept in TOML tables in ``otest/symbols/``, one per symbol
+The meaning of each symbol is kept in TOML tables in ``terraino/symbols/``, one per symbol
 standard. See ``isom2000.toml`` for a description of the keys.
 """
 
@@ -102,7 +102,7 @@ class SymbolRule:
         ground: Ground class painted by the symbol, or None.
         trees: What happens to trees from the laser canopy under the symbol.
         narrow_trees: Tree rule instead of ``trees`` for long, narrow areas (see
-            otest.process.layers.is_narrow), or None: mappers often draw a row of
+            terraino.process.layers.is_narrow), or None: mappers often draw a row of
             trees along a road or field as a strip of the open land around it.
         young: Young trees added per 100 m².
         shrubs: Undergrowth density, 0..1.
@@ -168,7 +168,9 @@ class SymbolSet:
     def load(cls, key: str) -> SymbolSet:
         """Load a bundled table, for example ``"isom2000"``."""
         text = (
-            resources.files("otest.symbols").joinpath(f"{key}.toml").read_text("utf-8")
+            resources.files("terraino.symbols")
+            .joinpath(f"{key}.toml")
+            .read_text("utf-8")
         )
         table = tomllib.loads(text)
         rules = {num: SymbolRule.from_table(e) for num, e in table["symbols"].items()}

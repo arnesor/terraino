@@ -1,4 +1,4 @@
-// World package format written by the Python pipeline (src/otest/export.py).
+// World package format written by the Python pipeline (src/terraino/export.py).
 //
 // Scene coordinates: x = easting - origin easting, z = origin northing - northing
 // (so +z points south), y = height above sea level. The origin is the north-west

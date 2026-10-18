@@ -10,7 +10,7 @@ export interface TrackRecord {
 }
 
 /**
- * Look of each kind (otest.process.symbols.TRACKS). Strips reach `margin` metres past
+ * Look of each kind (terraino.process.symbols.TRACKS). Strips reach `margin` metres past
  * the track's edge, where the ground beside it is worn (paths) or damp (streams).
  * Footpaths are drawn first, then water (so a stream shows across a path, which gets a
  * footbridge), then roads (culverts carry them over streams).
@@ -180,7 +180,7 @@ function createTrackMaterial(kind: string, gfx: Gfx): THREE.MeshLambertMaterial 
       .replace('#include <common>', '#include <common>\n' + SHADER_COMMON)
       .replace('#include <map_fragment>', SHADER_MAIN)
   }
-  material.customProgramCacheKey = () => 'otest-track-v2'
+  material.customProgramCacheKey = () => 'terraino-track-v2'
   return material
 }
 

@@ -1,7 +1,7 @@
 [project]
-name = "otest"
+name = "terraino"
 version = "0.0.0"
-description = "Otest"
+description = "Terrain-O: orienteering in real terrain, in 3D on your computer"
 authors = [{ name = "Arne Sørli", email = "arne.sorli@kongsberg.frisurf.no" }]
 license = "MIT"
 license-files = ["LICENSE"]
@@ -20,12 +20,12 @@ dependencies = [
 ]
 
 [project.urls]
-homepage = "https://github.com/arnesor/otest"
-repository = "https://github.com/arnesor/otest"
-Changelog = "https://github.com/arnesor/otest/releases"
+homepage = "https://github.com/arnesor/terraino"
+repository = "https://github.com/arnesor/terraino"
+Changelog = "https://github.com/arnesor/terraino/releases"
 
 [project.scripts]
-otest = "otest.__main__:main"
+terraino = "terraino.__main__:main"
 
 [dependency-groups]
 lint = [
@@ -50,7 +50,7 @@ dev = [
 
 [tool.coverage.run]
 branch = true
-source = ["otest"]
+source = ["terraino"]
 relative_files = true
 
 [tool.coverage.report]
@@ -70,7 +70,7 @@ markers = ["network: downloads data from online services (run with -m network)"]
 
 [tool.deptry]
 # deptry does not detect the src/ layout package as first party on its own.
-known_first_party = ["otest"]
+known_first_party = ["terraino"]
 
 [[tool.mypy.overrides]]
 # No type information published for these packages.

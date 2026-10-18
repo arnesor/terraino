@@ -8,10 +8,10 @@ import pytest
 from PIL import Image
 from pyproj import Transformer
 
-from otest.ingest.georef import Extent
-from otest.ingest.image import ImageMapError, parse_world_file, read_image_map
-from otest.process.classify import Colour, classify_colours, classify_map
-from otest.process.symbols import Ground, SymbolSet
+from terraino.ingest.georef import Extent
+from terraino.ingest.image import ImageMapError, parse_world_file, read_image_map
+from terraino.process.classify import Colour, classify_colours, classify_map
+from terraino.process.symbols import Ground, SymbolSet
 
 ISOM = SymbolSet.load("isom2000")
 WHITE = (255, 255, 255)

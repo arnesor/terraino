@@ -16,9 +16,9 @@ import numpy.typing as npt
 from PIL import Image
 from scipy import ndimage
 
-from otest.fetch.cache import DownloadError, cached_download
-from otest.ingest.georef import Extent
-from otest.process.symbols import Ground
+from terraino.fetch.cache import DownloadError, cached_download
+from terraino.ingest.georef import Extent
+from terraino.process.symbols import Ground
 
 log = logging.getLogger(__name__)
 

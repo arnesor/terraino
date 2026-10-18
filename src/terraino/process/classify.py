@@ -19,8 +19,8 @@ from scipy import ndimage
 from shapely import Polygon
 from shapely.geometry import shape
 
-from otest.process.layers import TREE_RULES, GroundLayers
-from otest.process.symbols import Ground, SymbolSet
+from terraino.process.layers import TREE_RULES, GroundLayers
+from terraino.process.symbols import Ground, SymbolSet
 
 
 class Colour(IntEnum):

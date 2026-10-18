@@ -2,7 +2,7 @@
 #
 # Keys (all optional):
 #   ground  ground class: forest open rough marsh rock field paved gravel path water
-#           lawn stony sand building (see otest.process.symbols.Ground)
+#           lawn stony sand building (see terraino.process.symbols.Ground)
 #   trees   "keep" (laser canopy trees, plus smaller trees below the canopy up to the
 #           SR16 count), "lidar" (only the trees the laser finds), "scattered" (a few
 #           of the laser's trees, the tallest, far apart) or "none"

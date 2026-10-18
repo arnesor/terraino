@@ -9,6 +9,10 @@ export type Lang = keyof typeof LANGS
 
 const STRINGS = {
   // Start screen.
+  tagline: {
+    en: 'Orienteering in real terrain, in 3D on your computer',
+    nb: 'Orientering i ekte terreng, i 3D på datamaskinen',
+  },
   worldLabel: { en: 'Map', nb: 'Kart' },
   languageLabel: { en: 'Language', nb: 'Språk' },
   courseFileButton: { en: 'Open course file …', nb: 'Åpne løypefil …' },
@@ -36,7 +40,7 @@ const STRINGS = {
   },
 
   // Loading.
-  noWorlds: { en: 'No worlds found. Build one first:\n  uv run otest build <map.ocd>', nb: 'Fant ingen verdener. Bygg en først:\n  uv run otest build <kart.ocd>' },
+  noWorlds: { en: 'No worlds found. Build one first:\n  uv run terraino build <map.ocd>', nb: 'Fant ingen verdener. Bygg en først:\n  uv run terraino build <kart.ocd>' },
   loadingWorld: { en: 'Loading {name} …', nb: 'Laster {name} …' },
   loadingTerrain: { en: 'Loading terrain {percent} %', nb: 'Laster terreng {percent} %' },
   paintingTextures: { en: 'Painting textures …', nb: 'Maler teksturer …' },
@@ -125,8 +129,22 @@ const STRINGS = {
 
 export type TextKey = keyof typeof STRINGS
 
-const STORAGE_KEY = 'otest.lang'
+const STORAGE_KEY = 'terraino.lang'
 const LOCALES: Record<Lang, string> = { en: 'en-GB', nb: 'nb-NO' }
+
+/** Move a value stored under the program's old name (otest) to its new key, once. */
+export function renameStoredKey(old: string, key: string) {
+  try {
+    const value = localStorage.getItem(old)
+    if (value === null) return
+    if (localStorage.getItem(key) === null) localStorage.setItem(key, value)
+    localStorage.removeItem(old)
+  } catch {
+    // Storage can be unavailable (private mode).
+  }
+}
+
+renameStoredKey('otest.lang', STORAGE_KEY)
 
 function isLang(value: string | null | undefined): value is Lang {
   return value != null && Object.hasOwn(LANGS, value)
@@ -190,6 +208,7 @@ export function formatNumber(value: number, decimals = 0): string {
  */
 export function applyTranslations(root: ParentNode = document) {
   document.documentElement.lang = current
+  document.title = `Terrain-O – ${t('tagline')}`
   for (const el of root.querySelectorAll<HTMLElement>('[data-i18n]')) {
     const key = el.dataset.i18n
     if (key && key in STRINGS) el.textContent = t(key as TextKey)

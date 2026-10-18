@@ -399,7 +399,7 @@ async function main() {
 
   // For poking at the scene from the browser console while developing.
   if (import.meta.env.DEV) {
-    Object.assign(window, { otest: { THREE, renderer, scene, camera, gfx, forest, undergrowth, player, run, hud } })
+    Object.assign(window, { terraino: { THREE, renderer, scene, camera, gfx, forest, undergrowth, player, run, hud } })
   }
 
   const timer = new THREE.Timer()

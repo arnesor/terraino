@@ -1,7 +1,7 @@
 """Buildings with heights and roofs measured from the laser surface model.
 
 With a laser point cloud the roof shape is measured too: the fine surface inside each
-footprint is split into roof planes by the way it faces (otest.process.roofs), giving
+footprint is split into roof planes by the way it faces (terraino.process.roofs), giving
 wings with gable, hipped, shed and flat roofs. Where that does not explain the surface,
 a single flat, shed, gable or hip roof is fitted to the whole footprint.
 """
@@ -22,20 +22,20 @@ from rasterio.features import rasterize
 from shapely import MultiPolygon, Point, Polygon, STRtree
 from shapely.geometry.base import BaseGeometry
 
-from otest.fetch.matrikkel import BuildingPoint
-from otest.fetch.osm import OsmFeature
-from otest.fetch.topo_buildings import TopoBuilding
-from otest.ingest.georef import Extent
-from otest.process.building_types import (
+from terraino.fetch.matrikkel import BuildingPoint
+from terraino.fetch.osm import OsmFeature
+from terraino.fetch.topo_buildings import TopoBuilding
+from terraino.ingest.georef import Extent
+from terraino.process.building_types import (
     STYLES,
     colours,
     floors_for,
     kind_for_type,
     type_rank,
 )
-from otest.process.geometry import to_geometry
-from otest.process.roofs import RoofPart, parts_from_lines, robust_fit, segment_roof
-from otest.process.symbols import Ground, SymbolSet
+from terraino.process.geometry import to_geometry
+from terraino.process.roofs import RoofPart, parts_from_lines, robust_fit, segment_roof
+from terraino.process.symbols import Ground, SymbolSet
 
 log = logging.getLogger(__name__)
 

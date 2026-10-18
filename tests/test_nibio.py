@@ -6,8 +6,8 @@ import pytest
 import rasterio
 from PIL import Image
 
-from otest.fetch import nibio
-from otest.ingest.georef import Extent
+from terraino.fetch import nibio
+from terraino.ingest.georef import Extent
 
 
 def write_sr16(path: Path, extent: Extent, data: npt.NDArray[np.int_]) -> None:
@@ -56,7 +56,7 @@ def test_wms_species_image_is_decoded(
         Image.fromarray(img).save(path)
         return path
 
-    monkeypatch.setattr("otest.fetch.nibio.cached_download", fake_download)
+    monkeypatch.setattr("terraino.fetch.nibio.cached_download", fake_download)
     world = Extent(0, 0, 64, 32)
     forest = nibio.fetch_forest(25832, world, tmp_path)
     assert forest.source == "WMS"

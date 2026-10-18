@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from otest.build import BuildOptions, build_world
+from terraino.build import BuildOptions, build_world
 from tests.test_ocad import TEST_MAP, needs_test_map
 
 pytestmark = [pytest.mark.network, needs_test_map]

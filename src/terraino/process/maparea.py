@@ -15,7 +15,7 @@ from typing import Any
 from shapely import MultiPolygon, Polygon, STRtree, unary_union
 from shapely.geometry.base import BaseGeometry
 
-from otest.process.geometry import to_geometry
+from terraino.process.geometry import to_geometry
 
 DEFAULT_GAP_M = 40.0
 

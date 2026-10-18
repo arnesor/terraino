@@ -7,8 +7,8 @@ import pytest
 import rasterio
 import requests
 
-from otest.fetch import cache, kartverket
-from otest.ingest.georef import Extent
+from terraino.fetch import cache, kartverket
+from terraino.ingest.georef import Extent
 
 
 def write_tif(
@@ -95,7 +95,7 @@ def test_cached_download_writes_once(
         calls.append(url)
         return Response()
 
-    monkeypatch.setattr("otest.fetch.cache.requests.get", get)
+    monkeypatch.setattr("terraino.fetch.cache.requests.get", get)
     target = tmp_path / "a" / "b.tif"
     assert cache.cached_download(
         "https://x", {}, target, expect_content_type="image/tiff"
@@ -117,8 +117,10 @@ def test_cached_download_rejects_error_pages(
         content = b"<ServiceException/>"
         text = "<ServiceException/>"
 
-    monkeypatch.setattr("otest.fetch.cache.requests.get", lambda url, **kw: Response())
-    monkeypatch.setattr("otest.fetch.cache.time.sleep", lambda s: None)
+    monkeypatch.setattr(
+        "terraino.fetch.cache.requests.get", lambda url, **kw: Response()
+    )
+    monkeypatch.setattr("terraino.fetch.cache.time.sleep", lambda s: None)
     target = tmp_path / "x.tif"
     with pytest.raises(cache.DownloadError, match="ServiceException"):
         cache.cached_download("https://x", {}, target, expect_content_type="image/tiff")
@@ -131,7 +133,7 @@ def test_cached_download_retries_connection_errors(
     def get(url: str, **kwargs: object) -> None:
         raise requests.ConnectionError("down")
 
-    monkeypatch.setattr("otest.fetch.cache.requests.get", get)
-    monkeypatch.setattr("otest.fetch.cache.time.sleep", lambda s: None)
+    monkeypatch.setattr("terraino.fetch.cache.requests.get", get)
+    monkeypatch.setattr("terraino.fetch.cache.time.sleep", lambda s: None)
     with pytest.raises(cache.DownloadError, match="down"):
         cache.cached_download("https://x", {}, tmp_path / "x.tif")

@@ -11,10 +11,10 @@ from scipy import ndimage
 from shapely import LineString, MultiLineString, MultiPolygon, Polygon
 from shapely.geometry.base import BaseGeometry
 
-from otest.fetch.osm import OsmFeature
-from otest.ingest.georef import Extent
-from otest.process.layers import TREES_KEEP, TREES_LIDAR, TREES_NONE, GroundLayers
-from otest.process.symbols import Ground
+from terraino.fetch.osm import OsmFeature
+from terraino.ingest.georef import Extent
+from terraino.process.layers import TREES_KEEP, TREES_LIDAR, TREES_NONE, GroundLayers
+from terraino.process.symbols import Ground
 
 FOREST_CANOPY_M = 3.0
 # Undergrowth level given to low vegetation found in the laser data.
@@ -70,7 +70,7 @@ def fill_unknown_ground(layers: GroundLayers, canopy: npt.NDArray[np.float32]) -
     """Give cells outside the map a ground class: forest under canopy, else open land.
 
     Examples:
-        >>> from otest.process.layers import GroundLayers
+        >>> from terraino.process.layers import GroundLayers
         >>> z = np.zeros((1, 2), dtype=np.float32)
         >>> layers = GroundLayers(
         ...     ground=np.zeros((1, 2), np.uint8), speed=z + 1, young=z, shrubs=z,
@@ -89,7 +89,7 @@ def add_low_vegetation(layers: GroundLayers, found: npt.NDArray[np.bool_]) -> No
     """Put undergrowth where the laser data found bushes or young trees.
 
     Examples:
-        >>> from otest.process.layers import GroundLayers
+        >>> from terraino.process.layers import GroundLayers
         >>> z = np.zeros((1, 3), dtype=np.float32)
         >>> layers = GroundLayers(
         ...     ground=np.array([[2, 2, 10]], np.uint8), speed=z + 1, young=z, shrubs=z,
@@ -111,7 +111,7 @@ def add_lidar_undergrowth(layers: GroundLayers, low: npt.NDArray[np.float32]) ->
             where unknown), from the laser point cloud.
 
     Examples:
-        >>> from otest.process.layers import GroundLayers
+        >>> from terraino.process.layers import GroundLayers
         >>> z = np.zeros((1, 3), dtype=np.float32)
         >>> layers = GroundLayers(
         ...     ground=np.array([[1, 1, 2]], np.uint8), speed=z + 1, young=z, shrubs=z,
@@ -211,7 +211,7 @@ def apply_osm(
             water.append((geometry.buffer(width / 2), int(Ground.WATER)))
 
     outside = ~layers.in_map
-    # Roads are drawn as their own strips (otest.process.tracks), not as ground.
+    # Roads are drawn as their own strips (terraino.process.tracks), not as ground.
     _paint(layers.ground, water, extent, outside)
     clear = np.zeros_like(layers.clear)
     _paint(clear, [(g, 1) for g, _ in water + roads], extent, outside)

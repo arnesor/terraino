@@ -19,15 +19,15 @@ import numpy as np
 import numpy.typing as npt
 from scipy import ndimage
 
-from otest.fetch.nibio import Species
-from otest.process.layers import (
+from terraino.fetch.nibio import Species
+from terraino.process.layers import (
     TREES_KEEP,
     TREES_LIDAR,
     TREES_NONE,
     TREES_SCATTERED,
     GroundLayers,
 )
-from otest.process.symbols import Ground
+from terraino.process.symbols import Ground
 
 MIN_TREE_HEIGHT_M = 2.5
 MAX_CANOPY_M = 60.0
@@ -58,7 +58,7 @@ CROWN_RADIUS_M = (0.4, 7.0)
 # A crown's base: this quantile of the lowest vegetation return in each of its cells.
 # The laser mostly hits the upper crown; low branches show only in some cells.
 CROWN_BASE_QUANTILE = 0.25
-# Returns lower than this were not counted (otest.ingest.lidar.CROWN_MIN_M), so a crown
+# Returns lower than this were not counted (terraino.ingest.lidar.CROWN_MIN_M), so a crown
 # reaching that low has branches to the ground.
 CROWN_BASE_FLOOR_M = 1.0
 

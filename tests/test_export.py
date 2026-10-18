@@ -8,7 +8,7 @@ import pytest
 from PIL import Image
 from shapely import Polygon
 
-from otest.export import (
+from terraino.export import (
     CHUNK,
     COARSE_STEP,
     TREE_DTYPE,
@@ -17,9 +17,9 @@ from otest.export import (
     coarse_chunks,
     write_world,
 )
-from otest.ingest.georef import Extent
-from otest.process.layers import GroundLayers
-from otest.process.trees import Trees
+from terraino.ingest.georef import Extent
+from terraino.process.layers import GroundLayers
+from terraino.process.trees import Trees
 
 
 def test_height_encoding_round_trip() -> None:

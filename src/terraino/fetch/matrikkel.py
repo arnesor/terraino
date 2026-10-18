@@ -13,8 +13,8 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
-from otest.fetch.cache import DownloadError, cached_download
-from otest.ingest.georef import Extent
+from terraino.fetch.cache import DownloadError, cached_download
+from terraino.ingest.georef import Extent
 
 log = logging.getLogger(__name__)
 

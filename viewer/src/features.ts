@@ -99,7 +99,7 @@ function waterMaterial(): THREE.MeshLambertMaterial {
         totalEmissiveRadiance += sky * (0.03 + 0.97 * fresnel);`,
       )
   }
-  material.customProgramCacheKey = () => 'otest-waterhole'
+  material.customProgramCacheKey = () => 'terraino-waterhole'
   return material
 }
 
