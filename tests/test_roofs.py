@@ -6,7 +6,7 @@ import pytest
 import shapely
 from shapely import Polygon, box
 
-from otest.process.roofs import RoofPart, segment_roof
+from terraino.process.roofs import RoofPart, segment_roof
 
 CELL = 0.5
 

@@ -1,7 +1,7 @@
 # Project-Local Scripts
 
-Place scripts that use this project's dependencies or import `otest` here.
-Keep reusable logic under `src/otest` and make scripts thin entry points.
+Place scripts that use this project's dependencies or import `terraino` here.
+Keep reusable logic under `src/terraino` and make scripts thin entry points.
 
 Run a script from the project root:
 
@@ -12,5 +12,5 @@ uv run scripts/example.py
 Import the installed package name, not `src`:
 
 ```python
-from otest import functions
+from terraino import functions
 ```

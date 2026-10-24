@@ -5,9 +5,9 @@ import numpy.typing as npt
 import pytest
 from shapely import Polygon, box
 
-from otest.ingest.georef import Extent
-from otest.process.fuse import fill_unknown_ground
-from otest.process.layers import (
+from terraino.ingest.georef import Extent
+from terraino.process.fuse import fill_unknown_ground
+from terraino.process.layers import (
     TREES_KEEP,
     TREES_LIDAR,
     TREES_NONE,
@@ -15,8 +15,8 @@ from otest.process.layers import (
     GroundLayers,
     rasterize_map,
 )
-from otest.process.symbols import Ground, SymbolSet
-from otest.process.trees import (
+from terraino.process.symbols import Ground, SymbolSet
+from terraino.process.trees import (
     MIN_TREE_HEIGHT_M,
     SCATTERED_SPACING_M,
     canopy_height,

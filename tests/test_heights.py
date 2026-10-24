@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from otest.process.heights import fill_missing
+from terraino.process.heights import fill_missing
 
 
 def test_complete_grid_is_unchanged_copy() -> None:

@@ -3,9 +3,9 @@ from typing import Any
 import pytest
 from shapely import LineString, box
 
-from otest.fetch.osm import OsmFeature
-from otest.process.symbols import SymbolSet
-from otest.process.tracks import collect_tracks, snap_ends
+from terraino.fetch.osm import OsmFeature
+from terraino.process.symbols import SymbolSet
+from terraino.process.tracks import collect_tracks, snap_ends
 
 ISOM = SymbolSet.load("isom2000")
 
@@ -57,7 +57,7 @@ def test_collect_tracks_from_map_and_osm() -> None:
 
 
 def test_unknown_track_style_is_rejected() -> None:
-    from otest.process.symbols import SymbolRule
+    from terraino.process.symbols import SymbolRule
 
     with pytest.raises(ValueError, match="Unknown track"):
         SymbolRule.from_table({"track": "motorway"})

@@ -2,6 +2,53 @@ import type { World } from './world'
 
 const PARALLEL_REQUESTS = 12
 
+/**
+ * A chunk stored with every `step`-th sample ((m + 1)^2 values) brought back to the
+ * full grid ((m * step + 1)^2 values) by bilinear interpolation.
+ */
+export function upsample(coarse: Float32Array, m: number, step: number): Float32Array {
+  const n = m * step
+  const out = new Float32Array((n + 1) * (n + 1))
+  for (let row = 0; row <= n; row++) {
+    const r = Math.min(Math.floor(row / step), m - 1)
+    const fr = row / step - r
+    for (let col = 0; col <= n; col++) {
+      const c = Math.min(Math.floor(col / step), m - 1)
+      const fc = col / step - c
+      const i = r * (m + 1) + c
+      const top = coarse[i]! * (1 - fc) + coarse[i + 1]! * fc
+      const bottom = coarse[i + m + 1]! * (1 - fc) + coarse[i + m + 2]! * fc
+      out[row * (n + 1) + col] = top * (1 - fr) + bottom * fr
+    }
+  }
+  return out
+}
+
+/**
+ * Give each coarse chunk the exact edge samples of its detailed neighbours: chunks share
+ * their edges, and the terrain must not open a seam where detail ends.
+ */
+export function stitchEdges(chunks: Float32Array[], coarse: Set<number>, chunksX: number, chunksY: number, n: number) {
+  const w = n + 1
+  for (const index of coarse) {
+    const cx = index % chunksX
+    const cy = Math.floor(index / chunksX)
+    const chunk = chunks[index]!
+    const detailed = (x: number, y: number) =>
+      x >= 0 && y >= 0 && x < chunksX && y < chunksY && !coarse.has(y * chunksX + x) ? chunks[y * chunksX + x]! : null
+    const west = detailed(cx - 1, cy)
+    const east = detailed(cx + 1, cy)
+    const north = detailed(cx, cy - 1)
+    const south = detailed(cx, cy + 1)
+    for (let k = 0; k <= n; k++) {
+      if (west) chunk[k * w] = west[k * w + n]!
+      if (east) chunk[k * w + n] = east[k * w]!
+      if (north) chunk[k] = north[n * w + k]!
+      if (south) chunk[n * w + k] = south[k]!
+    }
+  }
+}
+
 /** All terrain heights of a world, decoded from the chunk files. */
 export class HeightField {
   readonly chunk: number
@@ -35,6 +82,8 @@ export class HeightField {
     const h = world.manifest.height
     const total = h.chunksX * h.chunksY
     const chunks = new Array<Float32Array>(total)
+    const coarse = new Set(h.coarse?.chunks ?? [])
+    const coarseStep = h.coarse?.step ?? 1
     let next = 0
     let done = 0
 
@@ -48,11 +97,12 @@ export class HeightField {
         const raw = new Uint16Array(await response.arrayBuffer())
         const heights = new Float32Array(raw.length)
         for (let i = 0; i < raw.length; i++) heights[i] = h.offset + raw[i]! * h.scale
-        chunks[index] = heights
+        chunks[index] = coarse.has(index) ? upsample(heights, h.chunk / coarseStep, coarseStep) : heights
         onProgress(++done, total)
       }
     }
     await Promise.all(Array.from({ length: PARALLEL_REQUESTS }, worker))
+    if (coarse.size) stitchEdges(chunks, coarse, h.chunksX, h.chunksY, h.chunk)
     return new HeightField(world, chunks)
   }
 

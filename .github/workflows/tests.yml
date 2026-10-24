@@ -55,7 +55,7 @@ jobs:
         run: uv run deptry .
 
       - name: Run documentation examples
-        run: uv run python -m xdoctest --modname=otest --command=all --colored=1
+        run: uv run python -m xdoctest --modname=terraino --command=all --colored=1
 
   tests:
     name: Tests / Python ${{ matrix.python }} / ${{ matrix.os }}

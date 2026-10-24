@@ -2,8 +2,8 @@ from typing import Any
 
 import pytest
 
-from otest.process.geometry import to_geometry
-from otest.process.maparea import find_map_area
+from terraino.process.geometry import to_geometry
+from terraino.process.maparea import find_map_area
 
 
 def square(

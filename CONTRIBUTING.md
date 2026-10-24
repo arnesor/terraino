@@ -50,7 +50,7 @@ You can now run an interactive Python session, or your app:
 
 ```console
 uv run python
-uv run otest
+uv run terraino
 ```
 
 ## How to test the project
@@ -99,7 +99,7 @@ uv run ruff format
 Run doctests using [xdoctest]:
 
 ```console
-uv run python -m xdoctest --modname=otest --command=all
+uv run python -m xdoctest --modname=terraino --command=all
 ```
 
 ### Run Dependency Checks
@@ -132,15 +132,15 @@ It is recommended to open an issue before starting work on anything.
 This will allow a chance to talk it over with the owners and validate your approach.
 
 [mit license]: https://opensource.org/licenses/MIT
-[source code]: https://github.com/arnesor/otest
-[issue tracker]: https://github.com/arnesor/otest/issues
+[source code]: https://github.com/arnesor/terraino
+[issue tracker]: https://github.com/arnesor/terraino/issues
 [uv]: https://github.com/astral-sh/uv
 [pytest]: https://pytest.org/
 [mypy]: https://mypy.org/
 [ruff]: https://github.com/astral-sh/ruff
 [rumdl]: https://github.com/rvben/rumdl
 [xdoctest]: https://github.com/Erotemic/xdoctest
-[pull request]: https://github.com/arnesor/otest/pulls
+[pull request]: https://github.com/arnesor/terraino/pulls
 
 <!-- github-only -->
 

@@ -1,6 +1,6 @@
 import pytest
 
-from otest.process.symbols import Ground, SymbolRule, SymbolSet, detect_symbol_set
+from terraino.process.symbols import Ground, SymbolRule, SymbolSet, detect_symbol_set
 
 
 @pytest.mark.parametrize("key", ["isom2000", "isom2017"])
@@ -92,7 +92,7 @@ def test_water_lines_are_drawn_as_water(
 
 
 def test_helper_symbols_are_recognised() -> None:
-    from otest.process.symbols import is_helper_symbol
+    from terraino.process.symbols import is_helper_symbol
 
     assert is_helper_symbol("Hjelpelinje")
     assert is_helper_symbol("Construction line")

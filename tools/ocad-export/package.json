@@ -2,7 +2,7 @@
   "name": "ocad-export",
   "version": "0.1.0",
   "private": true,
-  "description": "Export OCAD maps to GeoJSON, SVG and PNG for the otest pipeline",
+  "description": "Export OCAD maps to GeoJSON, SVG and PNG for the Terrain-O pipeline",
   "type": "module",
   "bin": "export.mjs",
   "engines": {

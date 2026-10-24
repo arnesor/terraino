@@ -6,16 +6,16 @@ import numpy as np
 import pytest
 from shapely import box
 
-from otest.fetch import topo
-from otest.fetch.cache import DownloadError
-from otest.fetch.topo_buildings import (
+from terraino.fetch import topo
+from terraino.fetch.cache import DownloadError
+from terraino.fetch.topo_buildings import (
     FILL,
     ROOF_LINE,
     fetch_topo_buildings,
     trace_buildings,
 )
-from otest.ingest.georef import Extent
-from otest.process.roofs import parts_from_lines
+from terraino.ingest.georef import Extent
+from terraino.process.roofs import parts_from_lines
 
 X0, Y1 = 1000.0, 2000.0
 

@@ -1,4 +1,4 @@
-// World package format written by the Python pipeline (src/otest/export.py).
+// World package format written by the Python pipeline (src/terraino/export.py).
 //
 // Scene coordinates: x = easting - origin easting, z = origin northing - northing
 // (so +z points south), y = height above sea level. The origin is the north-west
@@ -18,6 +18,8 @@ export interface HeightInfo {
   min: number
   max: number
   path: string
+  /** Chunks away from the map, stored with only every `step`-th sample (format 3). */
+  coarse?: { step: number; chunks: number[] }
 }
 
 export interface LayerInfo {
@@ -54,7 +56,8 @@ export interface Manifest {
   extent: [number, number, number, number]
   height: HeightInfo
   drape: { path: string; tilePx: number; overview: string }
-  map: { image: string; size: [number, number]; scale: number | null }
+  /** offset: shift the map was built with (--offset), applied to courses from OCAD files. */
+  map: { image: string; size: [number, number]; scale: number | null; offset?: [number, number] }
   mapArea: [number, number][]
   spawn: [number, number]
   attribution: string[]
@@ -65,7 +68,7 @@ export interface Manifest {
   tracks?: { path: string; count: number }
 }
 
-export const SUPPORTED_FORMATS = [1, 2]
+export const SUPPORTED_FORMATS = [1, 2, 3]
 
 export class World {
   readonly base: string

@@ -10,7 +10,7 @@ export interface TrackRecord {
 }
 
 /**
- * Look of each kind (otest.process.symbols.TRACKS). Strips reach `margin` metres past
+ * Look of each kind (terraino.process.symbols.TRACKS). Strips reach `margin` metres past
  * the track's edge, where the ground beside it is worn (paths) or damp (streams).
  * Footpaths are drawn first, then water (so a stream shows across a path, which gets a
  * footbridge), then roads (culverts carry them over streams).
@@ -180,7 +180,7 @@ function createTrackMaterial(kind: string, gfx: Gfx): THREE.MeshLambertMaterial 
       .replace('#include <common>', '#include <common>\n' + SHADER_COMMON)
       .replace('#include <map_fragment>', SHADER_MAIN)
   }
-  material.customProgramCacheKey = () => 'otest-track-v2'
+  material.customProgramCacheKey = () => 'terraino-track-v2'
   return material
 }
 
@@ -245,6 +245,79 @@ interface Segment {
   z1: number
   half: number
   kind: string
+}
+
+// Grid cell for finding where paths cross streams, and for keeping footbridges apart.
+const CROSSING_CELL = 16
+const BRIDGE_SPACING = 5
+
+/** Where a path segment (`path.points[i]` to `[i + 1]`) crosses a stream segment (`water.points[j]` …). */
+export interface Crossing {
+  path: TrackRecord
+  i: number
+  water: TrackRecord
+  j: number
+  /** How far along the path segment the crossing is, 0–1. */
+  t: number
+}
+
+const cellOf = (v: number, size: number) => Math.floor(v / size)
+const cellKey = (gx: number, gz: number) => gx * 100003 + gz
+
+/**
+ * Every crossing of a path segment with a stream segment, in the order of the paths and their
+ * segments, then the streams and theirs. Stream segments are put in a grid, so each path
+ * segment is tested only against the stream segments near it.
+ */
+export function findCrossings(paths: TrackRecord[], water: TrackRecord[]): Crossing[] {
+  // Stream segments by grid cell, numbered in stream order so that results keep that order.
+  const segments: { w: TrackRecord; j: number }[] = []
+  const grid = new Map<number, number[]>()
+  for (const w of water) {
+    for (let j = 0; j + 1 < w.points.length; j++) {
+      const [cx, cz] = w.points[j]!
+      const [dx, dz] = w.points[j + 1]!
+      const id = segments.push({ w, j }) - 1
+      for (let gx = cellOf(Math.min(cx, dx), CROSSING_CELL); gx <= cellOf(Math.max(cx, dx), CROSSING_CELL); gx++) {
+        for (let gz = cellOf(Math.min(cz, dz), CROSSING_CELL); gz <= cellOf(Math.max(cz, dz), CROSSING_CELL); gz++) {
+          const key = cellKey(gx, gz)
+          const list = grid.get(key)
+          if (list) list.push(id)
+          else grid.set(key, [id])
+        }
+      }
+    }
+  }
+  const found: Crossing[] = []
+  const candidates = new Set<number>()
+  for (const p of paths) {
+    for (let i = 0; i + 1 < p.points.length; i++) {
+      const [ax, az] = p.points[i]!
+      const [bx, bz] = p.points[i + 1]!
+      candidates.clear()
+      for (let gx = cellOf(Math.min(ax, bx), CROSSING_CELL); gx <= cellOf(Math.max(ax, bx), CROSSING_CELL); gx++) {
+        for (let gz = cellOf(Math.min(az, bz), CROSSING_CELL); gz <= cellOf(Math.max(az, bz), CROSSING_CELL); gz++) {
+          for (const id of grid.get(cellKey(gx, gz)) ?? []) candidates.add(id)
+        }
+      }
+      for (const id of [...candidates].sort((a, b) => a - b)) {
+        const { w, j } = segments[id]!
+        const [cx, cz] = w.points[j]!
+        const [dx, dz] = w.points[j + 1]!
+        const rx = bx - ax
+        const rz = bz - az
+        const sx = dx - cx
+        const sz = dz - cz
+        const den = rx * sz - rz * sx
+        if (Math.abs(den) < 1e-9) continue
+        const t = ((cx - ax) * sz - (cz - az) * sx) / den
+        const u = ((cx - ax) * rz - (cz - az) * rx) / den
+        if (t < 0 || t > 1 || u < 0 || u > 1) continue
+        found.push({ path: p, i, water: w, j, t })
+      }
+    }
+  }
+  return found
 }
 
 /** A footbridge where a path crosses a stream. */
@@ -455,56 +528,59 @@ export class Tracks {
     const water = records.filter(r => BRIDGED_WATER.has(r.kind))
     const paths = records.filter(r => FOOTPATHS.has(r.kind))
     const found: (Bridge & { order: number })[] = []
-    for (const p of paths) {
-      for (let i = 0; i + 1 < p.points.length; i++) {
-        const [ax, az] = p.points[i]!
-        const [bx, bz] = p.points[i + 1]!
-        for (const w of water) {
-          for (let j = 0; j + 1 < w.points.length; j++) {
-            const [cx, cz] = w.points[j]!
-            const [dx, dz] = w.points[j + 1]!
-            const rx = bx - ax
-            const rz = bz - az
-            const sx = dx - cx
-            const sz = dz - cz
-            const den = rx * sz - rz * sx
-            if (Math.abs(den) < 1e-9) continue
-            const t = ((cx - ax) * sz - (cz - az) * sx) / den
-            const u = ((cx - ax) * rz - (cz - az) * rx) / den
-            if (t < 0 || t > 1 || u < 0 || u > 1) continue
-            const len = Math.hypot(rx, rz)
-            const ux = rx / len
-            const uz = rz / len
-            // The channel is longer along the path when it is crossed at a slant.
-            const sin = Math.max(0.45, Math.abs(ux * sz - uz * sx) / Math.hypot(sx, sz))
-            const logs = w.kind === 'water_channel'
-            const halfLength = (w.width / 2 + (logs ? 0.7 : 1.0)) / sin
-            const x = ax + rx * t
-            const z = az + rz * t
-            const bank = Math.max(
-              this.heights.heightAt(x + ux * (halfLength + 0.6), z + uz * (halfLength + 0.6)),
-              this.heights.heightAt(x - ux * (halfLength + 0.6), z - uz * (halfLength + 0.6)),
-              this.heights.heightAt(x, z) + (logs ? 0.15 : 0.45),
-            )
-            found.push({
-              x,
-              z,
-              ux,
-              uz,
-              halfLength,
-              width: logs ? 0.6 : p.kind === 'path' ? 1.1 : 0.8,
-              deck: bank + (logs ? 0.08 : 0.12),
-              logs,
-              order: p.kind === 'path' ? 2 : 1,
-            })
-          }
+    for (const { path: p, i, water: w, j, t } of findCrossings(paths, water)) {
+      const [ax, az] = p.points[i]!
+      const [bx, bz] = p.points[i + 1]!
+      const [cx, cz] = w.points[j]!
+      const [dx, dz] = w.points[j + 1]!
+      const rx = bx - ax
+      const rz = bz - az
+      const sx = dx - cx
+      const sz = dz - cz
+      const len = Math.hypot(rx, rz)
+      const ux = rx / len
+      const uz = rz / len
+      // The channel is longer along the path when it is crossed at a slant.
+      const sin = Math.max(0.45, Math.abs(ux * sz - uz * sx) / Math.hypot(sx, sz))
+      const logs = w.kind === 'water_channel'
+      const halfLength = (w.width / 2 + (logs ? 0.7 : 1.0)) / sin
+      const x = ax + rx * t
+      const z = az + rz * t
+      const bank = Math.max(
+        this.heights.heightAt(x + ux * (halfLength + 0.6), z + uz * (halfLength + 0.6)),
+        this.heights.heightAt(x - ux * (halfLength + 0.6), z - uz * (halfLength + 0.6)),
+        this.heights.heightAt(x, z) + (logs ? 0.15 : 0.45),
+      )
+      found.push({
+        x,
+        z,
+        ux,
+        uz,
+        halfLength,
+        width: logs ? 0.6 : p.kind === 'path' ? 1.1 : 0.8,
+        deck: bank + (logs ? 0.08 : 0.12),
+        logs,
+        order: p.kind === 'path' ? 2 : 1,
+      })
+    }
+    // One bridge per crossing, the widest path's; nearby bridges are found through a grid.
+    found.sort((a, b) => b.order - a.order)
+    const placed = new Map<number, Bridge[]>()
+    for (const c of found) {
+      const gx = cellOf(c.x, BRIDGE_SPACING)
+      const gz = cellOf(c.z, BRIDGE_SPACING)
+      let taken = false
+      for (let x = gx - 1; x <= gx + 1 && !taken; x++) {
+        for (let z = gz - 1; z <= gz + 1 && !taken; z++) {
+          taken = (placed.get(cellKey(x, z)) ?? []).some(k => Math.hypot(k.x - c.x, k.z - c.z) < BRIDGE_SPACING)
         }
       }
-    }
-    // One bridge per crossing, the widest path's.
-    found.sort((a, b) => b.order - a.order)
-    for (const c of found) {
-      if (!this.bridges.some(k => Math.hypot(k.x - c.x, k.z - c.z) < 5)) this.bridges.push(c)
+      if (taken) continue
+      this.bridges.push(c)
+      const key = cellKey(gx, gz)
+      const list = placed.get(key)
+      if (list) list.push(c)
+      else placed.set(key, [c])
     }
     if (this.bridges.length) this.group.add(this.bridgeMeshes())
   }

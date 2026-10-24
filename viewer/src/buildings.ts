@@ -318,7 +318,11 @@ const WALL_KIND: Record<string, WallKind> = {
   shed: 'boards',
 }
 
-export async function loadBuildings(world: World, gfx: Gfx): Promise<THREE.Group | null> {
+/** The buildings as one group of meshes, and their outlines (scene x, z) for placing control flags. */
+export async function loadBuildings(
+  world: World,
+  gfx: Gfx,
+): Promise<{ group: THREE.Group; outlines: [number, number][][] } | null> {
   const info = world.manifest.buildings
   if (!info) return null
   const response = await fetch(world.url(info.path))
@@ -364,5 +368,5 @@ export async function loadBuildings(world: World, gfx: Gfx): Promise<THREE.Group
     mesh.receiveShadow = true
     group.add(mesh)
   }
-  return group
+  return { group, outlines: records.map(b => b.outline) }
 }

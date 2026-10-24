@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import './style.css'
 import { loadBuildings } from './buildings'
-import { beep, CourseRun, loadCourse } from './course'
+import { beep, type Control, type Course, CourseRun, loadCourse } from './course'
 import { Environment } from './environment'
 import { MapFeatures } from './features'
 import { FAR_DISTANCE, Forest } from './forest'
@@ -9,7 +9,11 @@ import { Gfx, QUALITY } from './gfx'
 import { asLayerTexture } from './groundMaterial'
 import { HeightField } from './heightfield'
 import { Hud } from './hud'
+import { applyTranslations, formatNumber, setupLanguageSelect, t, type TextKey } from './i18n'
 import { decodePng, LayerStore } from './layers'
+import { type CourseControl, type ImportedCourse, readCourseFile } from './ocad/courses'
+import { OcadError } from './ocad/reader'
+import { blocked, type PlacementData, placeFlag } from './placement'
 import { Player } from './player'
 import { Terrain } from './terrain'
 import { Tracks } from './tracks'
@@ -21,6 +25,19 @@ const overlay = document.getElementById('overlay')!
 const status = document.getElementById('status')!
 const startButton = document.getElementById('start') as HTMLButtonElement
 const worldSelect = document.getElementById('world-select') as HTMLSelectElement
+const langSelect = document.getElementById('lang-select') as HTMLSelectElement
+const courseFileButton = document.getElementById('course-file-button') as HTMLButtonElement
+const courseFile = document.getElementById('course-file') as HTMLInputElement
+const courseLabel = document.getElementById('course-label')!
+const courseSelect = document.getElementById('course-select') as HTMLSelectElement
+
+applyTranslations()
+setupLanguageSelect(langSelect)
+
+/** Let the browser draw and handle input between heavy startup steps. */
+function pause(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, 0))
+}
 
 function setStatus(text: string) {
   status.textContent = text
@@ -35,7 +52,11 @@ async function chooseWorld(): Promise<string | null> {
     worldSelect.appendChild(option)
   }
   worldSelect.addEventListener('change', () => {
-    location.search = `?world=${encodeURIComponent(worldSelect.value)}`
+    const params = new URLSearchParams()
+    params.set('world', worldSelect.value)
+    const lang = new URLSearchParams(location.search).get('lang')
+    if (lang) params.set('lang', lang)
+    location.search = params.toString()
   })
   const name = fromUrl ?? worlds[0] ?? null
   if (name) worldSelect.value = name
@@ -65,17 +86,96 @@ function applyViewParams(player: Player, world: World) {
   }
 }
 
+/** UTM zone of an EPSG code such as EPSG:25832 or EPSG:32632. */
+function utmZone(crs: string): number | null {
+  const code = Number(crs.split(':')[1])
+  return (code > 25800 && code <= 25860) || (code > 32600 && code <= 32660) ? code % 100 : null
+}
+
+/**
+ * A course from an OCAD file, with each flag placed by its control description, and the
+ * file's other controls (`all`), which stand in the terrain too.
+ */
+function courseFrom(imported: ImportedCourse, all: CourseControl[], world: World, placement: PlacementData): Course {
+  const controls = imported.controls.map(c => c.position)
+  const flag = (c: CourseControl, previous?: Control): Control =>
+    world.toProjected(
+      ...placeFlag(c.description, world.toScene(...c.position), placement, previous && world.toScene(...previous)),
+    )
+  const flags = imported.controls.map((c, i): Control => (c.kind === 'control' ? flag(c, controls[i - 1]) : c.position))
+  const onCourse = new Set(imported.controls.map(c => c.code))
+  const others = all
+    .filter(c => !onCourse.has(c.code))
+    .map(c => ({ code: c.code, position: c.position, flag: flag(c) }))
+  return { controls, imported, flags, others }
+}
+
+function ocadMessage(err: unknown): string {
+  if (err instanceof OcadError) {
+    return err.reason === 'version' ? t('ocadVersion', { version: err.version }) : t('notOcad')
+  }
+  return t('error', { message: err instanceof Error ? err.message : String(err) })
+}
+
+/** Course file button and course list on the start screen. */
+function setupCourseImport(world: World, placement: PlacementData, choose: (course: Course) => void) {
+  let courses: ImportedCourse[] = []
+  let allControls: CourseControl[] = []
+  courseFileButton.disabled = false
+  courseFileButton.addEventListener('click', () => courseFile.click())
+  courseFile.addEventListener('change', async () => {
+    const file = courseFile.files?.[0]
+    courseFile.value = ''
+    if (!file) return
+    setStatus(t('readingCourses', { file: file.name }))
+    try {
+      const read = readCourseFile(await file.arrayBuffer(), world.manifest.map.offset ?? [0, 0])
+      const mapZone = utmZone(world.manifest.crs)
+      if (read.zone !== null && mapZone !== null && read.zone !== mapZone) {
+        throw new Error(t('wrongZone', { course: read.zone, map: mapZone }))
+      }
+      if (!read.courses.length) throw new Error(t('noCourses'))
+      courses = read.courses
+      allControls = read.controls
+      courseSelect.replaceChildren(new Option(t('chooseCourse'), ''))
+      courses.forEach((c, i) => courseSelect.add(new Option(c.name, String(i))))
+      courseLabel.hidden = false
+      setStatus(t('coursesFound', { count: courses.length, file: file.name }))
+    } catch (err) {
+      setStatus(err instanceof OcadError ? ocadMessage(err) : err instanceof Error ? err.message : String(err))
+    }
+  })
+  courseSelect.addEventListener('change', () => {
+    const imported = courses[Number(courseSelect.value)]
+    if (!courseSelect.value || !imported) return
+    const [x0, y0, x1, y1] = world.manifest.extent
+    const inside = ({ position: [e, n] }: { position: Control }) => e >= x0 && e <= x1 && n >= y0 && n <= y1
+    if (!imported.controls.every(inside)) {
+      setStatus(t('outsideMap', { name: imported.name }))
+      return
+    }
+    choose(courseFrom(imported, allControls, world, placement))
+    setStatus(
+      t('courseChosen', {
+        name: imported.name,
+        controls: imported.controls.filter(c => c.kind === 'control').length,
+        length: formatNumber(imported.lengthM / 1000, 1),
+      }),
+    )
+  })
+}
+
 async function main() {
   const name = await chooseWorld()
   if (!name) {
-    setStatus('No worlds found. Build one first:\n  uv run otest build <map.ocd>')
+    setStatus(t('noWorlds'))
     return
   }
 
-  setStatus(`Loading ${name} …`)
+  setStatus(t('loadingWorld', { name }))
   const world = await World.load(name)
   const heights = await HeightField.load(world, (done, total) =>
-    setStatus(`Loading terrain ${Math.round((100 * done) / total)} %`),
+    setStatus(t('loadingTerrain', { percent: Math.round((100 * done) / total) })),
   )
   const overview = await new THREE.TextureLoader().loadAsync(world.url(world.manifest.drape.overview))
 
@@ -84,6 +184,8 @@ async function main() {
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.0
+  // Reading every shader's log makes the browser wait for each compile; keep that for development.
+  if (import.meta.env.PROD) renderer.debug.checkShaderErrors = false
   app.appendChild(renderer.domElement)
 
   const scene = new THREE.Scene()
@@ -91,8 +193,8 @@ async function main() {
   const environment = new Environment(scene, renderer)
   const quality = new URLSearchParams(location.search).get('quality')
   if (quality === 'high' || quality === 'medium' || quality === 'low') environment.setQuality(quality)
-  setStatus('Painting textures …')
-  await new Promise(resolve => setTimeout(resolve, 0))
+  setStatus(t('paintingTextures'))
+  await pause()
   const gfx = new Gfx(renderer)
   gfx.setQuality(QUALITY[environment.quality])
   gfx.buildImpostors(renderer, environment.sunDirection)
@@ -114,6 +216,8 @@ async function main() {
   })
   scene.add(terrain.group)
 
+  setStatus(t('buildingWorld'))
+  await pause()
   const tracks = await Tracks.load(world, heights, gfx)
   if (tracks) scene.add(tracks.group)
   const treeInfo = world.manifest.trees
@@ -128,8 +232,10 @@ async function main() {
     : null
   if (undergrowth) undergrowth.tracks = tracks
   if (undergrowth) scene.add(undergrowth.group)
+  await pause()
   const buildings = await loadBuildings(world, gfx)
-  if (buildings) scene.add(buildings)
+  if (buildings) scene.add(buildings.group)
+  await pause()
   const features = await MapFeatures.load(world, heights, gfx)
   if (features && undergrowth) undergrowth.setStumps(features.stumps)
   if (features) scene.add(features.group)
@@ -153,13 +259,28 @@ async function main() {
   const [sx, sz] = world.toScene(...world.manifest.spawn)
   player.placeAt(sx, sz)
   applyViewParams(player, world)
-  const run = new CourseRun(world, heights, loadCourse(world))
+  const placement: PlacementData = {
+    ...(features?.data ?? { kinds: [], points: [], lines: [], cliffs: [] }),
+    buildings: buildings?.outlines ?? [],
+    heightAt: (x, z) => heights.heightAt(x, z),
+  }
+  const run = new CourseRun(world, heights, loadCourse(world), (x, z) => blocked(placement, [x, z]))
   scene.add(run.group)
   run.punchListener = () => beep()
+  const qualityNames: Record<typeof environment.quality, TextKey> = {
+    high: 'qualityHigh',
+    medium: 'qualityMedium',
+    low: 'qualityLow',
+  }
   const hud = new Hud(document.getElementById('hud')!, world, player, run, () => {
     const trees = forest?.drawn ?? { near: 0, total: 0 }
-    return `${trees.near.toLocaleString('en')} near / ${trees.total.toLocaleString('en')} trees · ${environment.quality} quality`
+    return t('treesStatus', {
+      near: formatNumber(trees.near),
+      total: formatNumber(trees.total),
+      quality: t(qualityNames[environment.quality]),
+    })
   })
+  hud.showDescriptions(true)
   // The map window gets the mouse when it opens. Pressing on the terrain takes it back
   // for steering (the map stays open), and Esc gives it to the map again.
   const resume = document.getElementById('resume')!
@@ -193,14 +314,26 @@ async function main() {
     if (!hud.mapOpen) overlay.hidden = false
     updateResume()
   })
+  /**
+   * Put the runner at the start, ready to run: a few metres behind the start banner, looking
+   * at it and the start control, as when a course is opened (T does the same).
+   */
+  const goToStart = () => {
+    if (!run.course.controls.length) return
+    if (player.flying) player.toggleFlying()
+    run.reset()
+    const view = run.startView()
+    if (view) {
+      player.placeAt(view.x, view.z)
+      player.camera.rotation.set(THREE.MathUtils.degToRad(-4), -view.heading, 0, 'YXZ')
+    } else {
+      const start = run.scenePosition(0)
+      player.placeAt(start.x, start.z)
+    }
+  }
   window.addEventListener('keydown', e => {
     if (e.code === 'KeyO') terrain.setMode(terrain.mode === 'ground' ? 'map' : 'ground')
-    if (e.code === 'KeyT' && run.course.controls.length) {
-      const start = run.scenePosition(0)
-      if (player.flying) player.toggleFlying()
-      player.placeAt(start.x, start.z)
-      run.reset()
-    }
+    if (e.code === 'KeyT') goToStart()
     if (e.code === 'KeyR') run.reset()
     if (e.code === 'KeyG') {
       const order = ['high', 'medium', 'low'] as const
@@ -213,14 +346,24 @@ async function main() {
     }
   })
 
-  setStatus('Preparing terrain …')
+  setStatus(t('preparingTerrain'))
   await terrain.prepare(camera.position)
   if (forest) {
-    setStatus('Planting trees …')
+    setStatus(t('plantingTrees'))
     await forest.prepare(camera.position)
   }
   undergrowth?.update(camera.position)
+  // Compile the shaders now, in parallel where the browser can, instead of all at once
+  // (and waiting for each) when the first frame is drawn.
+  setStatus(t('compilingShaders'))
+  await pause()
+  await renderer.compileAsync(scene, camera)
 
+  setupCourseImport(world, placement, course => {
+    run.setCourse(course)
+    hud.showDescriptions(true)
+    goToStart()
+  })
   startButton.hidden = false
   if (new URLSearchParams(location.search).has('start')) overlay.hidden = true
   setStatus(
@@ -255,7 +398,9 @@ async function main() {
   })
 
   // For poking at the scene from the browser console while developing.
-  if (import.meta.env.DEV) Object.assign(window, { otest: { THREE, renderer, scene, camera, gfx, forest, undergrowth, player } })
+  if (import.meta.env.DEV) {
+    Object.assign(window, { terraino: { THREE, renderer, scene, camera, gfx, forest, undergrowth, player, run, hud } })
+  }
 
   const timer = new THREE.Timer()
   renderer.setAnimationLoop(() => {
@@ -275,5 +420,5 @@ async function main() {
 
 main().catch(err => {
   console.error(err)
-  setStatus(`Error: ${err instanceof Error ? err.message : String(err)}`)
+  setStatus(t('error', { message: err instanceof Error ? err.message : String(err) }))
 })

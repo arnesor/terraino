@@ -1,6 +1,6 @@
 import pytest
 
-from otest.ingest.georef import Extent, UnsupportedCrsError, etrs89_utm_epsg
+from terraino.ingest.georef import Extent, UnsupportedCrsError, etrs89_utm_epsg
 
 
 @pytest.mark.parametrize(

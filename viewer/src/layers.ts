@@ -3,7 +3,7 @@ import { asLayerTexture } from './groundMaterial'
 import type { LayerInfo } from './world'
 import type { World } from './world'
 
-/** Ground classes, as in otest.process.symbols.Ground. */
+/** Ground classes, as in terraino.process.symbols.Ground. */
 export const Ground = {
   unknown: 0,
   forest: 1,

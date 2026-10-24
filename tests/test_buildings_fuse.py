@@ -8,22 +8,22 @@ import pytest
 import shapely
 from shapely import LineString, Polygon, box
 
-from otest.fetch import matrikkel
-from otest.fetch.ar5 import decode_land_cover
-from otest.fetch.cache import DownloadError
-from otest.fetch.matrikkel import BuildingPoint
-from otest.fetch.osm import OsmFeature, parse_overpass
-from otest.fetch.topo_buildings import RoofLine, TopoBuilding
-from otest.ingest.georef import Extent
-from otest.process.buildings import (
+from terraino.fetch import matrikkel
+from terraino.fetch.ar5 import decode_land_cover
+from terraino.fetch.cache import DownloadError
+from terraino.fetch.matrikkel import BuildingPoint
+from terraino.fetch.osm import OsmFeature, parse_overpass
+from terraino.fetch.topo_buildings import RoofLine, TopoBuilding
+from terraino.ingest.georef import Extent
+from terraino.process.buildings import (
     building_kind,
     collect_footprints,
     fit_roof,
     measure_buildings,
 )
-from otest.process.fuse import apply_land_cover, apply_osm, road_style
-from otest.process.layers import TREES_LIDAR, GroundLayers
-from otest.process.symbols import Ground, SymbolSet
+from terraino.process.fuse import apply_land_cover, apply_osm, road_style
+from terraino.process.layers import TREES_LIDAR, GroundLayers
+from terraino.process.symbols import Ground, SymbolSet
 
 EXTENT = Extent(0, 0, 100, 100)
 # 12 x 8 m, the long side east-west.

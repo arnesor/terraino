@@ -4,8 +4,8 @@ import laspy
 import numpy as np
 import pytest
 
-from otest.ingest.georef import Extent
-from otest.ingest.lidar import (
+from terraino.ingest.georef import Extent
+from terraino.ingest.lidar import (
     FINE,
     LidarRasters,
     coarse_canopy,

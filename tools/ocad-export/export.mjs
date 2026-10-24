@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Export an OCAD map to files the otest pipeline can read:
+// Export an OCAD map to files the Terrain-O pipeline can read:
 //
 //   meta.json        CRS, scale, map bounds, world extent and symbol table
 //   objects.geojson  map objects in projected coordinates (no symbol graphics)
@@ -21,7 +21,7 @@
 // objects.geojson ("oid"). They are stable between runs on the same file.
 //
 // This tool is licensed AGPL-3.0, because it links ocad2geojson (AGPL-3.0).
-// The otest Python package only runs it as a separate program.
+// The terraino Python package only runs it as a separate program.
 
 import fs from 'node:fs'
 import path from 'node:path'
