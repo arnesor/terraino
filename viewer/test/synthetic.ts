@@ -1,6 +1,5 @@
 // A small synthetic world for unit tests: heights from a function, served by a stubbed fetch.
 import * as THREE from 'three'
-import { vi } from 'vitest'
 import type { Gfx } from '../src/gfx'
 import { HeightField } from '../src/heightfield'
 import { ChunkLayer, Ground } from '../src/layers'
@@ -49,7 +48,8 @@ export async function syntheticWorld(
     layers: LAYER_INFO,
   } as unknown as Manifest
   const world = new World('/worlds/synthetic/', manifest)
-  vi.stubGlobal('fetch', async (url: string) => {
+  const realFetch = globalThis.fetch
+  globalThis.fetch = (async (url: string) => {
     const match = /height\/(\d+)_(\d+)\.bin$/.exec(url)
     if (!match) return new Response(null, { status: 404 })
     const cx = Number(match[1])
@@ -59,11 +59,11 @@ export async function syntheticWorld(
       for (let c = 0; c <= CHUNK; c++) raw[r * (CHUNK + 1) + c] = Math.round(f(cx * CHUNK + c, cy * CHUNK + r) / SCALE)
     }
     return new Response(raw.buffer)
-  })
+  }) as typeof fetch
   try {
     return { world, heights: await HeightField.load(world, () => {}) }
   } finally {
-    vi.unstubAllGlobals()
+    globalThis.fetch = realFetch
   }
 }
 

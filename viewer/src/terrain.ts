@@ -33,6 +33,9 @@ interface Chunk {
   detailDrape: THREE.MeshLambertMaterial | null
   detailGround: THREE.MeshLambertMaterial | null
   loading: boolean
+  // True once the detail textures have loaded, or failed to: they are not fetched again
+  // until the chunk has been far away.
+  detailLoaded: boolean
 }
 
 /** Index buffer for a chunk grid with `n` cells per side plus a skirt around it. */
@@ -160,6 +163,7 @@ export class Terrain {
           detailDrape: null,
           detailGround: null,
           loading: false,
+          detailLoaded: false,
         })
       }
     }
@@ -262,14 +266,21 @@ export class Terrain {
     const url = this.world.url(this.world.manifest.drape.path, chunk.cx, chunk.cy)
     const layerInfo = this.world.manifest.layers
     try {
-      const [drape, layer] = await Promise.all([
+      // Either can fail without the other: the ground layer also feeds the undergrowth.
+      const [drape, layerResult] = await Promise.allSettled([
         this.textureLoader.loadAsync(url),
         this.options.layers?.load(chunk.cx, chunk.cy) ?? Promise.resolve(null),
       ])
-      drape.colorSpace = THREE.SRGBColorSpace
-      drape.anisotropy = this.options.maxAnisotropy
-      drape.wrapS = drape.wrapT = THREE.ClampToEdgeWrapping
-      chunk.detailDrape = new THREE.MeshLambertMaterial({ map: drape })
+      if (drape.status === 'fulfilled') {
+        const map = drape.value
+        map.colorSpace = THREE.SRGBColorSpace
+        map.anisotropy = this.options.maxAnisotropy
+        map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping
+        chunk.detailDrape = new THREE.MeshLambertMaterial({ map })
+      } else {
+        console.warn(`Could not load the drape of chunk ${chunk.cx}_${chunk.cy}`, drape.reason)
+      }
+      const layer = layerResult.status === 'fulfilled' ? layerResult.value : null
       if (layer && layerInfo) {
         const n = this.heights.chunk
         chunk.detailGround = createGroundMaterial(
@@ -290,20 +301,22 @@ export class Terrain {
     } finally {
       this.texturesLoading--
       chunk.loading = false
+      chunk.detailLoaded = true
     }
   }
 
   private loadDetail(chunk: Chunk) {
-    if (chunk.loading || chunk.detailDrape || this.texturesLoading >= MAX_TEXTURE_LOADS) return
+    if (chunk.loading || chunk.detailLoaded || this.texturesLoading >= MAX_TEXTURE_LOADS) return
     void this.fetchDetail(chunk)
   }
 
   private dropDetail(chunk: Chunk) {
-    if (!chunk.detailDrape) return
+    if (!chunk.detailLoaded) return
+    chunk.detailLoaded = false
     chunk.near = false
     this.applyMaterial(chunk)
-    chunk.detailDrape.map?.dispose()
-    chunk.detailDrape.dispose()
+    chunk.detailDrape?.map?.dispose()
+    chunk.detailDrape?.dispose()
     chunk.detailDrape = null
     chunk.detailGround?.dispose()
     chunk.detailGround = null

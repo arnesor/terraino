@@ -64,6 +64,8 @@ export class Environment {
   setQuality(quality: Quality) {
     this.quality = quality
     const size = SHADOW_SIZE[quality]
+    // Switching shadows on or off changes the lights, so three recompiles every lit material
+    // on the next render.
     this.renderer.shadowMap.enabled = size > 0
     this.sun.castShadow = size > 0
     if (size > 0) {
@@ -71,8 +73,6 @@ export class Environment {
       this.sun.shadow.map?.dispose()
       this.sun.shadow.map = null
     }
-    // Materials must be recompiled when shadows are switched on or off.
-    this.renderer.shadowMap.needsUpdate = true
   }
 
   /** Keep the sky and the shadowed area centred on the camera. */

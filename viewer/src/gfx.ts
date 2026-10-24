@@ -43,6 +43,8 @@ export const GROUND_LAYERS: GroundKind[] = ['forest', 'grass', 'soil', 'gravel',
 
 const IMPOSTOR_W = 256
 const IMPOSTOR_H = 512
+// Slots in the impostor atlas, one per tree variant, rounded up to a power of two.
+const IMPOSTOR_SLOTS = 2 ** Math.ceil(Math.log2(VARIANTS.length))
 // The impostor camera sees x in ±IMPOSTOR_HALF_W and y from -0.02 to 1.02 of the tree.
 export const IMPOSTOR_HALF_W = 0.26
 
@@ -240,8 +242,7 @@ export class Gfx {
    * variant. Distant trees are drawn as camera-facing quads with these pictures.
    */
   buildImpostors(renderer: THREE.WebGLRenderer, sunDir: THREE.Vector3): THREE.Texture {
-    const slots = VARIANTS.length
-    const target = new THREE.WebGLRenderTarget(IMPOSTOR_W * 8, IMPOSTOR_H, {
+    const target = new THREE.WebGLRenderTarget(IMPOSTOR_W * IMPOSTOR_SLOTS, IMPOSTOR_H, {
       generateMipmaps: true,
       minFilter: THREE.LinearMipmapLinearFilter,
       magFilter: THREE.LinearFilter,
@@ -268,7 +269,7 @@ export class Gfx {
     renderer.setRenderTarget(target)
     renderer.setClearColor(0x000000, 0)
     renderer.clear()
-    for (let v = 0; v < slots; v++) {
+    for (let v = 0; v < VARIANTS.length; v++) {
       const model = this.treeModel(v)
       const mats = this.species[VARIANTS[v]!.species]
       const group = new THREE.Group()
@@ -325,7 +326,7 @@ export class Gfx {
           vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), normalize(to + vec3(1e-4))));
           vec3 wp = c + right * position.x * wid + vec3(0.0, position.y * hgt, 0.0);
           float u = flip > 0.0 ? uv.x : 1.0 - uv.x;
-          vUv = vec2((aSlot + u) / 8.0, uv.y);
+          vUv = vec2((aSlot + u) / ${IMPOSTOR_SLOTS.toFixed(1)}, uv.y);
           vTint = vec3(1.0);
           #ifdef USE_INSTANCING_COLOR
             vTint = instanceColor;

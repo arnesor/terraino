@@ -58,7 +58,10 @@ export class ChunkLayer {
   }
 
   dispose() {
+    const image: unknown = this.texture.image
     this.texture.dispose()
+    // A decoded bitmap holds its pixels until it is closed.
+    if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) image.close()
   }
 }
 
