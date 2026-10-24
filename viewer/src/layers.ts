@@ -43,23 +43,25 @@ export class ChunkLayer {
     this.info = info
   }
 
-  /** Layer values at chunk-local sample position (x, z), nearest sample. */
-  sample(x: number, z: number): LayerSample {
+  /** Layer values at chunk-local sample position (x, z), nearest sample, written into `out`. */
+  sample(x: number, z: number, out: LayerSample = { ground: 0, canopy: 0, shrubs: 0, speed: 0 }): LayerSample {
     const n = this.size - 1
     const col = Math.min(Math.max(Math.round(x), 0), n)
     const row = Math.min(Math.max(Math.round(z), 0), n)
     const i = (row * this.size + col) * 4
     const b = this.pixels[i + 2]!
-    return {
-      ground: this.pixels[i]!,
-      canopy: this.pixels[i + 1]! * this.info.canopyUnit,
-      shrubs: (b >> 4) / this.info.levels,
-      speed: (b & 15) / this.info.levels,
-    }
+    out.ground = this.pixels[i]!
+    out.canopy = this.pixels[i + 1]! * this.info.canopyUnit
+    out.shrubs = (b >> 4) / this.info.levels
+    out.speed = (b & 15) / this.info.levels
+    return out
   }
 
   dispose() {
+    const image: unknown = this.texture.image
     this.texture.dispose()
+    // A decoded bitmap holds its pixels until it is closed.
+    if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) image.close()
   }
 }
 
@@ -83,6 +85,7 @@ export class LayerStore {
   private readonly world: World
   private readonly cache = new Map<string, ChunkLayer>()
   private readonly pending = new Map<string, Promise<ChunkLayer | null>>()
+  private added = 0
 
   constructor(world: World, info: LayerInfo) {
     this.world = world
@@ -107,7 +110,7 @@ export class LayerStore {
         .then(({ bitmap, pixels }) => {
           const texture = asLayerTexture(new THREE.Texture(bitmap))
           const layer = new ChunkLayer(pixels, bitmap.width, texture, this.info)
-          this.cache.set(key, layer)
+          this.put(cx, cy, layer)
           return layer
         })
         .catch(err => {
@@ -118,6 +121,17 @@ export class LayerStore {
       this.pending.set(key, promise)
     }
     return promise
+  }
+
+  /** Goes up whenever a layer is added, so users can tell when to look again. */
+  get version(): number {
+    return this.added
+  }
+
+  /** Add a decoded layer to the cache. */
+  put(cx: number, cy: number, layer: ChunkLayer) {
+    this.cache.set(this.key(cx, cy), layer)
+    this.added++
   }
 
   release(cx: number, cy: number) {

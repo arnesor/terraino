@@ -14,8 +14,9 @@ const LODS = [
 ]
 // Chunks closer than this use their full-resolution textures.
 const DETAIL_TEXTURE_DISTANCE = 450
-// Chunk geometries rebuilt per frame at most, to avoid stutter.
-const MAX_REBUILDS_PER_FRAME = 3
+// Chunk vertices rebuilt per frame at most, to avoid stutter: about one full-detail chunk.
+// A chunk bigger than this is still rebuilt when it is the first in a frame.
+const MAX_REBUILT_VERTICES_PER_FRAME = 70_000
 const MAX_TEXTURE_LOADS = 6
 
 export type TerrainMode = 'ground' | 'map'
@@ -32,6 +33,9 @@ interface Chunk {
   detailDrape: THREE.MeshLambertMaterial | null
   detailGround: THREE.MeshLambertMaterial | null
   loading: boolean
+  // True once the detail textures have loaded, or failed to: they are not fetched again
+  // until the chunk has been far away.
+  detailLoaded: boolean
 }
 
 /** Index buffer for a chunk grid with `n` cells per side plus a skirt around it. */
@@ -159,6 +163,7 @@ export class Terrain {
           detailDrape: null,
           detailGround: null,
           loading: false,
+          detailLoaded: false,
         })
       }
     }
@@ -222,7 +227,9 @@ export class Terrain {
             h.sample(col, row - step) - h.sample(col, row + step),
           )
           .normalize()
-        normals.set([normal.x, normal.y, normal.z], i * 3)
+        normals[i * 3] = normal.x
+        normals[i * 3 + 1] = normal.y
+        normals[i * 3 + 2] = normal.z
         uvs[i * 2] = c / n
         uvs[i * 2 + 1] = 1 - r / n
       }
@@ -259,14 +266,21 @@ export class Terrain {
     const url = this.world.url(this.world.manifest.drape.path, chunk.cx, chunk.cy)
     const layerInfo = this.world.manifest.layers
     try {
-      const [drape, layer] = await Promise.all([
+      // Either can fail without the other: the ground layer also feeds the undergrowth.
+      const [drape, layerResult] = await Promise.allSettled([
         this.textureLoader.loadAsync(url),
         this.options.layers?.load(chunk.cx, chunk.cy) ?? Promise.resolve(null),
       ])
-      drape.colorSpace = THREE.SRGBColorSpace
-      drape.anisotropy = this.options.maxAnisotropy
-      drape.wrapS = drape.wrapT = THREE.ClampToEdgeWrapping
-      chunk.detailDrape = new THREE.MeshLambertMaterial({ map: drape })
+      if (drape.status === 'fulfilled') {
+        const map = drape.value
+        map.colorSpace = THREE.SRGBColorSpace
+        map.anisotropy = this.options.maxAnisotropy
+        map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping
+        chunk.detailDrape = new THREE.MeshLambertMaterial({ map })
+      } else {
+        console.warn(`Could not load the drape of chunk ${chunk.cx}_${chunk.cy}`, drape.reason)
+      }
+      const layer = layerResult.status === 'fulfilled' ? layerResult.value : null
       if (layer && layerInfo) {
         const n = this.heights.chunk
         chunk.detailGround = createGroundMaterial(
@@ -287,20 +301,22 @@ export class Terrain {
     } finally {
       this.texturesLoading--
       chunk.loading = false
+      chunk.detailLoaded = true
     }
   }
 
   private loadDetail(chunk: Chunk) {
-    if (chunk.loading || chunk.detailDrape || this.texturesLoading >= MAX_TEXTURE_LOADS) return
+    if (chunk.loading || chunk.detailLoaded || this.texturesLoading >= MAX_TEXTURE_LOADS) return
     void this.fetchDetail(chunk)
   }
 
   private dropDetail(chunk: Chunk) {
-    if (!chunk.detailDrape) return
+    if (!chunk.detailLoaded) return
+    chunk.detailLoaded = false
     chunk.near = false
     this.applyMaterial(chunk)
-    chunk.detailDrape.map?.dispose()
-    chunk.detailDrape.dispose()
+    chunk.detailDrape?.map?.dispose()
+    chunk.detailDrape?.dispose()
     chunk.detailDrape = null
     chunk.detailGround?.dispose()
     chunk.detailGround = null
@@ -354,7 +370,11 @@ export class Terrain {
     const pending = this.chunks
       .filter(c => c.wantStep !== c.step)
       .sort((a, b) => a.wantStep - b.wantStep || a.center.distanceTo(eye) - b.center.distanceTo(eye))
-    for (const chunk of pending.slice(0, MAX_REBUILDS_PER_FRAME)) {
+    let budget = MAX_REBUILT_VERTICES_PER_FRAME
+    for (const chunk of pending) {
+      const vertices = (this.heights.chunk / chunk.wantStep + 1) ** 2
+      if (vertices > budget && budget < MAX_REBUILT_VERTICES_PER_FRAME) break
+      budget -= vertices
       const old = chunk.mesh.geometry
       chunk.mesh.geometry = this.buildGeometry(chunk.cx, chunk.cy, chunk.wantStep)
       chunk.step = chunk.wantStep

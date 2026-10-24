@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { Gfx, QualitySettings } from './gfx'
 import type { HeightField } from './heightfield'
-import { Ground, type LayerSample, type LayerStore } from './layers'
+import { type ChunkLayer, Ground, type LayerSample, type LayerStore } from './layers'
 import type { Tracks } from './tracks'
 import type { CoverKind } from './vendor/textures.js'
 
@@ -133,6 +133,8 @@ export class Undergrowth {
   private readonly stumpMesh: THREE.InstancedMesh
   private readonly stumpGrid = new Map<number, number[]>()
   private builtAt: THREE.Vector3 | null = null
+  // Layer version at the last fill if some layers were missing then, else null.
+  private waitingFor: number | null = null
   private quality: QualitySettings
   private readonly bushBase: Partial<Record<number, number>>
 
@@ -186,7 +188,9 @@ export class Undergrowth {
   }
 
   update(eye: THREE.Vector3) {
-    if (this.builtAt && this.builtAt.distanceTo(eye) < REBUILD_DISTANCE) return
+    const moved = !this.builtAt || this.builtAt.distanceTo(eye) >= REBUILD_DISTANCE
+    const arrived = this.waitingFor !== null && this.waitingFor !== this.layers.version
+    if (!moved && !arrived) return
     const n = this.heights.chunk
     const matrix = new THREE.Matrix4()
     const quat = new THREE.Quaternion()
@@ -205,27 +209,39 @@ export class Undergrowth {
       return true
     }
     let complete = true
+    // The layer of the last cell's chunk, and one sample object reused for every cell.
+    let layer: ChunkLayer | undefined
+    let layerCx = NaN
+    let layerCy = NaN
+    const sample: LayerSample = { ground: 0, canopy: 0, shrubs: 0, speed: 0 }
     const bushRadius = this.quality.near - 8
     const coverRadius = this.quality.cover
     const perCell = this.quality.coverDensity
     const samples = Math.ceil(perCell)
 
-    const x0 = Math.floor(eye.x - bushRadius)
-    const z0 = Math.floor(eye.z - bushRadius)
-    for (let z = z0; z <= eye.z + bushRadius; z++) {
-      for (let x = x0; x <= eye.x + bushRadius; x++) {
+    // Only cells inside the world: there are no layers beyond its edge.
+    const x0 = Math.max(Math.floor(eye.x - bushRadius), 0)
+    const z0 = Math.max(Math.floor(eye.z - bushRadius), 0)
+    const x1 = Math.min(eye.x + bushRadius, this.heights.chunksX * n - 1)
+    const z1 = Math.min(eye.z + bushRadius, this.heights.chunksY * n - 1)
+    for (let z = z0; z <= z1; z++) {
+      for (let x = x0; x <= x1; x++) {
         const dx = x - eye.x
         const dz = z - eye.z
         const d2 = dx * dx + dz * dz
         if (d2 > bushRadius * bushRadius) continue
         const cx = Math.floor(x / n)
         const cy = Math.floor(z / n)
-        const layer = this.layers.get(cx, cy)
+        if (cx !== layerCx || cy !== layerCy) {
+          layer = this.layers.get(cx, cy)
+          layerCx = cx
+          layerCy = cy
+        }
         if (!layer) {
           complete = false
           continue
         }
-        const s = layer.sample(x - cx * n, z - cy * n)
+        const s = layer.sample(x - cx * n, z - cy * n, sample)
         if (s.ground === Ground.path || s.ground === Ground.gravel || s.ground === Ground.paved) continue
         if (s.ground === Ground.water || s.ground === Ground.building) continue
         const forest = s.ground === Ground.forest
@@ -363,10 +379,16 @@ export class Undergrowth {
 
     for (const mesh of [this.bushes, this.logs, this.stumpMesh, ...this.twigs, ...this.cover.values()]) {
       mesh.count = counts.get(mesh) ?? 0
-      mesh.instanceMatrix.needsUpdate = true
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+      // Upload only the instances in use; without a range three uploads the whole capacity.
+      for (const attribute of [mesh.instanceMatrix, mesh.instanceColor]) {
+        if (!attribute) continue
+        attribute.clearUpdateRanges()
+        attribute.addUpdateRange(0, mesh.count * attribute.itemSize)
+        attribute.needsUpdate = true
+      }
     }
-    // Rebuild again soon if some layers were still loading.
-    this.builtAt = complete ? eye.clone() : null
+    // Fill again when more layers have arrived, if some were missing (loading or failed).
+    this.builtAt = eye.clone()
+    this.waitingFor = complete ? null : this.layers.version
   }
 }
