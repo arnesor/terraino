@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the tested commit
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -90,13 +90,13 @@ jobs:
 
       - name: Update release draft
         if: steps.branch.outputs.current == 'true' && steps.version.outputs.changed != 'true'
-        uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9  # v7
+        uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0  # v7
         with:
           commitish: ${{ github.event.workflow_run.head_sha }}
 
       - name: Publish GitHub release
         if: steps.branch.outputs.current == 'true' && steps.version.outputs.changed == 'true'
-        uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9  # v7
+        uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0  # v7
         with:
           commitish: ${{ github.event.workflow_run.head_sha }}
           name: v${{ steps.version.outputs.version }}
