@@ -1,5 +1,7 @@
 default_language_version:
   python: python3.13
+# Downloaded files, kept exactly as the services sent them (see tests/fixtures/README.md).
+exclude: ^tests/fixtures/cache/
 repos:
   - repo: local
     hooks:
@@ -8,6 +10,8 @@ repos:
         name: Check added large files
         entry: check-added-large-files
         language: system
+        # The test point cloud (see tests/fixtures/lidar/README.md).
+        exclude: ^tests/fixtures/lidar/
       - id: check-merge-conflict
         name: Check for merge conflict strings
         entry: check-merge-conflict

@@ -107,6 +107,49 @@ describe('OCAD course setting file', () => {
   })
 })
 
+describe('OCAD course setting file for the cropped Langvatnet map', () => {
+  // TestCourseLangvatnet.ocd is set on LangvatnetUtsnitt.ocd (tests/fixtures/ocad).
+  const file = readCourseFile(load('TestCourseLangvatnet.ocd'))
+  const kort = file.courses[0]!
+
+  it('reads the one course', () => {
+    expect(file.courses.map(c => c.name)).toEqual(['Kort'])
+    expect(file.zone).toBe(32)
+    expect(kort.controls.map(c => c.code)).toEqual(['S1', '31', '32', 'M1'])
+    expect(kort.controls.map(c => c.kind)).toEqual(['start', 'control', 'control', 'finish'])
+    expect(kort.controls[1]!.description).toEqual({ d: '2.004', g: '12.108' })
+    expect(kort.controls[2]!.description).toEqual({ c: '0.103', d: '2.001' })
+  })
+
+  it('places the objects where ocad2geojson has them', () => {
+    const positions = Object.fromEntries(kort.controls.map(c => [c.code, c.position]))
+    const expected: Record<string, [number, number]> = {
+      S1: [666666.8, 6646288.1],
+      31: [666611.7, 6646290.1],
+      32: [666571.1, 6646376.6],
+      M1: [666729.2, 6646352.5],
+    }
+    for (const [code, [e, n]] of Object.entries(expected)) {
+      expect(positions[code]![0]).toBeCloseTo(e, 1)
+      expect(positions[code]![1]).toBeCloseTo(n, 1)
+    }
+    expect(kort.table!.topLeft[0]).toBeCloseTo(666826.5, 1)
+    expect(kort.table!.topLeft[1]).toBeCloseTo(6646482.1, 1)
+    expect(kort.lengthM).toBeCloseTo(310.6, 0)
+  })
+
+  it('keeps the controls on the map', () => {
+    // The mapped area of LangvatnetUtsnitt.ocd.
+    const [x0, y0, x1, y1] = [666537.6, 6646245.6, 666905.3, 6646523.5]
+    for (const { position: [e, n] } of kort.controls) {
+      expect(e).toBeGreaterThan(x0)
+      expect(e).toBeLessThan(x1)
+      expect(n).toBeGreaterThan(y0)
+      expect(n).toBeLessThan(y1)
+    }
+  })
+})
+
 describe('OCAD reader', () => {
   it('rejects files that are not OCAD files', () => {
     expect(() => readOcad(new ArrayBuffer(100))).toThrow(OcadError)

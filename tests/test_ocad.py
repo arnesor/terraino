@@ -1,5 +1,4 @@
 import json
-import os
 import shutil
 from pathlib import Path
 
@@ -7,12 +6,11 @@ import pytest
 
 from terraino.ingest import ocad
 from terraino.ingest.georef import Extent
+from tests import FIXTURES
 
-TEST_MAP = Path(
-    os.environ.get(
-        "TERRAINO_TEST_MAP", "/home/arneso/tmp/langvatnet_260521_ocad2018.ocd"
-    )
-)
+TEST_MAP = FIXTURES / "ocad" / "LangvatnetUtsnitt.ocd"
+# The mapped area of TEST_MAP.
+MAP_BOUNDS = Extent(666537.6, 6646245.6, 666905.3, 6646523.5)
 
 
 def write_meta(directory: Path, code: int = 32632) -> None:
@@ -81,28 +79,27 @@ def exporter_available() -> bool:
     return shutil.which("node") is not None
 
 
-needs_test_map = pytest.mark.skipif(
-    not (TEST_MAP.is_file() and exporter_available()),
-    reason="needs the test map (TERRAINO_TEST_MAP) and the installed OCAD exporter",
+needs_exporter = pytest.mark.skipif(
+    not exporter_available(),
+    reason="needs the installed OCAD exporter (npm ci --prefix tools/ocad-export)",
 )
 
 
-@needs_test_map
+@needs_exporter
 def test_export_langvatnet(tmp_path: Path) -> None:
     export = ocad.export_ocad(TEST_MAP, tmp_path, render_png=False)
     assert export.epsg == 25832
     assert export.scale == 10000
     b = export.map_bounds
-    assert 662_000 < b.x0 < b.x1 < 669_000
-    assert 6_643_000 < b.y0 < b.y1 < 6_649_000
+    assert b.as_tuple() == pytest.approx(MAP_BOUNDS.as_tuple())
     features = export.load_objects()
-    assert len(features) > 10_000
+    assert len(features) == 149
     syms = {f["properties"]["sym"] for f in features}
-    assert {"301.0", "406.0", "526.0"} <= syms
+    assert {"303.0", "403.0", "406.0", "526.0"} <= syms
     assert [f["properties"]["oid"] for f in features[:3]] == [0, 1, 2]
 
 
-@needs_test_map
+@needs_exporter
 def test_export_offset_shifts_map(tmp_path: Path) -> None:
     plain = ocad.export_ocad(TEST_MAP, tmp_path / "a", render_png=False)
     shifted = ocad.export_ocad(

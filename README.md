@@ -205,9 +205,12 @@ npm run typecheck --prefix viewer
 npm test --prefix viewer
 ```
 
-`uv run pytest -m network` also runs an end-to-end build that downloads data.
-It and the OCAD tests use the map in `TERRAINO_TEST_MAP` and are skipped if
-that file does not exist.
+The tests run without network access:
+`tests/fixtures/` holds a small map with every file its build downloads,
+and both `uv run pytest` and `npm test --prefix viewer` build its world from them.
+The tests that build it are skipped (Python) or fail (viewer) if the OCAD exporter
+(`npm ci --prefix tools/ocad-export`) is not installed.
+`uv run pytest -m network` also runs the build against the live services.
 
 Git hooks run outside the uv environment unless it is active,
 so commit with `uv run git commit` or activate `.venv` first.

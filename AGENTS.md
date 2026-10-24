@@ -36,7 +36,12 @@ npm test --prefix viewer            # vitest
   or `npx vitest run test/tracks.test.ts` from inside `viewer/`.
 - `pytest` skips `network`-marked tests by default (see `addopts`).
   `uv run pytest -m network` runs an end-to-end build that downloads data.
-  The network and OCAD tests read the map in `TERRAINO_TEST_MAP` and are skipped if it is missing.
+  The OCAD, offline build and network tests use the data in `tests/fixtures/` and are skipped
+  if the OCAD exporter is not installed.
+  `tests/fixture_world.py` builds the fixture world offline, from a cache of every download;
+  see `tests/fixtures/README.md` for refreshing it.
+- `viewer/test/world.test.ts` builds that world with `uv run` first,
+  so the viewer tests need the Python environment and the OCAD exporter.
 - Coverage: `uv run coverage run -m pytest && uv run coverage report`.
   It fails under 50%.
 - Viewer dev server: `npm run dev --prefix viewer`, at <http://localhost:5173/>.

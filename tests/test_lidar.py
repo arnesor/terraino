@@ -4,17 +4,26 @@ import laspy
 import numpy as np
 import pytest
 
+from terraino.fetch import nibio
 from terraino.ingest.georef import Extent
 from terraino.ingest.lidar import (
     FINE,
+    GROUND_CLASS,
     LidarRasters,
     coarse_canopy,
     filled_canopy,
+    find_tiles,
     load_lidar,
     summarize_points,
 )
+from terraino.process.heights import fill_missing
+from terraino.process.trees import MIN_TREE_HEIGHT_M, tops_from_lidar
+from tests import FIXTURES
 
 EXTENT = Extent(1000, 2000, 1040, 2040)
+LIDAR_425 = FIXTURES / "lidar" / "425"
+# The mapped area of the fixture map, on whole 16 m.
+WORLD = Extent(666544, 6646256, 666896, 6646512)
 GROUND = 100.0
 
 
@@ -137,3 +146,62 @@ def test_filled_canopy_has_no_gaps() -> None:
     assert not np.isnan(filled).any()
     assert filled[11, 11] == 5.0  # next to the return
     assert filled[50, 50] == 1.5  # far from it: the 1 m canopy height model
+
+
+def ground_returns(folder: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Easting, northing and height of the ground returns in ``folder``'s LAZ files."""
+    xs, ys, zs = [], [], []
+    for path in find_tiles(folder):
+        # One decoding thread: once the parallel decoder has started its threads,
+        # the worker processes that load_lidar forks hang.
+        las = laspy.read(path, laz_backend=laspy.LazBackend.Lazrs)
+        ground = np.asarray(las.classification) == GROUND_CLASS
+        xs.append(np.asarray(las.x)[ground])
+        ys.append(np.asarray(las.y)[ground])
+        zs.append(np.asarray(las.z)[ground])
+    return np.concatenate(xs), np.concatenate(ys), np.concatenate(zs)
+
+
+def ground_model(folder: Path, extent: Extent) -> np.ndarray:
+    """Mean height of the ground returns in each 1 m cell, with the gaps filled."""
+    x, y, z = ground_returns(folder)
+    shape = extent.raster_shape(1)
+    row = np.floor(extent.y1 - y).astype(int)
+    col = np.floor(x - extent.x0).astype(int)
+    inside = (row >= 0) & (row < shape[0]) & (col >= 0) & (col < shape[1])
+    cells = row[inside] * shape[1] + col[inside]
+    total = np.bincount(cells, z[inside], minlength=shape[0] * shape[1])
+    count = np.bincount(cells, minlength=shape[0] * shape[1])
+    with np.errstate(invalid="ignore"):
+        mean = (total / count).reshape(shape).astype(np.float32)
+    return fill_missing(mean)
+
+
+@pytest.fixture(scope="module")
+def langvatnet(tmp_path_factory: pytest.TempPathFactory) -> LidarRasters:
+    cache = tmp_path_factory.mktemp("cache")
+    dtm = ground_model(LIDAR_425, WORLD)
+    lidar = load_lidar([LIDAR_425], 25832, WORLD, dtm, cache)
+    assert lidar is not None
+    return lidar
+
+
+def test_fixture_canopy_matches_sr16_forest(
+    langvatnet: LidarRasters, tmp_path: Path
+) -> None:
+    assert langvatnet.coverage.all()
+    canopy = np.nan_to_num(coarse_canopy(langvatnet.canopy))
+    assert 25 < canopy.max() < 40
+    # The laser finds trees where SR16 has forest, and mostly open ground elsewhere.
+    forest = nibio.fetch_forest(25832, WORLD, tmp_path, FIXTURES / "sr16").species > 0
+    assert (canopy[forest] > MIN_TREE_HEIGHT_M).mean() > 0.6
+    assert (canopy[~forest] > MIN_TREE_HEIGHT_M).mean() < 0.2
+
+
+def test_fixture_tree_tops(langvatnet: LidarRasters) -> None:
+    canopy = np.nan_to_num(coarse_canopy(langvatnet.canopy))
+    tops = tops_from_lidar(filled_canopy(langvatnet, canopy), langvatnet.crown_base)
+    # About 3 ha of the 9 ha have trees.
+    assert 500 < len(tops) < 2000
+    assert tops.height.min() >= MIN_TREE_HEIGHT_M
+    assert tops.height.max() == pytest.approx(canopy.max(), abs=0.5)
