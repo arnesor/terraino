@@ -80,7 +80,7 @@ ignore_missing_imports = true
 [tool.rumdl]
 flavor = "gfm"
 line-length = 100
-exclude = [".agents/**"]
+exclude = [".agents/**", "docs/agents/**"]
 
 [tool.rumdl.MD013]
 code-blocks = false
