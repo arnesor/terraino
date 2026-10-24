@@ -27,7 +27,7 @@ function posRandom(x: number, z: number, salt: number): number {
 }
 
 /** Trees of one chunk, decoded. Positions are scene coordinates. */
-class TreeChunk {
+export class TreeChunk {
   readonly cx: number
   readonly cy: number
   readonly x: Float32Array

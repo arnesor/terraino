@@ -93,6 +93,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
+      - name: Install the OCAD exporter
+        run: npm ci --prefix tools/ocad-export
+
       - name: Run tests with coverage
         run: uv run coverage run --parallel-mode -m pytest
 

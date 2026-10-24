@@ -1,0 +1,796 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<wfs:FeatureCollection xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/wfs/2.0 http://schemas.opengis.net/wfs/2.0/wfs.xsd http://www.opengis.net/gml/3.2 http://schemas.opengis.net/gml/3.2.1/gml.xsd http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101 https://wfs.geonorge.no/skwms1/wfs.matrikkelen-bygningspunkt?SERVICE=WFS&amp;VERSION=2.0.0&amp;REQUEST=DescribeFeatureType&amp;OUTPUTFORMAT=text%2Fxml%3B+subtype%3Dgml%2F3.2.1&amp;TYPENAME=app:Bygning&amp;NAMESPACES=xmlns(app,http%3A%2F%2Fskjema.geonorge.no%2FSOSI%2Fproduktspesifikasjon%2FMatrikkelen-Bygningspunkt%2F20211101)" xmlns:wfs="http://www.opengis.net/wfs/2.0" timeStamp="2026-10-24T18:36:33Z" xmlns:gml="http://www.opengis.net/gml/3.2" numberMatched="unknown" numberReturned="0">
+  <!--NOTE: numberReturned attribute should be 'unknown' as well, but this would not validate against the current version of the WFS 2.0 schema (change upcoming). See change request (CR 144): https://portal.opengeospatial.org/files?artifact_id=43925.-->
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1720805">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410119</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>true</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:adresseId>405338528</app:adresseId>
+          <app:bruksenhetId>112126448</app:bruksenhetId>
+          <app:uuidBruksenhet>a964a86b-8e95-58df-910e-63a0c3620fff</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025106</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:naringsgruppe>X</app:naringsgruppe>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1720805_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1720805_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666728.000 6646368.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>113</app:bygningstype>
+      <app:uuidBygning>592df8c0-a567-5938-993e-885dbdd080e2</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126316</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1720808">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410186</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>VanligRegistrering</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:adresseId>393822113</app:adresseId>
+          <app:bruksenhetId>112126450</app:bruksenhetId>
+          <app:uuidBruksenhet>7a6dd3b8-5fce-5675-be7c-ead0a70e6c47</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025143</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:naringsgruppe>X</app:naringsgruppe>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1720808_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1720808_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>667029.000 6646410.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>111</app:bygningstype>
+      <app:uuidBygning>e0f12216-297e-5947-ba21-d1837d09a010</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126328</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1720811">
+      <app:oppdateringsdato>2025-11-11T12:09:55.480</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410291</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:adresseId>393822117</app:adresseId>
+          <app:bruksenhetId>112126454</app:bruksenhetId>
+          <app:uuidBruksenhet>5b54eaea-3ffc-5a06-8f4a-7baac5d469a1</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025772</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:naringsgruppe>X</app:naringsgruppe>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1720811_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1720811_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>667033.000 6646157.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>111</app:bygningstype>
+      <app:uuidBygning>a8b079e5-61a8-5828-9ad6-e7c9da3aed50</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126355</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>5</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1730898">
+      <app:oppdateringsdato>2020-06-15T15:56:48.888</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>7300816</app:bygningsnummer>
+      <app:bygningsstatus>FA</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>VanligRegistrering</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:bruksenhetId>112104470</app:bruksenhetId>
+          <app:uuidBruksenhet>5e8d49d9-0ffd-5228-b8de-0c4b18a2af33</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025790</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:naringsgruppe>Y</app:naringsgruppe>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1730898_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1730898_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666868.000 6646208.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>181</app:bygningstype>
+      <app:uuidBygning>81062ab3-63e2-5d80-a092-cd474b4c2552</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112104074</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1733976">
+      <app:oppdateringsdato>2020-06-15T15:56:48.888</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>19268373</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>VanligRegistrering</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:bruksenhetId>112118645</app:bruksenhetId>
+          <app:uuidBruksenhet>1956d7de-55ca-532b-bfc4-ca7ec54d1067</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025143</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:naringsgruppe>Y</app:naringsgruppe>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1733976_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1733976_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>667028.000 6646370.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>181</app:bygningstype>
+      <app:uuidBygning>297091ed-83dd-5507-9739-80f098391ad9</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112118506</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1735762">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410011</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:bruksenhetId>112126499</app:bruksenhetId>
+          <app:uuidBruksenhet>d1512757-09f9-513e-8d46-20c75a0c80f3</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025762</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1735762_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1735762_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666834.000 6646543.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>181</app:bygningstype>
+      <app:uuidBygning>aa18fd1b-65d8-51e3-8d7e-d4354304d87f</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126298</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1735763">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410038</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:bruksenhetId>112126500</app:bruksenhetId>
+          <app:uuidBruksenhet>78e5fec5-7928-5557-8136-1e5bf285e111</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025762</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1735763_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1735763_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666841.000 6646541.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>181</app:bygningstype>
+      <app:uuidBygning>5aee80fa-e7f2-5173-b252-b42ddb0e84e5</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126300</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1735764">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410046</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:bruksenhetId>112126501</app:bruksenhetId>
+          <app:uuidBruksenhet>c52125ab-1a26-54b2-b092-b9bedc1b378f</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025762</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1735764_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1735764_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666872.000 6646504.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>181</app:bygningstype>
+      <app:uuidBygning>94d5a55c-0ae5-573e-9eab-f3a8f9ed0e0e</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126302</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1735765">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410054</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>VanligRegistrering</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:bruksenhetId>112126502</app:bruksenhetId>
+          <app:uuidBruksenhet>eeb525b0-c372-54fc-9b37-6a96dcb806c4</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025765</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:naringsgruppe>Y</app:naringsgruppe>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1735765_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1735765_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666885.150 6646473.250</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>181</app:bygningstype>
+      <app:uuidBygning>7830494e-1f90-55f7-b5ef-2a2fcb4b62f4</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126304</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1735767">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410089</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:bruksenhetId>112126504</app:bruksenhetId>
+          <app:uuidBruksenhet>5c2fc797-21e6-5fb7-bf36-6479a9e5d730</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025106</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:naringsgruppe>A</app:naringsgruppe>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1735767_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1735767_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666640.000 6646368.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>249</app:bygningstype>
+      <app:uuidBygning>806add7f-1e68-5a66-920f-f444f0ec5d4b</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126310</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1735768">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410097</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:bruksenhetId>112126505</app:bruksenhetId>
+          <app:uuidBruksenhet>0e893cb4-b729-5b8e-915a-74ede9b031ff</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025106</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:naringsgruppe>A</app:naringsgruppe>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1735768_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1735768_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666667.000 6646371.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>249</app:bygningstype>
+      <app:uuidBygning>84226499-84c6-513e-a6b2-475468b74182</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126312</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1735776">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410232</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:bruksenhetId>112126515</app:bruksenhetId>
+          <app:uuidBruksenhet>f5b80cb0-0c54-5e2a-9d3d-6f07cfd082e7</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025109</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:naringsgruppe>A</app:naringsgruppe>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1735776_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1735776_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666620.000 6646139.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>249</app:bygningstype>
+      <app:uuidBygning>688c8650-9d25-5611-b0ac-de27b7fee3eb</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126343</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1735801">
+      <app:oppdateringsdato>2023-08-10T10:06:21.566</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410275</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>true</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:bruksenhetId>112126453</app:bruksenhetId>
+          <app:uuidBruksenhet>38db96f2-9e14-5adc-beaa-11a7d1728ac3</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025109</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:naringsgruppe>Y</app:naringsgruppe>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1735801_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1735801_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666865.000 6646126.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>249</app:bygningstype>
+      <app:uuidBygning>291e6c47-f51c-5f69-86b7-e131f819e4d3</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126351</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>5</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1735771">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410151</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:bruksenhetId>112126509</app:bruksenhetId>
+          <app:uuidBruksenhet>9bae7b08-62b9-5804-84ea-e59764f190b3</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025134</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:naringsgruppe>Q</app:naringsgruppe>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1735771_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1735771_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>667026.000 6646439.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>679</app:bygningstype>
+      <app:uuidBygning>c40a0f6d-7a04-5cf1-8d44-7ed24a4a44ed</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126324</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1735772">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410178</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>true</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:bruksenhetId>112126510</app:bruksenhetId>
+          <app:uuidBruksenhet>fbbfc812-9e9e-58af-931f-388d64c3fc98</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025143</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1735772_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1735772_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>667026.000 6646428.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>181</app:bygningstype>
+      <app:uuidBygning>5ae2c521-ceb3-56c1-8592-c97864da4d8c</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126326</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1718254">
+      <app:oppdateringsdato>2020-06-15T15:56:48.888</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>7292872</app:bygningsnummer>
+      <app:bygningsstatus>FA</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>VanligRegistrering</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:adresseId>405338527</app:adresseId>
+          <app:bruksenhetId>112095463</app:bruksenhetId>
+          <app:uuidBruksenhet>b8153724-ac62-5fcb-80e6-96fa0d1e4d47</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025790</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:naringsgruppe>X</app:naringsgruppe>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1718254_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1718254_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666858.000 6646194.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>111</app:bygningstype>
+      <app:uuidBygning>2fa85edd-77fa-55f7-8216-1dad327923eb</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112095372</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1720803">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410003</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>VanligRegistrering</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:adresseId>405340300</app:adresseId>
+          <app:bruksenhetId>112126446</app:bruksenhetId>
+          <app:uuidBruksenhet>e81d72a5-8bc1-5485-82b9-e8621a24a55c</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025762</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:naringsgruppe>X</app:naringsgruppe>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1720803_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1720803_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666859.000 6646564.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>111</app:bygningstype>
+      <app:uuidBygning>f5244b52-fae3-5801-9a0b-b923a2726500</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126296</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1720804">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410062</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:adresseId>405340299</app:adresseId>
+          <app:bruksenhetId>112126447</app:bruksenhetId>
+          <app:uuidBruksenhet>53aef4c8-7cbc-5b3e-a14c-3569cc582494</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025765</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:naringsgruppe>X</app:naringsgruppe>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1720804_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1720804_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666890.000 6646448.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>111</app:bygningstype>
+      <app:uuidBygning>c0dac11b-5abf-55ea-998e-504030d6e875</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126306</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1720810">
+      <app:oppdateringsdato>2023-09-22T08:15:02.523</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410267</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>true</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:adresseId>405338526</app:adresseId>
+          <app:bruksenhetId>112126452</app:bruksenhetId>
+          <app:uuidBruksenhet>20d1b3ed-b012-5a7e-85fa-b17e83a2e92f</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025109</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:naringsgruppe>X</app:naringsgruppe>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1720810_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1720810_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666852.000 6646139.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>113</app:bygningstype>
+      <app:uuidBygning>1a9c8a60-6203-56bb-807b-0a017072a107</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126349</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>5</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1735766">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410070</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:bruksenhetId>112126503</app:bruksenhetId>
+          <app:uuidBruksenhet>f55d322a-d26c-5376-af3b-ccd036ff5aff</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025106</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1735766_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1735766_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666689.000 6646383.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>241</app:bygningstype>
+      <app:uuidBygning>f87ff06f-baa6-54d7-ae60-186e3f4667be</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126308</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1735769">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410100</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>true</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:bruksenhetId>112126506</app:bruksenhetId>
+          <app:uuidBruksenhet>47de4288-8567-540b-84c6-0ff97ec5bc1a</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025106</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1735769_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1735769_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666701.000 6646355.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>249</app:bygningstype>
+      <app:uuidBygning>2ea697d5-74fd-517a-af33-16baa0732df8</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126314</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+  <wfs:member>
+    <app:Bygning xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Matrikkelen-Bygningspunkt/20211101" gml:id="bygning.1735778">
+      <app:oppdateringsdato>2020-06-15T15:56:12.090</app:oppdateringsdato>
+      <app:stedfestingVerifisert>false</app:stedfestingVerifisert>
+      <app:bygningsnummer>153410259</app:bygningsnummer>
+      <app:bygningsstatus>TB</app:bygningsstatus>
+      <app:harKulturminne>false</app:harKulturminne>
+      <app:harSefrakminne>false</app:harSefrakminne>
+      <app:opprinnelse>Massivregistreringer</app:opprinnelse>
+      <app:kommunenummer>3416</app:kommunenummer>
+      <app:kommunenavn>EIDSKOG</app:kommunenavn>
+      <app:bruksenhet>
+        <app:Bruksenhet>
+          <app:bruksenhetId>112126517</app:bruksenhetId>
+          <app:uuidBruksenhet>3a24c52b-21bf-5dbe-bfb1-715e9ba9b2e5</app:uuidBruksenhet>
+          <app:matrikkelenhetId>112025109</app:matrikkelenhetId>
+        </app:Bruksenhet>
+      </app:bruksenhet>
+      <app:representasjonspunkt>
+        <!--Inlined geometry 'bygning.1735778_APP_REPRESENTASJONSPUNKT'-->
+        <gml:Point gml:id="bygning.1735778_APP_REPRESENTASJONSPUNKT" srsName="urn:ogc:def:crs:EPSG::25832">
+          <gml:pos>666797.000 6646133.000</gml:pos>
+        </gml:Point>
+      </app:representasjonspunkt>
+      <app:bygningstype>249</app:bygningstype>
+      <app:uuidBygning>dbd8f0c6-3a56-5148-b727-d069bd75a438</app:uuidBygning>
+      <app:identBygning>
+        <app:IdentBygning>
+          <app:bygningId>112126347</app:bygningId>
+          <app:navnerom>https://data.geonorge.no/sosi/matrikkel/bygningspunkt</app:navnerom>
+          <app:versjonId>3</app:versjonId>
+        </app:IdentBygning>
+      </app:identBygning>
+    </app:Bygning>
+  </wfs:member>
+</wfs:FeatureCollection>

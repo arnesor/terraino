@@ -8,6 +8,8 @@ from PIL import Image
 
 from terraino.fetch import nibio
 from terraino.ingest.georef import Extent
+from tests import FIXTURES
+from tests.test_lidar import WORLD
 
 
 def write_sr16(path: Path, extent: Extent, data: npt.NDArray[np.int_]) -> None:
@@ -62,3 +64,15 @@ def test_wms_species_image_is_decoded(
     assert forest.source == "WMS"
     assert forest.species[:, :32].min() == nibio.Species.SPRUCE
     assert forest.species[:, 32:].max() == nibio.Species.NONE
+
+
+def test_sr16_fixture(tmp_path: Path) -> None:
+    forest = nibio.fetch_forest(25832, WORLD, tmp_path, FIXTURES / "sr16")
+    assert forest.source.startswith("local SR16")
+    # The fixture has the species layer only.
+    assert forest.trees_per_ha is None
+    assert forest.crown_cover is None
+    share = np.bincount(forest.species.ravel(), minlength=4) / forest.species.size
+    assert 0.4 < share[nibio.Species.NONE] < 0.8
+    assert share[nibio.Species.PINE] > share[nibio.Species.SPRUCE]
+    assert share[nibio.Species.SPRUCE] > share[nibio.Species.DECIDUOUS] > 0
