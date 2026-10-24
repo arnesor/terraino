@@ -80,6 +80,7 @@ ignore_missing_imports = true
 [tool.rumdl]
 flavor = "gfm"
 line-length = 100
+exclude = [".agents/**"]
 
 [tool.rumdl.MD013]
 code-blocks = false
@@ -168,5 +169,5 @@ classmethod-decorators = ["classmethod", "validator", "root_validator", "pydanti
 exclude-newer = "7 days"
 
 [build-system]
-requires = ["uv_build>=0.12.17,<0.13.0"]
+requires = ["uv_build>=0.13.0,<0.14.0"]
 build-backend = "uv_build"
