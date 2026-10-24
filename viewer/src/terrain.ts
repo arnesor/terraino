@@ -14,8 +14,9 @@ const LODS = [
 ]
 // Chunks closer than this use their full-resolution textures.
 const DETAIL_TEXTURE_DISTANCE = 450
-// Chunk geometries rebuilt per frame at most, to avoid stutter.
-const MAX_REBUILDS_PER_FRAME = 3
+// Chunk vertices rebuilt per frame at most, to avoid stutter: about one full-detail chunk.
+// A chunk bigger than this is still rebuilt when it is the first in a frame.
+const MAX_REBUILT_VERTICES_PER_FRAME = 70_000
 const MAX_TEXTURE_LOADS = 6
 
 export type TerrainMode = 'ground' | 'map'
@@ -222,7 +223,9 @@ export class Terrain {
             h.sample(col, row - step) - h.sample(col, row + step),
           )
           .normalize()
-        normals.set([normal.x, normal.y, normal.z], i * 3)
+        normals[i * 3] = normal.x
+        normals[i * 3 + 1] = normal.y
+        normals[i * 3 + 2] = normal.z
         uvs[i * 2] = c / n
         uvs[i * 2 + 1] = 1 - r / n
       }
@@ -354,7 +357,11 @@ export class Terrain {
     const pending = this.chunks
       .filter(c => c.wantStep !== c.step)
       .sort((a, b) => a.wantStep - b.wantStep || a.center.distanceTo(eye) - b.center.distanceTo(eye))
-    for (const chunk of pending.slice(0, MAX_REBUILDS_PER_FRAME)) {
+    let budget = MAX_REBUILT_VERTICES_PER_FRAME
+    for (const chunk of pending) {
+      const vertices = (this.heights.chunk / chunk.wantStep + 1) ** 2
+      if (vertices > budget && budget < MAX_REBUILT_VERTICES_PER_FRAME) break
+      budget -= vertices
       const old = chunk.mesh.geometry
       chunk.mesh.geometry = this.buildGeometry(chunk.cx, chunk.cy, chunk.wantStep)
       chunk.step = chunk.wantStep
