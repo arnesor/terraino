@@ -248,7 +248,7 @@ async function main() {
   const buildings = await loadBuildings(world, gfx)
   if (buildings) scene.add(buildings.group)
   await pause()
-  const features = await MapFeatures.load(world, heights, gfx)
+  const features = await MapFeatures.load(world, heights, gfx, QUALITY[environment.quality])
   if (features && undergrowth) undergrowth.setStumps(features.stumps)
   if (features) scene.add(features.group)
 
@@ -387,6 +387,7 @@ async function main() {
       if (forest) forest.shadows = environment.quality !== 'low'
       forest?.setQuality(settings)
       undergrowth?.setQuality(settings)
+      features?.setQuality(settings)
     }
   })
 
@@ -460,6 +461,7 @@ async function main() {
     terrain.update(camera.position)
     forest?.update(camera.position)
     undergrowth?.update(camera.position)
+    features?.update(camera.position)
     grain?.update()
     environment.update(camera)
     hud.update(dt)

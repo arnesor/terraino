@@ -18,12 +18,14 @@ export interface QualitySettings {
   coverDensity: number
   /** Grain cards per square metre; they are drawn as far as the cover. */
   grainDensity: number
+  /** Boulders are drawn this far; small stones only as far as the cover. */
+  boulders: number
 }
 
 export const QUALITY: Record<Quality, QualitySettings> = {
-  high: { near: 110, cover: 40, coverDensity: 1.8, grainDensity: 3.5 },
-  medium: { near: 85, cover: 32, coverDensity: 1.4, grainDensity: 2.8 },
-  low: { near: 60, cover: 22, coverDensity: 1.0, grainDensity: 2.0 },
+  high: { near: 110, cover: 40, coverDensity: 1.8, grainDensity: 3.5, boulders: 600 },
+  medium: { near: 85, cover: 32, coverDensity: 1.4, grainDensity: 2.8, boulders: 450 },
+  low: { near: 60, cover: 22, coverDensity: 1.0, grainDensity: 2.0, boulders: 300 },
 }
 
 /** Tree model variants; trees of a species pick one. */

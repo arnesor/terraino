@@ -123,8 +123,10 @@ export class Hud {
   private snap = false
   private shownCourse: Course | null = null
   private drag: { x: number; y: number; moved: number } | null = null
+  // Frames since `fpsSince` (ms), counted by the clock: the frame time the game moves by is
+  // capped, and would never show under 10 fps.
   private frames = 0
-  private fpsTime = 0
+  private fpsSince = performance.now()
   private fps = 0
 
   constructor(
@@ -530,11 +532,11 @@ export class Hud {
 
   update(dt: number) {
     this.frames++
-    this.fpsTime += dt
-    if (this.fpsTime >= 0.5) {
-      this.fps = Math.round(this.frames / this.fpsTime)
+    const now = performance.now()
+    if (now - this.fpsSince >= 500) {
+      this.fps = (this.frames * 1000) / (now - this.fpsSince)
       this.frames = 0
-      this.fpsTime = 0
+      this.fpsSince = now
     }
 
     const pos = this.player.camera.position
@@ -546,7 +548,7 @@ export class Hud {
       t('infoHeight', { height: formatNumber(pos.y - 1.7, 1), pace: formatPace(this.player.speed) }) +
         (this.player.flying ? t('infoFlying') : ''),
       t('infoRunnability', { percent: Math.round(this.player.runnability * 100) }),
-      `${this.fps} fps · ${this.status()}`,
+      `${formatNumber(this.fps, this.fps < 10 ? 1 : 0)} fps · ${this.status()}`,
     ].join('\n')
 
     this.compassStrip.style.transform = `translateX(${-heading * 4}px)`
