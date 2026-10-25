@@ -26,6 +26,7 @@ const STRINGS = {
   keyMove: { en: 'move', nb: 'gå' },
   keyLook: { en: 'look around', nb: 'se deg rundt' },
   keyRun: { en: 'run (fly fast)', nb: 'løp (fly fort)' },
+  keyTime: { en: 'time factor up / down (game time runs faster)', nb: 'tidsfaktor opp / ned (spilltida går fortere)' },
   keyJump: { en: 'jump (fly up)', nb: 'hopp (fly opp)' },
   keyFly: { en: 'fly on/off · C: fly down', nb: 'fly av/på · C: fly ned' },
   keyMap: { en: 'map: drag, wheel zoom, double click to go there', nb: 'kart: dra, rulle for zoom, dobbeltklikk for å gå dit' },
@@ -104,8 +105,8 @@ const STRINGS = {
   position: { en: 'Position', nb: 'Posisjon' },
   setCourse: { en: 'Set course', nb: 'Legg løype' },
   setCourseTitle: {
-    en: 'Click on the map to place start, controls and finish (E)',
-    nb: 'Klikk på kartet for å sette start, poster og mål (E)',
+    en: 'Click on the map to place start, controls and finish (N)',
+    nb: 'Klikk på kartet for å sette start, poster og mål (N)',
   },
   done: { en: 'Done', nb: 'Ferdig' },
   helpEditing: {

@@ -61,7 +61,7 @@ export class Player {
   // the smoothed eye, which is the camera's height.
   private bodyY = 0
   private eyeSpeed = 0
-  /** Current horizontal speed in m/s, for the HUD. */
+  /** Current horizontal speed (m/s of game time), for the HUD. */
   speed = 0
   /** Running speed factor of the ground under the player, for the HUD. */
   runnability = 1
@@ -128,6 +128,10 @@ export class Player {
     return (deg + 360) % 360
   }
 
+  /**
+   * Move on by `dt` seconds of game time, at most a few hundredths of a second (see
+   * GameClock.advance), so the runner does not pass through trunks and walls.
+   */
   update(dt: number) {
     const pos = this.camera.position
     const forward = new THREE.Vector3()

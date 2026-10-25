@@ -1,3 +1,4 @@
+import { formatFactor, type GameClock } from './clock'
 import { type Course, type CourseRun, encodeCourse, formatPace, formatTime } from './course'
 import { describe, drawDescriptionTable, tableRows } from './descriptions/table'
 import { formatNumber, renameStoredKey, t, type TextKey } from './i18n'
@@ -78,10 +79,13 @@ export class Hud {
   private readonly world: World
   private readonly player: Player
   private readonly run: CourseRun
+  private readonly clock: GameClock
   private readonly status: () => string
   private readonly info: HTMLDivElement
   private readonly compassStrip: HTMLDivElement
   private readonly compassValue: HTMLDivElement
+  private readonly clockTime: HTMLSpanElement
+  private readonly clockFactor: HTMLSpanElement
   private readonly mapWindow: HTMLDivElement
   private readonly mapCanvas: HTMLCanvasElement
   private readonly mapTitle: HTMLSpanElement
@@ -121,10 +125,18 @@ export class Hud {
   private fpsTime = 0
   private fps = 0
 
-  constructor(root: HTMLElement, world: World, player: Player, run: CourseRun, status: () => string) {
+  constructor(
+    root: HTMLElement,
+    world: World,
+    player: Player,
+    run: CourseRun,
+    clock: GameClock,
+    status: () => string,
+  ) {
     this.world = world
     this.player = player
     this.run = run
+    this.clock = clock
     this.status = status
 
     this.info = el('div', 'hud-info', root)
@@ -154,6 +166,11 @@ export class Hud {
     }
     el('div', 'hud-compass-needle', compass)
     this.compassValue = el('div', 'hud-compass-value', compass)
+
+    // Run time and time factor, under the compass.
+    const clockPanel = el('div', 'hud-clock', root)
+    this.clockTime = el('span', 'hud-clock-time', clockPanel)
+    this.clockFactor = el('span', 'hud-clock-factor', clockPanel)
 
     this.runPanel = el('div', 'hud-run', root)
 
@@ -256,7 +273,7 @@ export class Hud {
     }
     if (e.code === 'Equal' || e.code === 'NumpadAdd') this.zoomAt(BUTTON_ZOOM)
     if (e.code === 'Minus' || e.code === 'NumpadSubtract') this.zoomAt(1 / BUTTON_ZOOM)
-    if (e.code === 'KeyE' && this.mapOpen) this.setEditing(!this.editing)
+    if (e.code === 'KeyN' && this.mapOpen) this.setEditing(!this.editing)
     if (e.code === 'KeyK') this.showDescriptions(!this.descriptionsShown)
     if (this.editing && e.code === 'Backspace') this.removeLastControl()
     if (this.editing && e.code === 'Delete') this.setCourse({ controls: [] })
@@ -532,10 +549,20 @@ export class Hud {
     this.compassStrip.style.transform = `translateX(${-heading * 4}px)`
     this.compassValue.textContent = `${Math.round(heading).toString().padStart(3, '0')}°`
 
+    this.updateClock()
     this.updateRunPanel()
     this.updateDescriptions()
     this.legsButton.disabled = !this.hasCourse
     if (this.mapOpen) this.drawMap(heading, dt)
+  }
+
+  /** The run time (when a course is set) and the time factor, greyed out while flying. */
+  private updateClock() {
+    const timed = this.run.course.controls.length >= 2
+    this.clockTime.hidden = !timed
+    if (timed) this.clockTime.textContent = `${formatTime(this.run.elapsed(this.clock.time))} · `
+    this.clockFactor.textContent = formatFactor(this.clock.factor)
+    this.clockFactor.classList.toggle('off', this.player.flying)
   }
 
   private updateRunPanel() {
@@ -553,8 +580,8 @@ export class Hud {
       const label = run.next >= n - 1 ? t('finish') : t('controlNumber', { number: run.next })
       lines.push(
         run.state === 'finished'
-          ? t('finished', { time: formatTime(run.elapsed()) })
-          : t('running', { time: formatTime(run.elapsed()), label }),
+          ? t('finished', { time: formatTime(run.elapsed(this.clock.time)) })
+          : t('running', { time: formatTime(run.elapsed(this.clock.time)), label }),
       )
       run.splits.forEach((time, i) => {
         const leg = i === 0 ? time : time - run.splits[i - 1]!

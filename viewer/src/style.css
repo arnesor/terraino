@@ -141,12 +141,34 @@ body {
   opacity: 0.8;
 }
 
+.hud-clock {
+  position: fixed;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 12px;
+  white-space: pre;
+  font: 700 26px ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  color: white;
+  background: rgba(15, 20, 18, 0.55);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.hud-clock-time[hidden] {
+  display: none;
+}
+
+.hud-clock-factor.off {
+  opacity: 0.4;
+}
+
 .hud-map {
   position: fixed;
-  top: 64px;
+  top: 96px;
   right: 16px;
   width: min(560px, calc(100vw - 32px));
-  height: min(640px, calc(100% - 96px));
+  height: min(640px, calc(100% - 128px));
   min-width: 300px;
   min-height: 280px;
   display: flex;

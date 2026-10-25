@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import './style.css'
 import { loadBuildings } from './buildings'
+import { GameClock } from './clock'
 import { beep, type Control, type Course, CourseRun, loadCourse } from './course'
 import { Environment } from './environment'
 import { MapFeatures } from './features'
@@ -283,7 +284,8 @@ async function main() {
     medium: 'qualityMedium',
     low: 'qualityLow',
   }
-  const hud = new Hud(document.getElementById('hud')!, world, player, run, () => {
+  const clock = new GameClock()
+  const hud = new Hud(document.getElementById('hud')!, world, player, run, clock, () => {
     const trees = forest?.drawn ?? { near: 0, total: 0 }
     return t('treesStatus', {
       near: formatNumber(trees.near),
@@ -348,6 +350,11 @@ async function main() {
       // The grain surface would hide the map's fields.
       if (grain) grain.group.visible = terrain.mode === 'ground'
     }
+    // The time factor, in steps; not while paused behind the overlay.
+    if (overlay.hidden && !e.repeat) {
+      if (e.code === 'KeyE') clock.faster()
+      if (e.code === 'KeyQ') clock.slower()
+    }
     if (e.code === 'KeyT') goToStart()
     if (e.code === 'KeyR') run.reset()
     if (e.code === 'KeyG') {
@@ -409,20 +416,26 @@ async function main() {
 
   // For poking at the scene from the browser console while developing.
   if (import.meta.env.DEV) {
-    Object.assign(window, { terraino: { THREE, renderer, scene, camera, gfx, forest, undergrowth, grain, player, run, hud } })
+    Object.assign(window, { terraino: { THREE, renderer, scene, camera, gfx, forest, undergrowth, grain, player, run, hud, clock } })
   }
 
+  // A hidden tab gets no frames; the timer then starts afresh instead of counting the time away.
   const timer = new THREE.Timer()
+  timer.connect(document)
   renderer.setAnimationLoop(() => {
     timer.update()
     const dt = Math.min(timer.getDelta(), 0.1)
+    // The wind keeps real time; the runner and the run clock go by game time, which stands
+    // still while the overlay covers the game (Esc).
     gfx.time.value += dt
-    player.update(dt)
+    clock.advance(dt, { paused: !overlay.hidden, flying: player.flying }, step => {
+      player.update(step)
+      if (!player.flying) run.update(camera.position, clock.time)
+    })
     terrain.update(camera.position)
     forest?.update(camera.position)
     undergrowth?.update(camera.position)
     grain?.update()
-    if (!player.flying) run.update(camera.position)
     environment.update(camera)
     hud.update(dt)
     renderer.render(scene, camera)

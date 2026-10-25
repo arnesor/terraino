@@ -1,8 +1,12 @@
 import * as THREE from 'three'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { GameClock } from '../src/clock'
 import type { HeightField } from '../src/heightfield'
 import { Player } from '../src/player'
 import { CHUNK, syntheticWorld } from './synthetic'
+
+// clock.ts loads the UI texts, which pick a language from the page's URL.
+vi.hoisted(() => vi.stubGlobal('location', { search: '' }))
 
 const FPS = 60
 const DT = 1 / FPS
@@ -174,5 +178,114 @@ describe('eye height in the air and on decks', () => {
     expect(camera.position.y).toBeGreaterThan(high - 0.1)
     const { above } = frames(player, heights, 3)
     expect(above.at(-1)).toBeCloseTo(EYE, 3)
+  })
+})
+
+describe('at a high time factor', () => {
+  /**
+   * Play `seconds` of game time at time factor `steps` up the ladder, in real frames of `dt`
+   * (0.1 s is the longest the game loop takes). Returns the eye height above the ground and
+   * the game time after each step.
+   */
+  function play(player: Player, heights: HeightField, steps: number, seconds: number, dt = DT) {
+    const clock = new GameClock()
+    for (let i = 0; i < steps; i++) clock.faster()
+    const above: number[] = []
+    const times: number[] = []
+    while (clock.time < seconds - 1e-9) {
+      clock.advance(dt, {}, step => {
+        player.update(step)
+        const p = player.camera.position
+        above.push(p.y - heights.heightAt(p.x, p.z))
+        times.push(clock.time)
+      })
+    }
+    return { above, times }
+  }
+
+  // 1×, 8× and 10×, at 60 frames a second and at the 0.1 s frames of a slow computer.
+  const CASES = [
+    [0, DT],
+    [6, DT],
+    [7, DT],
+    [6, 0.1],
+    [7, 0.1],
+  ] as const
+
+  it.each(CASES)('covers the same ground at game pace (ladder step %i, frames of %f s)', async (steps, dt) => {
+    const { player, camera, heights, key } = await setup(col => 100 + 0.1 * col)
+    player.placeAt(20, 128)
+    faceEast(camera)
+    key('keydown', 'KeyW')
+    // 12 s is a whole number of frames at every factor here.
+    expect(play(player, heights, steps, 12, dt).times.at(-1)).toBeCloseTo(12, 9)
+    const atOne = await setup(col => 100 + 0.1 * col)
+    atOne.player.placeAt(20, 128)
+    faceEast(atOne.camera)
+    atOne.key('keydown', 'KeyW')
+    frames(atOne.player, atOne.heights, 12)
+    // Uphill jogging: well short of 3.2 m/s, and the same pace (m per game second) as at 1×.
+    expect(camera.position.x - 20).toBeGreaterThan(20)
+    expect(camera.position.x).toBeCloseTo(atOne.camera.position.x, 1)
+    expect(player.speed).toBeCloseTo(atOne.player.speed, 2)
+  })
+
+  it.each(CASES)('runs through no trunk and stops at a wall (ladder step %i, frames of %f s)', async (steps, dt) => {
+    const { player, camera, key } = await setup(() => 100)
+    // A trunk just off the line the runner takes, and a building from x = 60.
+    const trunk = { x: 40, z: 128.05, radius: 0.15 }
+    player.surroundings = {
+      speedAt: x => (x >= 60 ? 0 : 1),
+      collide: (x, z, radius) => {
+        const dx = x - trunk.x
+        const dz = z - trunk.z
+        const d = Math.hypot(dx, dz)
+        const min = trunk.radius + radius
+        return d < min ? [trunk.x + (dx / d) * min, trunk.z + (dz / d) * min] : [x, z]
+      },
+    }
+    player.placeAt(20, 128)
+    faceEast(camera)
+    key('keydown', 'KeyW')
+    key('keydown', 'ShiftLeft')
+    let nearest = Infinity
+    let furthest = 0
+    const clock = new GameClock()
+    for (let i = 0; i < steps; i++) clock.faster()
+    while (clock.time < 12 - 1e-9) {
+      clock.advance(dt, {}, step => {
+        player.update(step)
+        const p = camera.position
+        nearest = Math.min(nearest, Math.hypot(p.x - trunk.x, p.z - trunk.z))
+        furthest = Math.max(furthest, p.x)
+      })
+    }
+    // Pushed round the trunk (radius 0.15 m + body 0.3 m), never into it.
+    expect(nearest).toBeGreaterThan(0.45 - 1e-6)
+    // At the wall, not in it.
+    expect(furthest).toBeLessThan(60)
+    expect(furthest).toBeGreaterThan(59.5)
+  })
+
+  it.each(CASES)('jumps as high and as long in game time (ladder step %i, frames of %f s)', async (steps, dt) => {
+    const flight = (above: number[], times: number[]) => {
+      const air = times.filter((_, i) => above[i]! > EYE + 0.01)
+      return { peak: Math.max(...above) - EYE, airtime: air.at(-1)! - air[0]! }
+    }
+    const { player, heights, key } = await setup(() => 100)
+    player.placeAt(128, 128)
+    key('keydown', 'Space')
+    key('keyup', 'Space')
+    const fast = flight(...Object.values(play(player, heights, steps, 2, dt)) as [number[], number[]])
+    const slow = await setup(() => 100)
+    slow.player.placeAt(128, 128)
+    slow.key('keydown', 'Space')
+    slow.key('keyup', 'Space')
+    const atOne = flight(...Object.values(play(slow.player, slow.heights, 0, 2)) as [number[], number[]])
+    expect(fast.peak).toBeGreaterThan(0.55)
+    expect(fast.peak).toBeLessThan(0.65)
+    expect(Math.abs(fast.peak - atOne.peak)).toBeLessThan(0.03)
+    expect(Math.abs(fast.airtime - atOne.airtime)).toBeLessThan(0.05)
+    expect(player.camera.position.y - 100).toBeCloseTo(EYE, 3)
   })
 })
