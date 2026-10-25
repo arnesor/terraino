@@ -6,7 +6,8 @@ under it until each 16 m cell has as many trees as SR16 reports (or a typical nu
 The orienteering map then decides where trees may stand: in forest the canopy is filled
 up as above, on open land, farmland and gardens only the trees the laser finds stand,
 on open land with scattered trees only a few of them, and young trees are added where the map shows dense forest. Species come from SR16, mixed a
-little, because SR16 only gives the dominant species per 16 m cell.
+little, because SR16 only gives the dominant species per 16 m cell; trees far from
+SR16's forest, and outside it on open land, are birch.
 """
 
 from __future__ import annotations
@@ -75,6 +76,13 @@ _GROUND_MIX = {
     Ground.ROCK: (0.10, 0.75, 0.15),
     Ground.LAWN: (0.20, 0.10, 0.70),
 }
+# Trees outside SR16 forest are birch on open ground (verges, field edges, gardens), and
+# on any ground farther than this (m) from SR16 forest, measured on a grid of this step
+# (m). On bog and bare rock they keep their mix above, leaning to pine.
+BIRCH_BEYOND_FOREST_M = 50.0
+FOREST_DISTANCE_STEP = 4
+_BIRCH_GROUND = (Ground.OPEN, Ground.ROUGH, Ground.FIELD, Ground.LAWN)
+_PINE_GROUND = (Ground.MARSH, Ground.ROCK)
 # Crown radius = a * height + b, per species (spruce narrow, broadleaf wide).
 _CROWN = {
     Species.SPRUCE: (0.11, 0.4),
@@ -362,6 +370,34 @@ def _pick_species(
     return (np.minimum(choice, 2) + 1).astype(np.uint8)
 
 
+def _birch(
+    dominant: npt.NDArray[np.uint8],
+    ground: npt.NDArray[np.uint8],
+    rows: npt.NDArray[np.intp],
+    cols: npt.NDArray[np.intp],
+    stand_grown: npt.NDArray[np.bool_],
+) -> npt.NDArray[np.bool_]:
+    """True for trees outside SR16 forest that are birch (see BIRCH_BEYOND_FOREST_M).
+
+    Seed trees left after a cut grew up in the forest and keep their species on open
+    ground. All False if SR16 has no forest in the world at all: then it is missing.
+    """
+    step = FOREST_DISTANCE_STEP
+    no_forest = dominant[::step, ::step] == Species.NONE
+    if no_forest.all():
+        return np.zeros(len(rows), dtype=bool)
+    distance = ndimage.distance_transform_edt(no_forest, sampling=step)
+    far = distance[rows // step, cols // step] > BIRCH_BEYOND_FOREST_M
+    here = ground[rows, cols]
+    open_ground = (
+        (dominant[rows, cols] == Species.NONE)
+        & np.isin(here, _BIRCH_GROUND)
+        & ~stand_grown
+    )
+    birch: npt.NDArray[np.bool_] = (far | open_ground) & ~np.isin(here, _PINE_GROUND)
+    return birch
+
+
 def _crowns(
     height: npt.NDArray[np.float32], species: npt.NDArray[np.uint8]
 ) -> npt.NDArray[np.float32]:
@@ -476,11 +512,14 @@ def place_trees(
     all_cols = np.concatenate([cols, yc]).astype(np.float32)
     all_heights = np.concatenate([heights, yh]).astype(np.float32)
     ir, ic = all_rows.astype(np.intp), all_cols.astype(np.intp)
+    n = len(all_rows)
+    stand_grown = np.zeros(n, dtype=bool)
+    stand_grown[: len(seed_trees)] = seed_trees
     species = _pick_species(species_map[ir, ic], layers.ground[ir, ic], rng)
+    species[_birch(species_map, layers.ground, ir, ic, stand_grown)] = Species.DECIDUOUS
 
     # Tops sit on cell centres; jitter so the forest does not look gridded. The laser
     # tops keep their own (finer) positions.
-    n = len(all_rows)
     jitter = rng.uniform(-0.45, 0.45, size=(2, n)).astype(np.float32)
     jitter[:, : len(laser)] *= laser.cell
     row = all_rows + 0.5
@@ -490,8 +529,6 @@ def place_trees(
     crown = _crowns(all_heights, species)
     measured = np.isfinite(laser.crown)
     crown[: len(laser)][measured] = laser.crown[measured]
-    stand_grown = np.zeros(n, dtype=bool)
-    stand_grown[: len(seed_trees)] = seed_trees
     crown_base = np.full(n, np.nan, dtype=np.float32)
     crown_base[: len(laser)] = laser.crown_base
     return Trees(
