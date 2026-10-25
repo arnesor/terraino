@@ -68,7 +68,6 @@ describe('eye height while running', () => {
     player.placeAt(20, 128)
     faceEast(camera)
     key('keydown', 'KeyW')
-    key('keydown', 'ShiftLeft')
     frames(player, heights, 0.5) // get going
     const { eye } = frames(player, heights, 3)
     // Under half a g, and well under the ground's own 10 cm range.
@@ -82,7 +81,6 @@ describe('eye height while running', () => {
     player.placeAt(20, 128)
     faceEast(camera)
     key('keydown', 'KeyW')
-    key('keydown', 'ShiftLeft')
     frames(player, heights, 0.5)
     const { above } = frames(player, heights, 3)
     for (const a of above) expect(Math.abs(a - EYE)).toBeLessThan(0.1)
@@ -96,7 +94,6 @@ describe('eye height while running', () => {
     // A 3 m cliff between x = 29 and 30.
     const { player, camera, heights, key } = await setup(col => (col >= 30 ? 103 : 100))
     key('keydown', 'KeyW')
-    key('keydown', 'ShiftLeft')
     for (const [from, heading] of [
       [20, -Math.PI / 2], // east, up the cliff
       [40, Math.PI / 2], // west, down it
@@ -116,19 +113,6 @@ describe('eye height while running', () => {
 })
 
 describe('eye height in the air and on decks', () => {
-  it('jumps as high as before and lands softly', async () => {
-    const { player, heights, key } = await setup(() => 100)
-    player.placeAt(128, 128)
-    key('keydown', 'Space')
-    key('keyup', 'Space')
-    const { above } = frames(player, heights, 2)
-    // A jump at 3.5 m/s rises 3.5² / (2 × 9.81) = 0.62 m.
-    expect(Math.max(...above) - EYE).toBeGreaterThan(0.55)
-    expect(Math.max(...above) - EYE).toBeLessThan(0.65)
-    expect(Math.min(...above)).toBeGreaterThan(EYE - 0.1)
-    expect(above.at(-1)).toBeCloseTo(EYE, 3)
-  })
-
   it('keeps 1.7 m above a bridge deck', async () => {
     const { player, camera, heights, key } = await setup(() => 100)
     player.surroundings = {
@@ -139,9 +123,8 @@ describe('eye height in the air and on decks', () => {
     player.placeAt(20, 128)
     faceEast(camera)
     key('keydown', 'KeyW')
-    key('keydown', 'ShiftLeft')
     let onDeck = 0
-    for (let i = 0; i < 4 * FPS; i++) {
+    for (let i = 0; i < 7 * FPS; i++) {
       player.update(DT)
       const x = camera.position.x
       if (x > 31.5 && x < 35.5) {
@@ -166,9 +149,11 @@ describe('eye height in the air and on decks', () => {
     const { player, camera, heights, key } = await setup(() => 100)
     player.placeAt(128, 128)
     key('keydown', 'KeyF')
-    key('keydown', 'Space') // fly up
+    // Fly up by looking up.
+    camera.rotation.set(1.2, 0, 0, 'YXZ')
+    key('keydown', 'KeyW')
     frames(player, heights, 0.5)
-    key('keyup', 'Space')
+    key('keyup', 'KeyW')
     const high = camera.position.y
     expect(high - 100).toBeGreaterThan(10)
 
@@ -247,12 +232,12 @@ describe('at a high time factor', () => {
     player.placeAt(20, 128)
     faceEast(camera)
     key('keydown', 'KeyW')
-    key('keydown', 'ShiftLeft')
     let nearest = Infinity
     let furthest = 0
     const clock = new GameClock()
     for (let i = 0; i < steps; i++) clock.faster()
-    while (clock.time < 12 - 1e-9) {
+    // 16 s at 3.2 m/s reaches the wall 40 m away.
+    while (clock.time < 16 - 1e-9) {
       clock.advance(dt, {}, step => {
         player.update(step)
         const p = camera.position
@@ -267,25 +252,23 @@ describe('at a high time factor', () => {
     expect(furthest).toBeGreaterThan(59.5)
   })
 
-  it.each(CASES)('jumps as high and as long in game time (ladder step %i, frames of %f s)', async (steps, dt) => {
-    const flight = (above: number[], times: number[]) => {
-      const air = times.filter((_, i) => above[i]! > EYE + 0.01)
-      return { peak: Math.max(...above) - EYE, airtime: air.at(-1)! - air[0]! }
+  it.each(CASES)('falls from a height as at 1× (ladder step %i, frames of %f s)', async (steps, dt) => {
+    /** Game time from dropping 20 m above the eye height until standing on the ground. */
+    const fall = async (steps: number, dt: number) => {
+      const { player, camera, heights, key } = await setup(() => 100)
+      player.placeAt(128, 128)
+      key('keydown', 'KeyF')
+      camera.position.y += 20
+      player.update(DT)
+      key('keydown', 'KeyF')
+      const { above, times } = play(player, heights, steps, 4, dt)
+      expect(above.at(-1)).toBeCloseTo(EYE, 3)
+      return times[above.findIndex(a => a < EYE + 0.01)]!
     }
-    const { player, heights, key } = await setup(() => 100)
-    player.placeAt(128, 128)
-    key('keydown', 'Space')
-    key('keyup', 'Space')
-    const fast = flight(...Object.values(play(player, heights, steps, 2, dt)) as [number[], number[]])
-    const slow = await setup(() => 100)
-    slow.player.placeAt(128, 128)
-    slow.key('keydown', 'Space')
-    slow.key('keyup', 'Space')
-    const atOne = flight(...Object.values(play(slow.player, slow.heights, 0, 2)) as [number[], number[]])
-    expect(fast.peak).toBeGreaterThan(0.55)
-    expect(fast.peak).toBeLessThan(0.65)
-    expect(Math.abs(fast.peak - atOne.peak)).toBeLessThan(0.03)
-    expect(Math.abs(fast.airtime - atOne.airtime)).toBeLessThan(0.05)
-    expect(player.camera.position.y - 100).toBeCloseTo(EYE, 3)
+    const time = await fall(steps, dt)
+    // A fall of 20 m takes √(2 × 20 / 9.81) = 2.02 s, and the eye then settles on its spring.
+    expect(time).toBeGreaterThan(1.95)
+    expect(time).toBeLessThan(2.2)
+    expect(Math.abs(time - (await fall(0, DT)))).toBeLessThan(0.05)
   })
 })

@@ -132,12 +132,11 @@ Maps must be georeferenced in UTM zone 32, 33 or 35 (ETRS89 or WGS 84).
 | ----------- | ------------------------------------------------- |
 | W A S D     | Move                                              |
 | Mouse       | Look around                                       |
-| Shift       | Run (fly fast)                                    |
-| Space       | Jump (fly up)                                     |
-| F           | Fly on/off, C flies down                          |
+| E / Q       | Time factor up / down: game time runs up to 10 times as fast |
+| F           | Fly on/off; look up or down to climb or dive      |
 | M           | Map window: drag to move, wheel to zoom, double click to go there |
 | K           | Control descriptions on/off                       |
-| E           | With the map open: set a course by clicking (or Set course) |
+| N           | With the map open: set a course by clicking (or Set course) |
 | L           | Copy a link to the course                         |
 | T           | Go to the start, behind the start banner; R restarts the run |
 | O           | Orienteering map on the ground on/off             |

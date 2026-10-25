@@ -4,11 +4,8 @@ import type { HeightField } from './heightfield'
 
 const EYE_HEIGHT = 1.7
 const JOG_SPEED = 3.2 // m/s, a steady orienteering pace
-const RUN_SPEED = 5.5
 const FLY_SPEED = 40
-const FLY_FAST_SPEED = 200
 const GRAVITY = 9.81
-const JUMP_SPEED = 3.5
 const BODY_RADIUS = 0.3
 const DRAG_LOOK_SPEED = 0.004 // radians per pixel when looking by dragging
 // The eye follows the ground under a footprint, as legs absorb bumps: the ground under the
@@ -56,8 +53,7 @@ export class Player {
   private readonly bounds: [number, number]
   private readonly keys = new Set<string>()
   private verticalSpeed = 0
-  private onGround = true
-  // Eye height of the body without smoothing (gravity, jumps and decks), and the speed of
+  // Eye height of the body without smoothing (gravity and decks), and the speed of
   // the smoothed eye, which is the camera's height.
   private bodyY = 0
   private eyeSpeed = 0
@@ -77,10 +73,6 @@ export class Player {
     window.addEventListener('keydown', e => {
       this.keys.add(e.code)
       if (e.code === 'KeyF' && this.acceptsKeys) this.toggleFlying()
-      if (e.code === 'Space' && !this.flying && this.onGround) {
-        this.verticalSpeed = JUMP_SPEED
-        this.onGround = false
-      }
     })
     window.addEventListener('keyup', e => this.keys.delete(e.code))
     window.addEventListener('blur', () => this.keys.clear())
@@ -147,18 +139,16 @@ export class Player {
       if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) move.add(right)
       if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) move.sub(right)
     }
-    const fast = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')
 
     if (this.flying) {
-      if (this.keys.has('Space')) move.y += 1
-      if (this.keys.has('KeyC')) move.y -= 1
-      if (move.lengthSq() > 0) move.normalize().multiplyScalar((fast ? FLY_FAST_SPEED : FLY_SPEED) * dt)
+      // Flying goes where you look: look up to climb, down to dive.
+      if (move.lengthSq() > 0) move.normalize().multiplyScalar(FLY_SPEED * dt)
       pos.add(move)
       pos.y = Math.max(pos.y, this.heights.heightAt(pos.x, pos.z) + EYE_HEIGHT)
       this.bodyY = pos.y
       this.speed = move.length() / Math.max(dt, 1e-6)
     } else {
-      let speed = fast ? RUN_SPEED : JOG_SPEED
+      let speed = JOG_SPEED
       if (move.lengthSq() > 0) {
         move.normalize()
         // Uphill is slow, gentle downhill a little faster, steep downhill careful.
@@ -192,12 +182,11 @@ export class Player {
       const ground = (onDeck ? deck : terrain) + EYE_HEIGHT
       this.verticalSpeed -= GRAVITY * dt
       this.bodyY += this.verticalSpeed * dt
-      // Follow the ground when walking downhill instead of falling in small hops.
-      const snap = this.onGround && this.verticalSpeed <= 0 && this.bodyY - ground < 0.6
-      if (this.bodyY <= ground || snap) {
+      // Follow the ground when walking downhill instead of falling in small hops; fall
+      // only from higher up (after flying, or off a cliff or a deck).
+      if (this.bodyY - ground < 0.6) {
         this.bodyY = ground
         this.verticalSpeed = 0
-        this.onGround = true
         // Decks are flat; on the ground the eye follows the footprint, smoothed.
         const target = onDeck ? ground : this.footprintHeight(pos.x, pos.z) + EYE_HEIGHT
         ;[pos.y, this.eyeSpeed] = spring(pos.y, this.eyeSpeed, target, dt, EYE_SPRING)
