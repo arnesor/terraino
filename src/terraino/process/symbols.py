@@ -115,7 +115,8 @@ class SymbolRule:
             such as undergrowth or marsh, or None. Within a group the topmost symbol
             counts, and the slowest of the groups and the symbol below them sets the
             speed. Other symbols replace the speed of everything below them.
-        width: Real-world width in metres of a line symbol, or None.
+        width: Real-world width in metres of a line symbol, or the side of a ruin drawn
+            as a point, or None.
         clear: Width in metres of a tree-free strip along a line, or None.
         order: Drawing order; higher values are painted on top.
         feature: 3D object placed for the symbol (see FEATURES), or None.

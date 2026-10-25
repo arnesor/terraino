@@ -11,7 +11,16 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 from rasterio.features import rasterize
-from shapely import LineString, MultiLineString, MultiPolygon, Point, Polygon, STRtree
+from shapely import (
+    LineString,
+    MultiLineString,
+    MultiPolygon,
+    Point,
+    Polygon,
+    STRtree,
+    box,
+)
+from shapely.affinity import rotate
 from shapely.geometry.base import BaseGeometry
 
 from terraino.ingest.georef import Extent
@@ -194,6 +203,25 @@ def _boulder_field_area(polygon: Polygon, size: float) -> list[PointFeature]:
     return out
 
 
+# Side in metres of a ruin drawn as a point symbol, when its rule gives no width.
+_POINT_RUIN_SIDE = 4.0
+
+
+def _point_ruin(point: Point, side: float, angle: float) -> Polygon:
+    """The square outline of a ruin drawn as a point, turned by the symbol's angle.
+
+    Examples:
+        >>> ruin = _point_ruin(Point(10, 20), 4.0, 0.0)
+        >>> ruin.bounds
+        (8.0, 18.0, 12.0, 22.0)
+        >>> round(_point_ruin(Point(0, 0), 4.0, math.radians(45)).bounds[2], 2)
+        2.83
+    """
+    half = side / 2
+    square = box(point.x - half, point.y - half, point.x + half, point.y + half)
+    return rotate(square, angle, origin=point, use_radians=True)
+
+
 def _lines(geometry: BaseGeometry) -> list[LineString]:
     if isinstance(geometry, LineString):
         return [geometry]
@@ -226,6 +254,9 @@ def collect_features(
         kind = rule.feature
         size = rule.size or _DEFAULT_SIZE.get(kind, 1.0)
         angle = math.radians(float(f["properties"].get("ang", 0.0)))
+        if kind == "ruin" and isinstance(geometry, Point):
+            # A ruin too small to draw to scale: a square of the rule's width.
+            geometry = _point_ruin(geometry, rule.width or _POINT_RUIN_SIDE, angle)
         if kind in ("cliff", "rock_face"):
             cliff_lines.extend((kind, line) for line in _lines(geometry))
         elif kind in _LINE_KINDS:

@@ -74,6 +74,23 @@ describe('ruins', () => {
     expect(door!.z).toBeCloseTo(103, 0)
   })
 
+  it('get a door even when very small and turned (a 3 by 3 m point ruin)', async () => {
+    const { heights } = await syntheticWorld(1, 1)
+    // A 3 m square turned 36°, as the pipeline makes for ISOM 2000 530.2.
+    const a = (36 * Math.PI) / 180
+    const corner = (u: number, v: number): [number, number] => [
+      100 + u * Math.cos(a) - v * Math.sin(a),
+      100 + u * Math.sin(a) + v * Math.cos(a),
+    ]
+    const square = [corner(-1.5, -1.5), corner(1.5, -1.5), corner(1.5, 1.5), corner(-1.5, 1.5)]
+    const runs = wallRuns({ kind: 'ruin', size: 0.5, points: [...square, square[0]!] }, heights, pathAt(120, 100))
+    expect(runs).toHaveLength(1)
+    const [door] = doors(runs)
+    expect(door!.width).toBeCloseTo(DOOR_WIDTH, 6)
+    // On the side towards the path, east of the middle.
+    expect(door!.x).toBeGreaterThan(100.5)
+  })
+
   it('follow the ground, standing on the lower side', async () => {
     // Rising 0.3 m per metre east.
     const { heights } = await syntheticWorld(1, 1, col => 100 + 0.3 * col)

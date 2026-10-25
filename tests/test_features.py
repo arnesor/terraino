@@ -3,7 +3,7 @@ from typing import Any
 
 import numpy as np
 import pytest
-from shapely import box
+from shapely import Polygon, box
 
 from terraino.ingest.georef import Extent
 from terraino.process.features import (
@@ -201,6 +201,27 @@ def test_a_building_drawn_as_a_rock_pillar_leaves_no_rocks() -> None:
     )
     assert drop_rocks_in_buildings(found, [box(50, 50, 62, 60)]) == 4
     assert [(p.kind, p.x, p.y) for p in found.points] == [("boulder", 80, 80)]
+
+
+def test_small_ruins_drawn_as_points_become_square_ruins() -> None:
+    # ISOM 2000 530.1 (small ruin, 5 m) turned 30°, and 530.2 (very small ruin, 3 m).
+    found, _ = collect_features(
+        [
+            feature(0, "530.1", point(20, 20), ang=30),
+            feature(1, "530.2", point(60, 60)),
+        ],
+        ISOM,
+    )
+    small, very_small = found.lines
+    assert (small.kind, small.size, very_small.size) == ("ruin", 0.6, 0.5)
+    for ruin, centre, side in ((small, (20, 20), 5), (very_small, (60, 60), 3)):
+        square = Polygon(ruin.coords)
+        assert ruin.coords[0] == ruin.coords[-1]  # closed, like an area ruin
+        assert square.area == pytest.approx(side * side)
+        assert (square.centroid.x, square.centroid.y) == pytest.approx(centre)
+    # The small ruin's first side runs at 30° from east.
+    (x0, y0), (x1, y1) = small.coords[0], small.coords[1]
+    assert math.degrees(math.atan2(y1 - y0, x1 - x0)) % 90 == pytest.approx(30)
 
 
 def test_a_ruin_under_a_building_is_left_out() -> None:
