@@ -224,11 +224,13 @@ async function main() {
     canopyFade: [FAR_DISTANCE * 0.7, FAR_DISTANCE],
     groundTex: gfx.groundArray,
   })
+  terrain.setQuality(QUALITY[environment.quality])
   scene.add(terrain.group)
 
   setStatus(t('buildingWorld'))
   await pause()
   const tracks = await Tracks.load(world, heights, gfx)
+  tracks?.setQuality(QUALITY[environment.quality])
   if (tracks) scene.add(tracks.group)
   const treeInfo = world.manifest.trees
   const forest = treeInfo ? new Forest(world, treeInfo, heights, gfx, QUALITY[environment.quality]) : null
@@ -388,6 +390,8 @@ async function main() {
       forest?.setQuality(settings)
       undergrowth?.setQuality(settings)
       features?.setQuality(settings)
+      terrain.setQuality(settings)
+      tracks?.setQuality(settings)
     }
   })
 
@@ -462,6 +466,7 @@ async function main() {
     forest?.update(camera.position)
     undergrowth?.update(camera.position)
     features?.update(camera.position)
+    tracks?.update(camera.position)
     grain?.update()
     environment.update(camera)
     hud.update(dt)

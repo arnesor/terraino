@@ -144,6 +144,26 @@ describe('fixture world', () => {
     }
   })
 
+  it('draws the track strips near the player only on low quality', async () => {
+    const tracks = (await Tracks.load(world, heights, gfx))!
+    const strips = tracks.group.children.filter(c => c instanceof THREE.Mesh)
+    const shown = () => strips.filter(s => s.visible).length
+    const [x, z] = world.toScene(...world.manifest.spawn)
+    const middle = new THREE.Vector3(x, 0, z)
+    tracks.update(middle)
+    expect(shown()).toBe(strips.length)
+    tracks.setQuality(QUALITY.low)
+    // Far away from the map: no strips on low, all on high.
+    const far = new THREE.Vector3(-1e5, 0, -1e5)
+    tracks.update(far)
+    expect(shown()).toBe(0)
+    tracks.update(middle)
+    expect(shown()).toBeGreaterThan(0)
+    tracks.setQuality(QUALITY.high)
+    tracks.update(far)
+    expect(shown()).toBe(strips.length)
+  })
+
   it('draws only the rocks near the player, farther at a higher quality', async () => {
     const features = (await MapFeatures.load(world, heights, gfx, QUALITY.low))!
     const { kinds, points } = features.data

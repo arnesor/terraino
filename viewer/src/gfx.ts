@@ -20,12 +20,16 @@ export interface QualitySettings {
   grainDensity: number
   /** Boulders are drawn this far; small stones only as far as the cover. */
   boulders: number
+  /** The terrain's level-of-detail distances are scaled by this: coarser terrain nearer. */
+  terrainDetail: number
+  /** Road, path and stream strips are drawn this far; beyond, the ground paints them. */
+  tracks: number
 }
 
 export const QUALITY: Record<Quality, QualitySettings> = {
-  high: { near: 110, cover: 40, coverDensity: 1.8, grainDensity: 3.5, boulders: 600 },
-  medium: { near: 85, cover: 32, coverDensity: 1.4, grainDensity: 2.8, boulders: 450 },
-  low: { near: 60, cover: 22, coverDensity: 1.0, grainDensity: 2.0, boulders: 300 },
+  high: { near: 110, cover: 40, coverDensity: 1.8, grainDensity: 3.5, boulders: 600, terrainDetail: 1, tracks: Infinity },
+  medium: { near: 85, cover: 32, coverDensity: 1.4, grainDensity: 2.8, boulders: 450, terrainDetail: 1, tracks: Infinity },
+  low: { near: 60, cover: 22, coverDensity: 1.0, grainDensity: 2.0, boulders: 300, terrainDetail: 0.5, tracks: 300 },
 }
 
 /** Tree model variants; trees of a species pick one. */
