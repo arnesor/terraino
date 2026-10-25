@@ -1,4 +1,4 @@
-import { type Course, type CourseRun, encodeCourse, formatTime } from './course'
+import { type Course, type CourseRun, encodeCourse, formatPace, formatTime } from './course'
 import { describe, drawDescriptionTable, tableRows } from './descriptions/table'
 import { formatNumber, renameStoredKey, t, type TextKey } from './i18n'
 import { fitRectangle, legIndices } from './mapview'
@@ -523,7 +523,7 @@ export class Hud {
     this.info.textContent = [
       this.world.manifest.name,
       `${this.world.manifest.crs}  E ${east.toFixed(0)}  N ${north.toFixed(0)}`,
-      t('infoHeight', { height: formatNumber(pos.y - 1.7, 1), speed: formatNumber(this.player.speed, 1) }) +
+      t('infoHeight', { height: formatNumber(pos.y - 1.7, 1), pace: formatPace(this.player.speed) }) +
         (this.player.flying ? t('infoFlying') : ''),
       t('infoRunnability', { percent: Math.round(this.player.runnability * 100) }),
       `${this.fps} fps · ${this.status()}`,

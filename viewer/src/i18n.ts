@@ -71,7 +71,7 @@ const STRINGS = {
   qualityHigh: { en: 'high', nb: 'høy' },
   qualityMedium: { en: 'medium', nb: 'middels' },
   qualityLow: { en: 'low', nb: 'lav' },
-  infoHeight: { en: 'Height {height} m · {speed} m/s', nb: 'Høyde {height} m · {speed} m/s' },
+  infoHeight: { en: 'Height {height} m · {pace} min/km', nb: 'Høyde {height} m · {pace} min/km' },
   infoFlying: { en: ' · flying', nb: ' · flyr' },
   infoRunnability: { en: 'Runnability {percent} %', nb: 'Løpbarhet {percent} %' },
 
