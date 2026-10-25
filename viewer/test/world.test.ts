@@ -9,7 +9,7 @@ import * as THREE from 'three'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { MapFeatures } from '../src/features'
 import { TreeChunk } from '../src/forest'
-import type { Gfx } from '../src/gfx'
+import { type Gfx, QUALITY } from '../src/gfx'
 import { HeightField } from '../src/heightfield'
 import { loadBuildings } from '../src/buildings'
 import { readCourseFile } from '../src/ocad/courses'
@@ -144,8 +144,57 @@ describe('fixture world', () => {
     }
   })
 
+  it('draws the track strips near the player only on low quality', async () => {
+    const tracks = (await Tracks.load(world, heights, gfx))!
+    const strips = tracks.group.children.filter(c => c instanceof THREE.Mesh)
+    const shown = () => strips.filter(s => s.visible).length
+    const [x, z] = world.toScene(...world.manifest.spawn)
+    const middle = new THREE.Vector3(x, 0, z)
+    tracks.update(middle)
+    expect(shown()).toBe(strips.length)
+    tracks.setQuality(QUALITY.low)
+    // Far away from the map: no strips on low, all on high.
+    const far = new THREE.Vector3(-1e5, 0, -1e5)
+    tracks.update(far)
+    expect(shown()).toBe(0)
+    tracks.update(middle)
+    expect(shown()).toBeGreaterThan(0)
+    tracks.setQuality(QUALITY.high)
+    tracks.update(far)
+    expect(shown()).toBe(strips.length)
+  })
+
+  it('draws only the rocks near the player, farther at a higher quality', async () => {
+    const features = (await MapFeatures.load(world, heights, gfx, QUALITY.low))!
+    const { kinds, points } = features.data
+    const rocks = points.filter(p => kinds[p[0]] === 'boulder' || kinds[p[0]] === 'stone')
+    const drawn = () =>
+      features.group.children.reduce((n, c) => n + (c instanceof THREE.InstancedMesh ? c.count : 0), 0)
+    // Within the distance, plus the 10 m the player may move before the rocks are picked again.
+    const expected = (eye: THREE.Vector3, quality: typeof QUALITY.low) =>
+      rocks.filter(([k, x, z]) => {
+        const reach = (kinds[k] === 'stone' ? quality.cover : quality.boulders) + 10
+        return Math.hypot(x - eye.x, z - eye.z) <= reach
+      }).length
+    // 350 m from a boulder: beyond the boulders on low (300 m), within them on high (600 m).
+    // Small stones (none in this world) only reach as far as the ground cover.
+    const rock = rocks.find(p => kinds[p[0]] === 'boulder')!
+    const eye = new THREE.Vector3(rock[1] + 350, 0, rock[2])
+    expect(drawn()).toBe(0)
+    features.update(eye)
+    const low = drawn()
+    expect(low).toBe(expected(eye, QUALITY.low))
+    features.setQuality(QUALITY.high)
+    features.update(eye)
+    expect(drawn()).toBe(expected(eye, QUALITY.high))
+    expect(drawn()).toBeGreaterThan(low)
+    // Far away from every rock, none are drawn.
+    features.update(new THREE.Vector3(-1e5, 0, -1e5))
+    expect(drawn()).toBe(0)
+  })
+
   it('places the test course flags clear of the map features', async () => {
-    const features = (await MapFeatures.load(world, heights, gfx))!
+    const features = (await MapFeatures.load(world, heights, gfx, QUALITY.high))!
     const m = world.manifest.features!
     expect(features.data.points).toHaveLength(m.points)
     expect(features.data.lines).toHaveLength(m.lines)

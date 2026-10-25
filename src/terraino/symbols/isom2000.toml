@@ -13,7 +13,8 @@
 #   speed_group  "undergrowth", "wet" or "stony" for a symbol drawn on top of the
 #           vegetation: the slowest of it and the area below counts, and within a group
 #           the topmost symbol. Other symbols replace the speed of all below them.
-#   width   real-world width in metres of a line symbol, painted with its ground class
+#   width   real-world width in metres of a line symbol, painted with its ground class;
+#           for a ruin drawn as a point, the side of its square
 #   clear   width in metres of a tree-free strip along a line symbol
 #   order   drawing order; higher values are painted on top
 #   feature 3D object placed for the symbol: boulder, boulder_cluster, boulder_field,
@@ -119,6 +120,9 @@ name = "ISOM 2000"
 "528" = { ground = "lawn", trees = "lidar", speed = 0.9, order = 50 }
 "529" = { ground = "paved", trees = "none", speed = 1.0, order = 85 }
 "530" = { feature = "ruin", size = 0.6 }
+# Small and very small ruins, drawn as points: too small to draw to scale.
+"530.1" = { feature = "ruin", size = 0.6, width = 5 }
+"530.2" = { feature = "ruin", size = 0.5, width = 3 }
 "535" = { feature = "tower", size = 10 }
 "536" = { feature = "tower", size = 4 }
 "537" = { feature = "cairn", size = 1.2 }

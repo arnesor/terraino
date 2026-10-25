@@ -1,10 +1,12 @@
 import * as THREE from 'three'
+import type { QualitySettings } from './gfx'
 import { createGroundMaterial } from './groundMaterial'
 import type { HeightField } from './heightfield'
 import type { LayerStore } from './layers'
 import type { World } from './world'
 
 // Distance (m) up to which each level of detail is used; the step is the vertex spacing.
+// The quality setting scales the distances (QualitySettings.terrainDetail).
 const LODS = [
   { maxDistance: 250, step: 1 },
   { maxDistance: 600, step: 2 },
@@ -99,6 +101,7 @@ export class Terrain {
   private readonly overviewGround: THREE.MeshLambertMaterial | null = null
   private texturesLoading = 0
   private modeValue: TerrainMode
+  private detail = 1
 
   constructor(world: World, heights: HeightField, options: TerrainOptions) {
     this.world = world
@@ -323,6 +326,16 @@ export class Terrain {
     this.options.layers?.release(chunk.cx, chunk.cy)
   }
 
+  /** Scale the level-of-detail distances; `update` rebuilds the chunks over a few frames. */
+  setQuality(quality: QualitySettings) {
+    this.detail = quality.terrainDetail
+  }
+
+  /** Vertex spacing for a chunk this far away. */
+  private stepAt(distance: number): number {
+    return LODS.find(l => distance < l.maxDistance * this.detail)!.step
+  }
+
   private distanceTo(chunk: Chunk, eye: THREE.Vector3): number {
     return Math.max(0, chunk.center.distanceTo(eye) - (this.heights.chunk * Math.SQRT2) / 2)
   }
@@ -335,7 +348,7 @@ export class Terrain {
     const near: Chunk[] = []
     for (const chunk of this.chunks) {
       const distance = this.distanceTo(chunk, eye)
-      chunk.wantStep = LODS.find(l => distance < l.maxDistance)!.step
+      chunk.wantStep = this.stepAt(distance)
       if (chunk.wantStep !== chunk.step) {
         chunk.mesh.geometry.dispose()
         chunk.mesh.geometry = this.buildGeometry(chunk.cx, chunk.cy, chunk.wantStep)
@@ -353,7 +366,7 @@ export class Terrain {
   update(eye: THREE.Vector3) {
     for (const chunk of this.chunks) {
       const distance = this.distanceTo(chunk, eye)
-      chunk.wantStep = LODS.find(l => distance < l.maxDistance)!.step
+      chunk.wantStep = this.stepAt(distance)
 
       if (distance < DETAIL_TEXTURE_DISTANCE) {
         if (!chunk.near) {

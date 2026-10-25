@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { QUALITY } from '../src/gfx'
 import { LayerStore } from '../src/layers'
 import { Terrain } from '../src/terrain'
 import { CHUNK, LAYER_INFO, syntheticWorld, uniformLayer } from './synthetic'
@@ -89,6 +90,23 @@ describe('terrain levels of detail', () => {
     // Flying high above the world: every chunk wants the coarsest level.
     terrain.update(eye(384, 384, 4000))
     expect(chunks(terrain).every(m => step(m) === 16)).toBe(true)
+  })
+
+  it('uses coarser terrain nearer on low quality', async () => {
+    const { terrain, eye } = await setup()
+    terrain.setQuality(QUALITY.low)
+    await terrain.prepare(eye(384, 384))
+    // The middle chunk and its edge neighbours are within 125 m (250 m × 0.5); the corner
+    // chunks, 181 m away, get every other height sample.
+    const at = (x: number, z: number) => step(chunks(terrain).find(m => m.position.x === x && m.position.z === z)!)
+    expect(at(256, 256)).toBe(1)
+    expect(at(0, 256)).toBe(1)
+    expect(at(0, 0)).toBe(2)
+    expect(at(512, 512)).toBe(2)
+    // Back to high quality: the corners are rebuilt at full detail.
+    terrain.setQuality(QUALITY.high)
+    for (let frame = 0; frame < 4; frame++) terrain.update(eye(384, 384))
+    expect(chunks(terrain).every(m => step(m) === 1)).toBe(true)
   })
 
   it('shades a tilted plane with the plane normal', async () => {

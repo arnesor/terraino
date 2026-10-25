@@ -36,6 +36,7 @@ from terraino.process.features import (
     carve_waterholes,
     collect_features,
     drop_rocks_in_buildings,
+    drop_ruins_in_buildings,
     measure_cliffs,
     paint_cliffs,
     place_poles,
@@ -412,6 +413,9 @@ def _add_nature_and_buildings(
         dropped = drop_rocks_in_buildings(objects, [fp[0] for fp in footprints])
         if dropped:
             log.info("Left out %d rocks standing in buildings", dropped)
+        dropped = drop_ruins_in_buildings(objects, [fp[0] for fp in footprints])
+        if dropped:
+            log.info("Left out %d ruins overlapping buildings", dropped)
         carve_cliffs(dtm, objects.cliffs, extent)
         carve_waterholes(dtm, layers, objects.points, extent)
         paint_cliffs(layers, objects.cliffs, extent)

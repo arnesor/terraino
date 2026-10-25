@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { type Gfx, GROUND_TEX_GLSL } from './gfx'
+import { type Gfx, GROUND_TEX_GLSL, type QualitySettings } from './gfx'
 import type { HeightField } from './heightfield'
 import type { World } from './world'
 
@@ -36,6 +36,9 @@ const CAP_SEGMENTS = 6
 const MAX_MITER = 2
 const INDEX_CELL = 8
 const TILE_M = 256
+// Which strips are near enough to draw (QualitySettings.tracks) is checked again after
+// moving this far.
+const STRIP_RECHECK_M = 10
 
 const SHADER_COMMON = /* glsl */ `
 uniform int trackKind;
@@ -342,6 +345,10 @@ export class Tracks {
   private readonly index = new Map<number, Segment[]>()
   private readonly normal = new THREE.Vector3()
   private readonly bridges: Bridge[] = []
+  /** The strip meshes, one per kind and tile, and how far they are drawn. */
+  private readonly strips: THREE.Mesh[] = []
+  private reach = Infinity
+  private checkedAt: THREE.Vector3 | null = null
 
   private constructor(heights: HeightField, gfx: Gfx) {
     this.heights = heights
@@ -359,6 +366,21 @@ export class Tracks {
     tracks.build(records)
     tracks.buildBridges(records)
     return tracks
+  }
+
+  setQuality(quality: QualitySettings) {
+    this.reach = quality.tracks
+    this.checkedAt = null
+  }
+
+  /** Draw the strips within reach of `eye`; the ground paints the tracks beyond. */
+  update(eye: THREE.Vector3) {
+    if (this.checkedAt && this.checkedAt.distanceTo(eye) < STRIP_RECHECK_M) return
+    this.checkedAt = eye.clone()
+    for (const strip of this.strips) {
+      const sphere = strip.geometry.boundingSphere!
+      strip.visible = sphere.center.distanceTo(eye) - sphere.radius < this.reach + STRIP_RECHECK_M
+    }
   }
 
   /** Add a vertex on the ground at (x, z), lit like the terrain there. */
@@ -386,8 +408,10 @@ export class Tracks {
       let material = materials.get(kind)
       if (!material) materials.set(kind, (material = createTrackMaterial(kind, this.gfx)))
       const mesh = new THREE.Mesh(builder.build(), material)
+      mesh.geometry.computeBoundingSphere()
       mesh.receiveShadow = true
       mesh.renderOrder = (STYLES[kind] ?? STYLES['path']!).order
+      this.strips.push(mesh)
       this.group.add(mesh)
     }
   }
@@ -509,6 +533,31 @@ export class Tracks {
     if (!list) return false
     for (const s of list) if (Tracks.distance(s, x, z) <= s.half + margin) return true
     return false
+  }
+
+  /** The nearest point within `maxDistance` on a track of one of `kinds`, or null. */
+  nearestPoint(x: number, z: number, maxDistance: number, kinds: ReadonlySet<string>): { x: number; z: number } | null {
+    let best: { x: number; z: number } | null = null
+    let bestDistance = maxDistance
+    const g0x = Math.floor((x - maxDistance) / INDEX_CELL)
+    const g1x = Math.floor((x + maxDistance) / INDEX_CELL)
+    const g0z = Math.floor((z - maxDistance) / INDEX_CELL)
+    const g1z = Math.floor((z + maxDistance) / INDEX_CELL)
+    for (let gx = g0x; gx <= g1x; gx++) {
+      for (let gz = g0z; gz <= g1z; gz++) {
+        for (const s of this.index.get(this.cellKey(gx, gz)) ?? []) {
+          if (!kinds.has(s.kind)) continue
+          const d = Tracks.distance(s, x, z)
+          if (d >= bestDistance) continue
+          const dx = s.x1 - s.x0
+          const dz = s.z1 - s.z0
+          const t = Math.max(0, Math.min(1, ((x - s.x0) * dx + (z - s.z0) * dz) / (dx * dx + dz * dz || 1)))
+          best = { x: s.x0 + dx * t, z: s.z0 + dz * t }
+          bestDistance = d
+        }
+      }
+    }
+    return best
   }
 
   /** Distance from (x, z) to the edge of the nearest track within 2 m, and its kind. */

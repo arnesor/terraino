@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { type Gfx, rockMaterial } from './gfx'
+import { type Gfx, type QualitySettings, rockMaterial } from './gfx'
 import type { HeightField } from './heightfield'
+import { type TrackFinder, WALL_KINDS, Walls } from './walls'
 import type { World } from './world'
 
 export interface FeatureFile {
@@ -16,12 +17,25 @@ export interface FeatureFile {
 const ROCK = new THREE.Color(0x77756e)
 const WOOD = new THREE.Color(0x7d6f5c)
 const DARK_WOOD = new THREE.Color(0x4f4336)
-const STONE_WALL = new THREE.Color(0x85827a)
 const POLE = new THREE.Color(0x5a4a38)
 // Boulders sink this far below the lowest ground around them.
 const BOULDER_SINK_M = 0.25
 const STEEL = new THREE.Color(0x8c9196)
 const COLLISION_CELL = 16
+// Rocks are drawn near the player only (see QualitySettings.boulders), picked from a grid
+// of this cell size whenever the player has moved this far.
+const ROCK_CELL = 64
+const ROCK_REBUILD_DISTANCE = 10
+
+/** A boulder or stone: its shape, its instance matrix and shade, and where it stands. */
+interface Rock {
+  shape: number
+  matrix: THREE.Matrix4
+  shade: number
+  x: number
+  z: number
+  stone: boolean
+}
 
 function rand(x: number, z: number, salt: number): number {
   const h = Math.sin(x * 12.9898 + z * 78.233 + salt * 37.719) * 43758.5453
@@ -111,23 +125,37 @@ export class MapFeatures {
   /** The features as read from features.json, for placing control flags. */
   data: FeatureFile = { kinds: [], points: [], lines: [], cliffs: [] }
   private readonly obstacles = new Map<number, [number, number, number][]>()
+  /** Rocks by ROCK_CELL grid cell, and one instanced mesh per rock shape. */
+  private readonly rocks = new Map<number, Rock[]>()
+  private readonly rockMeshes: THREE.InstancedMesh[] = []
+  private rocksAt: THREE.Vector3 | null = null
+  private quality: QualitySettings
+  private walls: Walls | null = null
 
   private readonly gfx: Gfx
 
-  private constructor(gfx: Gfx) {
+  private constructor(gfx: Gfx, quality: QualitySettings) {
     this.gfx = gfx
+    this.quality = quality
     this.group.name = 'features'
   }
 
-  static async load(world: World, heights: HeightField, gfx: Gfx): Promise<MapFeatures | null> {
+  /** `tracks` turn the ruins' doors towards the nearest path or road. */
+  static async load(
+    world: World,
+    heights: HeightField,
+    gfx: Gfx,
+    quality: QualitySettings,
+    tracks: TrackFinder | null = null,
+  ): Promise<MapFeatures | null> {
     const info = world.manifest.features
     if (!info) return null
     const response = await fetch(world.url(info.path))
     if (!response.ok) return null
     const data = (await response.json()) as FeatureFile
-    const features = new MapFeatures(gfx)
+    const features = new MapFeatures(gfx, quality)
     features.data = data
-    features.build(data, heights)
+    features.build(data, heights, tracks)
     return features
   }
 
@@ -136,6 +164,48 @@ export class MapFeatures {
     let list = this.obstacles.get(key)
     if (!list) this.obstacles.set(key, (list = []))
     list.push([x, z, radius])
+  }
+
+  setQuality(quality: QualitySettings) {
+    this.quality = quality
+    this.rocksAt = null
+    this.walls?.setQuality(quality)
+  }
+
+  /**
+   * Draw the rocks near `eye` (boulders within `boulders`, stones within `cover`), and
+   * the walls' single stones.
+   */
+  update(eye: THREE.Vector3) {
+    this.walls?.update(eye)
+    if (this.rocksAt && this.rocksAt.distanceTo(eye) < ROCK_REBUILD_DISTANCE) return
+    this.rocksAt = eye.clone()
+    // Reach a little farther, so rocks are already there when the player has moved on.
+    const far = this.quality.boulders + ROCK_REBUILD_DISTANCE
+    const near = this.quality.cover + ROCK_REBUILD_DISTANCE
+    const counts = this.rockMeshes.map(() => 0)
+    const color = new THREE.Color()
+    const c0 = Math.floor((eye.x - far) / ROCK_CELL)
+    const c1 = Math.floor((eye.x + far) / ROCK_CELL)
+    const r0 = Math.floor((eye.z - far) / ROCK_CELL)
+    const r1 = Math.floor((eye.z + far) / ROCK_CELL)
+    for (let c = c0; c <= c1; c++) {
+      for (let r = r0; r <= r1; r++) {
+        for (const rock of this.rocks.get(c * 100003 + r) ?? []) {
+          const reach = rock.stone ? near : far
+          if ((rock.x - eye.x) ** 2 + (rock.z - eye.z) ** 2 > reach * reach) continue
+          const mesh = this.rockMeshes[rock.shape]!
+          const i = counts[rock.shape]!++
+          mesh.setMatrixAt(i, rock.matrix)
+          mesh.setColorAt(i, color.setScalar(rock.shade))
+        }
+      }
+    }
+    this.rockMeshes.forEach((mesh, s) => {
+      mesh.count = counts[s]!
+      mesh.instanceMatrix.needsUpdate = true
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    })
   }
 
   /** Push (x, z) out of rocks and other solid objects. */
@@ -159,15 +229,14 @@ export class MapFeatures {
     return [x, z]
   }
 
-  private build(data: FeatureFile, heights: HeightField) {
+  private build(data: FeatureFile, heights: HeightField, tracks: TrackFinder | null) {
     const parts: THREE.BufferGeometry[] = []
     const ground = (x: number, z: number) => heights.heightAt(x, z)
 
-    // Rocks are instanced: a few shapes, many sizes.
+    // Rocks are instanced: a few shapes, many sizes. `update` picks the ones near the player.
     const rockShapes = this.gfx.models.rocks
     const rocks = data.points.filter(p => data.kinds[p[0]] === 'boulder' || data.kinds[p[0]] === 'stone')
     const material = rockMaterial(this.gfx, true)
-    const matrix = new THREE.Matrix4()
     const quat = new THREE.Quaternion()
     const scale = new THREE.Vector3()
     const pos = new THREE.Vector3()
@@ -175,10 +244,13 @@ export class MapFeatures {
     rockShapes.forEach((shape, s) => {
       const mine = rocks.filter((_, i) => i % rockShapes.length === s)
       const mesh = new THREE.InstancedMesh(shape, material, Math.max(mine.length, 1))
+      mesh.count = 0
+      // The rocks drawn change as the player moves; they are all near.
+      mesh.frustumCulled = false
       shape.computeBoundingBox()
       const bb = shape.boundingBox!
       const size3 = bb.getSize(new THREE.Vector3())
-      mine.forEach(([k, x, z, size, angle], i) => {
+      for (const [k, x, z, size, angle] of mine) {
         quat.setFromAxisAngle(up, angle)
         if (data.kinds[k] === 'boulder') {
           // `size` is the boulder's least height above the ground around it: the top
@@ -207,14 +279,17 @@ export class MapFeatures {
           pos.set(x, ground(x, z) + half * 0.1, z)
           scale.set(half * (1.0 + 0.3 * rand(x, z, 1)), half * 1.3, half * (0.85 + 0.3 * rand(x, z, 2)))
         }
-        mesh.setMatrixAt(i, matrix.compose(pos, quat, scale))
-        const t = 0.85 + 0.3 * rand(x, z, 4)
-        mesh.setColorAt(i, new THREE.Color(t, t, t))
-      })
-      mesh.count = mine.length
+        const key = Math.floor(x / ROCK_CELL) * 100003 + Math.floor(z / ROCK_CELL)
+        let cell = this.rocks.get(key)
+        if (!cell) this.rocks.set(key, (cell = []))
+        const matrix = new THREE.Matrix4().compose(pos, quat, scale)
+        cell.push({ shape: s, matrix, shade: 0.85 + 0.3 * rand(x, z, 4), x, z, stone: data.kinds[k] === 'stone' })
+      }
+      // Colours are set per instance; make the attribute now so the shader is built with it.
+      mesh.setColorAt(0, new THREE.Color(1, 1, 1))
       mesh.castShadow = true
       mesh.receiveShadow = true
-      mesh.computeBoundingSphere()
+      this.rockMeshes.push(mesh)
       this.group.add(mesh)
     })
 
@@ -231,12 +306,16 @@ export class MapFeatures {
       else if (kind === 'stump') this.stumps.push(x, z, size)
     }
 
+    const walls = data.lines.filter(line => WALL_KINDS.has(line.kind))
+    if (walls.length) {
+      this.walls = new Walls(walls, heights, this.gfx, this.quality, tracks)
+      this.group.add(this.walls.group)
+    }
+
     const wires: number[] = []
     for (const line of data.lines) {
       const pts = line.points.map(([x, z]) => new THREE.Vector3(x, ground(x, z), z))
-      if (line.kind === 'stone_wall' || line.kind === 'ruined_wall' || line.kind === 'ruin') {
-        parts.push(...this.wall(pts, line.size, line.kind !== 'stone_wall'))
-      } else if (line.kind === 'fence' || line.kind === 'ruined_fence') {
+      if (line.kind === 'fence' || line.kind === 'ruined_fence') {
         parts.push(...this.fence(pts, line.size, line.kind === 'ruined_fence'))
       } else if (line.kind === 'power_line' || line.kind === 'pylon_line') {
         const poles = line.poles?.length ? line.poles.map(([x, z]) => new THREE.Vector3(x, ground(x, z), z)) : null
@@ -268,21 +347,6 @@ export class MapFeatures {
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(wires, 3))
       this.group.add(new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0x2a2a2a })))
     }
-  }
-
-  private wall(pts: THREE.Vector3[], height: number, ruined: boolean): THREE.BufferGeometry[] {
-    const out: THREE.BufferGeometry[] = []
-    for (let i = 0; i + 1 < pts.length; i++) {
-      const a = pts[i]!.clone()
-      const b = pts[i + 1]!.clone()
-      if (ruined && rand(a.x, a.z, 9) < 0.35) continue
-      const h = height * (0.75 + 0.4 * rand(a.x, a.z, 5))
-      a.y -= 0.2
-      b.y -= 0.2
-      const shade = 0.85 + 0.25 * rand(a.x, a.z, 6)
-      out.push(beam(a, b, 0.7, h + 0.2, STONE_WALL.clone().multiplyScalar(shade)))
-    }
-    return out
   }
 
   private fence(pts: THREE.Vector3[], height: number, ruined: boolean): THREE.BufferGeometry[] {
