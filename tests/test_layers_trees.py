@@ -72,14 +72,54 @@ def test_ground_classes(layers: GroundLayers) -> None:
     assert layers.ground[cell(25, 65)] == Ground.WATER
     # Paths are drawn as strips by the viewer; the ground below keeps its class.
     assert layers.ground[cell(50, 45)] == Ground.FOREST
-    assert layers.speed[cell(50, 45)] == pytest.approx(1.0)
+    assert layers.speed[cell(50, 45)] == pytest.approx(1.15)
     assert layers.ground[cell(65, 65)] == Ground.MARSH
 
 
 def test_overprinting_marsh_keeps_vegetation(layers: GroundLayers) -> None:
     assert layers.young[cell(65, 65)] == pytest.approx(8)
-    assert layers.speed[cell(65, 65)] == pytest.approx(0.6)
+    # Marsh is faster than the green below it, so the green's speed counts.
+    assert layers.speed[cell(65, 65)] == pytest.approx(0.5)
     assert layers.speed[cell(55, 55)] == pytest.approx(0.5)
+
+
+def speed_of(number: str) -> float:
+    rule = ISOM.rule(number)
+    assert rule is not None
+    assert rule.speed is not None
+    return rule.speed
+
+
+def test_slowest_speed_group_counts() -> None:
+    features = [
+        area(0, "406.0", box(20, 20, 40, 40)),  # slow running
+        area(1, "311.0", box(30, 30, 40, 40)),  # indistinct marsh on top
+        area(2, "403.0", box(50, 20, 80, 40)),  # rough open land
+        area(3, "407.0", box(50, 20, 70, 40)),  # undergrowth on it
+        area(4, "310.0", box(60, 20, 80, 40)),  # marsh on both
+        area(5, "407.0", box(20, 50, 40, 80)),  # undergrowth in white forest
+        area(6, "409.0", box(30, 50, 40, 80)),  # denser undergrowth on top
+        area(7, "310.0", box(50, 50, 80, 80)),  # marsh
+        line(8, "506.0", [(50.0, 65.0), (80.0, 65.0)]),  # a path across it
+    ]
+    layers = rasterize_map(features, ISOM, EXTENT, MAP_AREA)
+    assert layers.speed[cell(35, 35)] == pytest.approx(
+        min(speed_of("406"), speed_of("311"))
+    )
+    assert layers.speed[cell(55, 30)] == pytest.approx(
+        min(speed_of("403"), speed_of("407"))
+    )
+    assert layers.speed[cell(65, 30)] == pytest.approx(
+        min(speed_of("403"), speed_of("407"), speed_of("310"))
+    )
+    assert layers.speed[cell(75, 30)] == pytest.approx(
+        min(speed_of("403"), speed_of("310"))
+    )
+    # Within a group the topmost symbol counts.
+    assert layers.speed[cell(35, 65)] == pytest.approx(speed_of("409"))
+    # Other symbols replace what is below them, marsh included.
+    assert layers.speed[cell(65, 65)] == pytest.approx(speed_of("506"))
+    assert layers.speed[cell(65, 75)] == pytest.approx(speed_of("310"))
 
 
 def test_tree_rules_and_clear_strips(layers: GroundLayers) -> None:
@@ -211,7 +251,7 @@ def test_undergrowth_overprint_keeps_rough_open_land() -> None:
     assert layers.ground[cell(40, 40)] == Ground.ROUGH
     assert layers.tree_rule[cell(40, 40)] == TREES_NONE
     assert layers.shrubs[cell(40, 40)] == pytest.approx(0.45)
-    assert layers.speed[cell(40, 40)] == pytest.approx(0.75)
+    assert layers.speed[cell(40, 40)] == pytest.approx(0.7)
     assert layers.ground[cell(78, 78)] == Ground.FOREST
     assert layers.shrubs[cell(78, 78)] == pytest.approx(0.45)
 

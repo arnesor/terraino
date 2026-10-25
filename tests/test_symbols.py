@@ -41,6 +41,11 @@ def test_unknown_tree_rule_is_rejected() -> None:
         SymbolRule.from_table({"trees": "many"})
 
 
+def test_unknown_speed_group_is_rejected() -> None:
+    with pytest.raises(ValueError, match="speed group"):
+        SymbolRule.from_table({"speed": 0.5, "speed_group": "mud"})
+
+
 def test_detect_symbol_set() -> None:
     assert detect_symbol_set({"521", "520"}) == "isom2017"
     assert detect_symbol_set({"526", "521"}) == "isom2000"
@@ -69,7 +74,7 @@ def test_narrow_ride_is_a_faint_path(key: str, number: str) -> None:
     assert ride is not None
     assert faint is not None
     assert ride.track == faint.track == "faint_path"
-    assert ride.speed == 1.0
+    assert ride.speed == faint.speed
     assert ride.clear is not None
     assert ride.clear >= 4
 

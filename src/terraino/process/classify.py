@@ -357,7 +357,10 @@ def classify_map(
             return
         if rule.ground is not None:
             ground[mask] = rule.ground
-        if rule.speed is not None:
+        if rule.speed is not None and rule.speed_group is not None:
+            # Marsh lies on the vegetation: the slower of the two counts.
+            speed[mask] = np.minimum(speed[mask], rule.speed)
+        elif rule.speed is not None:
             speed[mask] = rule.speed
         if vegetation:
             young[mask] = rule.young

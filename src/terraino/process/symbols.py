@@ -27,6 +27,8 @@ TRACKS = frozenset(
         "water_channel",
     }
 )
+# Symbols drawn on top of the vegetation that make it slower; see SymbolRule.speed_group.
+SPEED_GROUPS = frozenset({"undergrowth", "wet", "stony"})
 # Words in a symbol's name (in the map file) that mark mapper's helper symbols, such as
 # construction lines; they are not part of the terrain.
 HELPER_WORDS = (
@@ -107,6 +109,10 @@ class SymbolRule:
         young: Young trees added per 100 m².
         shrubs: Undergrowth density, 0..1.
         speed: Running speed factor, or None to leave it unchanged.
+        speed_group: Group (see SPEED_GROUPS) of a symbol drawn on top of the vegetation,
+            such as undergrowth or marsh, or None. Within a group the topmost symbol
+            counts, and the slowest of the groups and the symbol below them sets the
+            speed. Other symbols replace the speed of everything below them.
         width: Real-world width in metres of a line symbol, or None.
         clear: Width in metres of a tree-free strip along a line, or None.
         order: Drawing order; higher values are painted on top.
@@ -125,6 +131,7 @@ class SymbolRule:
     young: float = 0.0
     shrubs: float = 0.0
     speed: float | None = None
+    speed_group: str | None = None
     width: float | None = None
     clear: float | None = None
     order: int = 0
@@ -146,6 +153,11 @@ class SymbolRule:
             values["ground"] = Ground[str(values["ground"]).upper()]
         if values.get("track") is not None and values["track"] not in TRACKS:
             msg = f"Unknown track {values['track']!r}"
+            raise ValueError(msg)
+        if values.get("speed_group") is not None and (
+            values["speed_group"] not in SPEED_GROUPS
+        ):
+            msg = f"Unknown speed group {values['speed_group']!r}"
             raise ValueError(msg)
         if values.get("feature") is not None and values["feature"] not in FEATURES:
             msg = f"Unknown feature {values['feature']!r}"

@@ -15,7 +15,7 @@ from shapely.geometry.base import BaseGeometry
 
 from terraino.ingest.georef import Extent
 from terraino.process.geometry import to_geometry
-from terraino.process.symbols import Ground, SymbolRule, SymbolSet
+from terraino.process.symbols import SPEED_GROUPS, Ground, SymbolRule, SymbolSet
 
 log = logging.getLogger(__name__)
 
@@ -143,6 +143,37 @@ def _paint(
     return painted
 
 
+def _speed(shapes: Sequence[_Shape], extent: Extent) -> npt.NDArray[np.float32]:
+    """Paint the running speed of shapes sorted by drawing order.
+
+    Symbols in a speed group (undergrowth, marsh, stony ground) lie on top of the
+    vegetation: in each group the topmost one counts, and the slowest of the groups and
+    the symbol below them sets the speed. Any other symbol replaces the speed below it,
+    groups included, as a path does across a marsh.
+    """
+    timed = [s for s in shapes if s.rule.speed is not None]
+    if not timed:
+        return np.ones(extent.raster_shape(1), dtype=np.float32)
+    orders = np.array([s.rule.order for s in timed])
+    speeds = np.array([s.rule.speed for s in timed], dtype=np.float32)
+
+    def topmost(group: str | None) -> npt.NDArray[np.int32]:
+        """Index (in ``timed``) of the topmost shape of ``group`` in each cell, or -1."""
+        pairs = [
+            (s.geometry, i) for i, s in enumerate(timed) if s.rule.speed_group == group
+        ]
+        return _paint(pairs, extent, -1, np.int32)
+
+    below = topmost(None)
+    speed = np.where(below >= 0, speeds[below], np.float32(1.0))
+    below_order = np.where(below >= 0, orders[below], np.iinfo(orders.dtype).min)
+    for group in sorted(SPEED_GROUPS):
+        top = topmost(group)
+        cells = (top >= 0) & (orders[top] >= below_order)
+        speed[cells] = np.minimum(speed[cells], speeds[top[cells]])
+    return speed
+
+
 def rasterize_map(
     features: Iterable[Mapping[str, Any]],
     symbols: SymbolSet,
@@ -178,12 +209,7 @@ def rasterize_map(
         int(Ground.UNKNOWN),
         np.uint8,
     )
-    speed = _paint(
-        [(s.geometry, s.rule.speed) for s in shapes if s.rule.speed is not None],
-        extent,
-        1.0,
-        np.float32,
-    )
+    speed = _speed(shapes, extent)
     # Vegetation areas set young trees, shrubs and the tree rule; overprinting areas
     # (marsh, stony ground, undergrowth patterns) leave what is below them.
     vegetation = [
