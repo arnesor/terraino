@@ -11,6 +11,31 @@ const GRAVITY = 9.81
 const JUMP_SPEED = 3.5
 const BODY_RADIUS = 0.3
 const DRAG_LOOK_SPEED = 0.004 // radians per pixel when looking by dragging
+// The eye follows the ground under a footprint, as legs absorb bumps: the ground under the
+// player and 8 points this far (m) around it, each cut off this far (m) above or below the
+// ground under the player, so that a cliff edge does not pull the eye over it. On an even
+// slope the points cancel out in pairs.
+const FOOTPRINT_RADIUS = 0.75
+const FOOTPRINT_LIMIT = 0.25
+const FOOTPRINT = Array.from({ length: 8 }, (_, k) => [
+  FOOTPRINT_RADIUS * Math.cos((k * Math.PI) / 4),
+  FOOTPRINT_RADIUS * Math.sin((k * Math.PI) / 4),
+])
+// Time constant (s) of the spring that smooths the eye height over the slope changes at
+// the height samples.
+const EYE_SPRING = 0.03
+
+/**
+ * Move `y`, moving at `v`, towards `target` for `dt` seconds on a critically damped spring
+ * with time constant `tau`. Exact, so stable for any `dt`. Returns the new height and speed.
+ */
+function spring(y: number, v: number, target: number, dt: number, tau: number): [number, number] {
+  const w = 1 / tau
+  const x = y - target
+  const c = v + w * x
+  const e = Math.exp(-w * dt)
+  return [target + (x + c * dt) * e, (v - w * c * dt) * e]
+}
 
 /** What the ground and the forest allow at a position. */
 export interface Surroundings {
@@ -32,6 +57,10 @@ export class Player {
   private readonly keys = new Set<string>()
   private verticalSpeed = 0
   private onGround = true
+  // Eye height of the body without smoothing (gravity, jumps and decks), and the speed of
+  // the smoothed eye, which is the camera's height.
+  private bodyY = 0
+  private eyeSpeed = 0
   /** Current horizontal speed in m/s, for the HUD. */
   speed = 0
   /** Running speed factor of the ground under the player, for the HUD. */
@@ -71,12 +100,25 @@ export class Player {
 
   placeAt(x: number, z: number) {
     this.camera.position.set(x, this.heights.heightAt(x, z) + EYE_HEIGHT, z)
+    this.bodyY = this.camera.position.y
     this.verticalSpeed = 0
+    this.eyeSpeed = 0
   }
 
   toggleFlying() {
     this.flying = !this.flying
     if (!this.flying) this.verticalSpeed = 0
+  }
+
+  /** Ground height under the player's footprint (see FOOTPRINT_RADIUS). */
+  private footprintHeight(x: number, z: number): number {
+    const h0 = this.heights.heightAt(x, z)
+    let sum = h0
+    for (const [dx, dz] of FOOTPRINT) {
+      const h = this.heights.heightAt(x + dx!, z + dz!)
+      sum += THREE.MathUtils.clamp(h, h0 - FOOTPRINT_LIMIT, h0 + FOOTPRINT_LIMIT)
+    }
+    return sum / (FOOTPRINT.length + 1)
   }
 
   /** Compass heading in degrees, 0 = grid north, 90 = east. */
@@ -109,6 +151,7 @@ export class Player {
       if (move.lengthSq() > 0) move.normalize().multiplyScalar((fast ? FLY_FAST_SPEED : FLY_SPEED) * dt)
       pos.add(move)
       pos.y = Math.max(pos.y, this.heights.heightAt(pos.x, pos.z) + EYE_HEIGHT)
+      this.bodyY = pos.y
       this.speed = move.length() / Math.max(dt, 1e-6)
     } else {
       let speed = fast ? RUN_SPEED : JOG_SPEED
@@ -139,16 +182,25 @@ export class Player {
       }
       this.speed = move.length() / Math.max(dt, 1e-6)
 
+      const terrain = this.heights.heightAt(pos.x, pos.z)
       const deck = this.surroundings?.deckAt?.(pos.x, pos.z) ?? null
-      const ground = Math.max(this.heights.heightAt(pos.x, pos.z), deck ?? -Infinity) + EYE_HEIGHT
+      const onDeck = deck !== null && deck >= terrain
+      const ground = (onDeck ? deck : terrain) + EYE_HEIGHT
       this.verticalSpeed -= GRAVITY * dt
-      pos.y += this.verticalSpeed * dt
+      this.bodyY += this.verticalSpeed * dt
       // Follow the ground when walking downhill instead of falling in small hops.
-      const snap = this.onGround && this.verticalSpeed <= 0 && pos.y - ground < 0.6
-      if (pos.y <= ground || snap) {
-        pos.y = ground
+      const snap = this.onGround && this.verticalSpeed <= 0 && this.bodyY - ground < 0.6
+      if (this.bodyY <= ground || snap) {
+        this.bodyY = ground
         this.verticalSpeed = 0
         this.onGround = true
+        // Decks are flat; on the ground the eye follows the footprint, smoothed.
+        const target = onDeck ? ground : this.footprintHeight(pos.x, pos.z) + EYE_HEIGHT
+        ;[pos.y, this.eyeSpeed] = spring(pos.y, this.eyeSpeed, target, dt, EYE_SPRING)
+      } else {
+        // In the air the eye moves with the body.
+        pos.y = this.bodyY
+        this.eyeSpeed = this.verticalSpeed
       }
     }
 
