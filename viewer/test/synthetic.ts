@@ -16,6 +16,7 @@ export const LAYER_INFO: LayerInfo = {
   overviewStep: 4,
   canopyUnit: 0.1,
   levels: 15,
+  speedUnit: 0.01,
   ground: {},
 }
 
@@ -26,7 +27,7 @@ export async function syntheticWorld(
   f: (col: number, row: number) => number = () => 100,
 ): Promise<{ world: World; heights: HeightField }> {
   const manifest = {
-    format: 3,
+    format: 4,
     name: 'synthetic',
     extent: [0, 0, chunksX * CHUNK, chunksY * CHUNK],
     height: {
@@ -71,11 +72,11 @@ export async function syntheticWorld(
 export function uniformLayer(ground: number = Ground.forest, canopy = 10, shrubs = 0.5): ChunkLayer {
   const size = CHUNK + 1
   const pixels = new Uint8ClampedArray(size * size * 4)
-  const b = (Math.round(shrubs * LAYER_INFO.levels) << 4) | LAYER_INFO.levels
+  const r = (Math.round(shrubs * LAYER_INFO.levels) << 4) | ground
   for (let i = 0; i < pixels.length; i += 4) {
-    pixels[i] = ground
+    pixels[i] = r
     pixels[i + 1] = Math.round(canopy / LAYER_INFO.canopyUnit)
-    pixels[i + 2] = b
+    pixels[i + 2] = Math.round(1 / LAYER_INFO.speedUnit)
     pixels[i + 3] = 255
   }
   return new ChunkLayer(pixels, size, new THREE.Texture(), LAYER_INFO)

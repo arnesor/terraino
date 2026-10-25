@@ -48,9 +48,10 @@ vec3 groundColor(int cls, vec2 uv, float n1, float n2, float n3) {
   return gtx(GT_FOREST, uv);
 }
 
-int layerClass(vec4 t) { return int(t.r * 255.0 + 0.5); }
-// Undergrowth level, the high four bits of blue.
-float shrubLevel(vec4 t) { return floor(t.b * 255.0 / 16.0 + 0.01); }
+// Ground class, the low four bits of red.
+int layerClass(vec4 t) { return int(t.r * 255.0 + 0.5) & 15; }
+// Undergrowth level, the high four bits of red.
+float shrubLevel(vec4 t) { return floor(t.r * 255.0 / 16.0 + 0.01); }
 `
 
 const MAIN = /* glsl */ `
