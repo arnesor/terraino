@@ -1,5 +1,5 @@
 import { formatFactor, type GameClock } from './clock'
-import { type Course, type CourseRun, encodeCourse, formatPace, formatTime } from './course'
+import { type Course, type CourseRun, encodeCourse, formatPace, formatTime, type RunState } from './course'
 import { describe, drawDescriptionTable, tableRows } from './descriptions/table'
 import { formatNumber, renameStoredKey, t, type TextKey } from './i18n'
 import { isTyping } from './keyboard'
@@ -143,8 +143,8 @@ export class Hud {
   private holding: 'map' | 'thumb' | null = null
   /** Where the runner says they are on the map, in projected coordinates. */
   private thumb: [number, number] | null = null
-  /** The run state and next control last seen, to follow punches. */
-  private punchKey = ''
+  /** The course, run state and next control last seen, to follow punches and restarts. */
+  private seen: { course: Course | null; state: RunState; next: number } = { course: null, state: 'ready', next: 0 }
 
   constructor(
     root: HTMLElement,
@@ -338,13 +338,15 @@ export class Hud {
 
   /**
    * Put the thumb on the start when the run starts and on each control as it is punched,
-   * and glide to the next legs (even if the map was moved).
+   * and glide to the next legs (even if the map was moved). A restart or another course
+   * takes the thumb off the map.
    */
   private followPunches() {
     const run = this.run
-    const key = `${run.state}\t${run.next}`
-    if (key === this.punchKey) return
-    this.punchKey = key
+    const seen = this.seen
+    if (run.course === seen.course && run.state === seen.state && run.next === seen.next) return
+    if (run.course !== seen.course || (run.state === 'ready' && seen.state !== 'ready')) this.thumb = null
+    this.seen = { course: run.course, state: run.state, next: run.next }
     if (run.state === 'ready') return
     this.thumb = run.course.controls[run.next - 1] ?? this.thumb
     if (this.legsWanted && this.hasCourse) this.setView('legs')

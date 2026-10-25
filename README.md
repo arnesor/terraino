@@ -158,6 +158,7 @@ The wheel turns the map 5° a notch, around the thumb.
 The thumb is a see-through arrow that marks where you think you are.
 Put it with a click on the map while the mouse is free;
 it moves to the start when you leave the start triangle, and to each control you punch.
+A restart or another course takes it off the map.
 Close the map with M or ✕.
 With a course, **Legs** (on by default) zooms the map to the leg you are on and the next one,
 and glides on to the next legs when you punch a control; dragging,
