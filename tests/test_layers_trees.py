@@ -17,6 +17,8 @@ from terraino.process.layers import (
 )
 from terraino.process.symbols import Ground, SymbolSet
 from terraino.process.trees import (
+    BIRCH_BEYOND_FOREST_M,
+    FOREST_DISTANCE_STEP,
     MIN_TREE_HEIGHT_M,
     SCATTERED_SPACING_M,
     canopy_height,
@@ -219,6 +221,64 @@ def test_place_trees_is_deterministic(layers: GroundLayers) -> None:
     b = place_trees(chm, layers, species, seed=7)
     np.testing.assert_array_equal(a.col, b.col)
     np.testing.assert_array_equal(a.species, b.species)
+
+
+def test_trees_far_from_sr16_forest_are_birch(layers: GroundLayers) -> None:
+    chm = cone_forest(
+        [(r, c, 18.0) for r in range(5, 100, 5) for c in range(5, 100, 5)]
+    )
+    species = np.zeros(chm.shape, dtype=np.uint8)
+    species[:, :12] = 1  # SR16 spruce forest along the west edge only
+    trees = place_trees(chm, layers, species, seed=3)
+    far = trees.col > 12 + BIRCH_BEYOND_FOREST_M + FOREST_DISTANCE_STEP
+    near = trees.col < 12
+    marsh = layers.ground[trees.row.astype(int), trees.col.astype(int)] == Ground.MARSH
+    assert (far & ~marsh).any()
+    assert (trees.species[far & ~marsh] == 3).all()
+    assert (trees.species[near] == 1).any()
+
+
+def test_trees_on_open_land_outside_sr16_forest_are_birch(layers: GroundLayers) -> None:
+    chm = cone_forest(
+        [(r, c, 18.0) for r in range(5, 100, 3) for c in range(5, 100, 3)]
+    )
+    species = np.zeros(chm.shape, dtype=np.uint8)
+    species[:, :12] = 1  # SR16 spruce forest along the west edge only
+    trees = place_trees(chm, layers, species, seed=3)
+    ground = layers.ground[trees.row.astype(int), trees.col.astype(int)]
+    # Within 50 m of SR16 forest: birch on open land, the usual mix in mapped forest.
+    near = (trees.col > 13) & (trees.col < 12 + BIRCH_BEYOND_FOREST_M - 4)
+    on_open = near & (ground == Ground.OPEN)
+    in_forest = near & (ground == Ground.FOREST)
+    assert on_open.sum() > 10
+    assert (trees.species[on_open] == 3).all()
+    assert (trees.species[in_forest] != 3).any()
+
+
+def test_trees_on_marsh_far_from_sr16_forest_lean_to_pine() -> None:
+    layers = rasterize_map(
+        [area(0, "310.0", box(60, 20, 90, 80))], ISOM, EXTENT, MAP_AREA
+    )
+    chm = cone_forest(
+        [(r, c, 18.0) for r in range(5, 100, 4) for c in range(5, 100, 4)]
+    )
+    species = np.zeros(chm.shape, dtype=np.uint8)
+    species[:, :12] = 1  # SR16 spruce forest along the west edge only
+    trees = place_trees(chm, layers, species, seed=3)
+    far = trees.col > 12 + BIRCH_BEYOND_FOREST_M + FOREST_DISTANCE_STEP
+    marsh = layers.ground[trees.row.astype(int), trees.col.astype(int)] == Ground.MARSH
+    on_bog = trees.species[far & marsh]
+    assert len(on_bog) > 20
+    assert np.bincount(on_bog, minlength=4).argmax() == 2  # pine, not all birch
+
+
+def test_without_sr16_trees_keep_their_mix(layers: GroundLayers) -> None:
+    chm = cone_forest(
+        [(r, c, 18.0) for r in range(5, 100, 5) for c in range(5, 100, 5)]
+    )
+    species = np.zeros(chm.shape, dtype=np.uint8)  # no SR16 data at all
+    trees = place_trees(chm, layers, species, seed=3)
+    assert (trees.species != 3).any()
 
 
 def test_effective_canopy_keeps_lidar_trees(layers: GroundLayers) -> None:
