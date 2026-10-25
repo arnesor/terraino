@@ -100,6 +100,8 @@ Worlds are never copied into `dist`.
 `forest.ts`, `undergrowth.ts`, `grain.ts`, `buildings.ts`,
 `features.ts` and `tracks.ts` render content.
 `player.ts` handles movement, and `hud.ts`/`mapview.ts` the UI and in-game map.
+`clock.ts` keeps game time, which runs at the time factor (E/Q) and measures the run;
+the game loop moves the player and the run on in its short steps.
 `course.ts` and `ocad/` read OCAD course setting files with the viewer's own reader,
 independent of `tools/ocad-export`.
 `descriptions/` holds the IOF control description table.

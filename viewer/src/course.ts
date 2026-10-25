@@ -207,6 +207,7 @@ export class CourseRun {
   state: RunState = 'ready'
   /** Index of the next control to punch (0 = start). */
   next = 0
+  /** Game time (seconds) when the runner left the start. */
   startTime = 0
   splits: number[] = []
   private readonly world: World
@@ -384,15 +385,15 @@ export class CourseRun {
     }
   }
 
-  /** Elapsed running time in seconds. */
-  elapsed(now = performance.now()): number {
+  /** Run time in seconds at game time `now` (seconds). */
+  elapsed(now: number): number {
     if (this.state === 'ready') return 0
-    const end = this.state === 'finished' ? this.startTime + this.splits[this.splits.length - 1]! * 1000 : now
-    return (end - this.startTime) / 1000
+    if (this.state === 'finished') return this.splits[this.splits.length - 1]!
+    return now - this.startTime
   }
 
-  /** Check punching for a runner at scene position `pos`. */
-  update(pos: THREE.Vector3, now = performance.now()) {
+  /** Check punching for a runner at scene position `pos`, at game time `now` (seconds). */
+  update(pos: THREE.Vector3, now: number) {
     const n = this.course.controls.length
     if (n < 2 || this.state === 'finished') return
     const flat = (p: THREE.Vector3) => Math.hypot(p.x - pos.x, p.z - pos.z)
@@ -407,7 +408,7 @@ export class CourseRun {
       return
     }
     if (flat(this.scenePosition(this.next)) < PUNCH_DISTANCE) {
-      this.splits.push((now - this.startTime) / 1000)
+      this.splits.push(now - this.startTime)
       this.onPunch(this.next)
       this.next++
       if (this.next >= n) this.state = 'finished'
