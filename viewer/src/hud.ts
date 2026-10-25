@@ -4,7 +4,6 @@ import { describe, drawDescriptionTable, tableRows } from './descriptions/table'
 import { formatNumber, renameStoredKey, t, type TextKey } from './i18n'
 import { isTyping } from './keyboard'
 import { fitRectangle, legIndices } from './mapview'
-import type { ImportedCourse } from './ocad/courses'
 import type { Player } from './player'
 import type { World } from './world'
 
@@ -853,7 +852,6 @@ export class Hud {
     const controls = this.run.course.controls
     if (!controls.length) return
     const imported = this.run.course.imported
-    if (imported) this.drawTable(ctx, imported, local, zoom)
     const scale = this.world.manifest.map.scale ?? 10000
     const radius = ((CIRCLE_MM * scale) / 1000) * zoom
     const pts = controls.map(([e, n]) => local(e, n))
@@ -913,26 +911,6 @@ export class Hud {
         ctx.restore()
       }
     })
-    ctx.restore()
-  }
-
-  /** The description table on the map, where the course setter placed it (or beside the course). */
-  private drawTable(
-    ctx: CanvasRenderingContext2D,
-    course: ImportedCourse,
-    local: (e: number, n: number) => [number, number],
-    zoom: number,
-  ) {
-    let topLeft = course.table?.topLeft
-    const boxM = course.table?.boxM ?? (6 * (this.world.manifest.map.scale ?? 10000)) / 1000
-    if (!topLeft) {
-      const es = course.controls.map(c => c.position[0])
-      const ns = course.controls.map(c => c.position[1])
-      topLeft = [Math.max(...es) + boxM, Math.max(...ns)]
-    }
-    ctx.save()
-    ctx.translate(...local(...topLeft))
-    drawDescriptionTable(ctx, course, boxM * zoom)
     ctx.restore()
   }
 }

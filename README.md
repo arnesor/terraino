@@ -167,8 +167,8 @@ You are put a few metres behind the start, looking at the start banner and the s
 All the controls in the file stand in the terrain, not only those on your course,
 so check the code before you punch.
 The course is not kept when you reload the page: open the file again, or use a link to it (L).
-The control description table is drawn on the map where the course setter placed it,
-and shown on screen while you run (K turns it on and off), with the next control highlighted.
+The control description table is shown on screen while you run
+(K turns it on and off), with the next control highlighted.
 Each flag stands where its description says: column G
 (north side, west foot, south-east corner …)
 puts it on that side of the feature from column D
