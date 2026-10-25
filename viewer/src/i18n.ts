@@ -28,13 +28,17 @@ const STRINGS = {
   keyFly: { en: 'fly on/off (look up or down to climb or dive)', nb: 'fly av/på (se opp eller ned for å stige eller dykke)' },
   keyMap: { en: 'map: drag, wheel zoom, double click to go there', nb: 'kart: dra, rulle for zoom, dobbeltklikk for å gå dit' },
   keyStart: { en: 'go to the start · R restart the run', nb: 'gå til start · R start løpet på nytt' },
+  keyStartScreen: { en: 'pause, on the start screen: choose map and course', nb: 'pause, på startsida: velg kart og løype' },
   keyDescriptions: { en: 'control descriptions on/off', nb: 'postbeskrivelse av/på' },
   keyGroundMap: { en: 'orienteering map on the ground on/off', nb: 'o-kartet på bakken av/på' },
   keyQuality: { en: 'graphics quality (shadows)', nb: 'grafikkvalitet (skygger)' },
-  keyPause: { en: 'pause', nb: 'pause' },
+  keyPause: {
+    en: 'pause; while steering with the map open, the first Esc gives the mouse to the map',
+    nb: 'pause; når du styrer med kartet oppe, gir første Esc musa til kartet',
+  },
   resumeHint: {
-    en: 'Click the terrain to steer with the mouse · Esc to use the map · W A S D to run',
-    nb: 'Klikk i terrenget for å styre med musa · Esc for å bruke kartet · W A S D for å løpe',
+    en: 'Click the terrain to steer with the mouse · Esc or H: pause · W A S D to run',
+    nb: 'Klikk i terrenget for å styre med musa · Esc eller H: pause · W A S D for å løpe',
   },
 
   // Loading.
@@ -86,6 +90,10 @@ const STRINGS = {
   // Map window.
   map: { en: 'Map', nb: 'Kart' },
   closeMap: { en: 'Close the map (M)', nb: 'Lukk kartet (M)' },
+  startScreen: {
+    en: 'Back to the start screen: choose map and course (H)',
+    nb: 'Tilbake til startsida: velg kart og løype (H)',
+  },
   rotateLeft: { en: 'Rotate anticlockwise', nb: 'Drei mot klokka' },
   rotateRight: { en: 'Rotate clockwise', nb: 'Drei med klokka' },
   northUp: { en: 'North up', nb: 'Nord opp' },

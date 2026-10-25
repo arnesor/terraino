@@ -303,9 +303,25 @@ async function main() {
   hud.onMapToggle = open => {
     player.keysWithoutLock = open
     if (open) player.controls.unlock()
-    else player.controls.lock()
+    else if (overlay.hidden) player.controls.lock()
     updateResume()
   }
+  // Whether Start should open the map again: it was open when the start screen was shown.
+  let mapWasOpen = false
+  // When the mouse was last let go. The Esc that lets it go (the browser's) may also reach
+  // the page; it must not pause the game as well.
+  let unlockedAt = -Infinity
+  /** Back to the start screen (H), to choose another map or course; game time stands still there. */
+  const showStartScreen = () => {
+    if (!overlay.hidden) return
+    mapWasOpen = hud.mapOpen
+    // Shown first, so that closing the map does not take the mouse for steering.
+    overlay.hidden = false
+    hud.toggleMap(false)
+    player.controls.unlock()
+    updateResume()
+  }
+  hud.onStartScreen = showStartScreen
   let dragLook: { x: number; y: number } | null = null
   renderer.domElement.addEventListener('pointerdown', e => {
     if (!overlay.hidden || player.controls.isLocked) return
@@ -355,6 +371,12 @@ async function main() {
       if (e.code === 'KeyE') clock.faster()
       if (e.code === 'KeyQ') clock.slower()
     }
+    // H pauses on the start screen; so does Esc once the mouse is free (the first Esc
+    // while steering only gives the mouse to the map).
+    if (e.code === 'KeyH') showStartScreen()
+    if (e.code === 'Escape' && !player.controls.isLocked && performance.now() - unlockedAt > 300) {
+      showStartScreen()
+    }
     if (e.code === 'KeyT') goToStart()
     if (e.code === 'KeyR') run.reset()
     if (e.code === 'KeyG') {
@@ -393,14 +415,16 @@ async function main() {
     world.manifest.map.scale ? `${world.manifest.name} · 1:${world.manifest.map.scale}` : world.manifest.name,
   )
   // The first start opens the map, with the mouse free for it; clicking the terrain
-  // then takes the mouse for steering. Later (after a pause) Start just resumes.
+  // then takes the mouse for steering. Later Start resumes as before the pause: with the
+  // map open again if it was open when H showed the start screen, else steering.
   let started = false
   startButton.addEventListener('click', () => {
-    if (started || hud.mapOpen) {
+    if ((started && !mapWasOpen) || hud.mapOpen) {
       player.controls.lock()
       return
     }
     started = true
+    mapWasOpen = false
     overlay.hidden = true
     hud.toggleMap(true)
     updateResume()
@@ -410,6 +434,7 @@ async function main() {
     updateResume()
   })
   player.controls.addEventListener('unlock', () => {
+    unlockedAt = performance.now()
     overlay.hidden = hud.mapOpen
     updateResume()
   })

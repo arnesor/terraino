@@ -74,6 +74,8 @@ export class Hud {
   editing = false
   /** Called when the map window opens or closes. */
   onMapToggle: (open: boolean) => void = () => {}
+  /** Called when the start screen is asked for from the map's title bar. */
+  onStartScreen: () => void = () => {}
   /** Called with a projected position when the map is double-clicked. */
   onTeleport: (east: number, north: number) => void = () => {}
   private readonly world: World
@@ -185,6 +187,7 @@ export class Hud {
     this.mapWindow.hidden = true
     const head = el('div', 'hud-map-head', this.mapWindow)
     this.mapTitle = el('span', 'hud-map-title', head)
+    button(head, '⌂', t('startScreen'), () => this.onStartScreen()).classList.add('close')
     button(head, '✕', t('closeMap'), () => this.toggleMap(false)).classList.add('close')
     const body = el('div', 'hud-map-body', this.mapWindow)
     this.mapCanvas = el('canvas', 'hud-map-canvas', body)

@@ -135,17 +135,20 @@ Maps must be georeferenced in UTM zone 32, 33 or 35 (ETRS89 or WGS 84).
 | E / Q       | Time factor up / down: game time runs up to 10 times as fast |
 | F           | Fly on/off; look up or down to climb or dive      |
 | M           | Map window: drag to move, wheel to zoom, double click to go there |
+| H           | Pause, on the start screen: choose another map or course |
 | K           | Control descriptions on/off                       |
 | N           | With the map open: set a course by clicking (or Set course) |
 | L           | Copy a link to the course                         |
 | T           | Go to the start, behind the start banner; R restarts the run |
 | O           | Orienteering map on the ground on/off             |
 | G           | Graphics quality: high, medium, low               |
-| Esc         | Pause                                             |
+| Esc         | Pause (while steering with the map open, the first Esc gives the mouse to the map) |
 
 The map window frees the mouse so you can drag, zoom and double click in it,
 and you can keep running with W A S D. Click the terrain to steer with the mouse again
 while the map stays open, and press Esc to give the mouse back to the map.
+Esc again, or H at any time, pauses the game on the start screen,
+where game time stands still and you can choose another map or course.
 Auto turns the map with your running direction; ⟲, ⟳ and N↑ turn it by hand.
 Close the map with M or ✕.
 With a course, **Legs** (on by default) zooms the map to the leg you are on and the next one,
