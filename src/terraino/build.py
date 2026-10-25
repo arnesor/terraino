@@ -16,6 +16,7 @@ from rasterio.transform import Affine
 from rasterio.warp import Resampling
 from shapely import LineString, Polygon
 from shapely.geometry import mapping
+from shapely.geometry.base import BaseGeometry
 
 from terraino.export import WorldData, write_world
 from terraino.fetch import ar5, kartverket, matrikkel, nibio, osm, topo_buildings
@@ -24,7 +25,7 @@ from terraino.ingest.georef import Extent
 from terraino.ingest.image import ImageMap, read_image_map
 from terraino.ingest.lidar import ATTRIBUTION as LIDAR_ATTRIBUTION
 from terraino.ingest.lidar import coarse_canopy, filled_canopy, load_lidar
-from terraino.ingest.ocad import AREA_SYMBOL, export_ocad
+from terraino.ingest.ocad import AREA_SYMBOL, TEXT_SYMBOL, export_ocad
 from terraino.process.buildings import collect_footprints, measure_buildings
 from terraino.process.classify import classify_map
 from terraino.process.features import (
@@ -34,6 +35,7 @@ from terraino.process.features import (
     carve_cliffs,
     carve_waterholes,
     collect_features,
+    drop_rocks_in_buildings,
     measure_cliffs,
     paint_cliffs,
     place_poles,
@@ -45,6 +47,7 @@ from terraino.process.fuse import (
     apply_osm,
     fill_unknown_ground,
 )
+from terraino.process.geometry import to_geometry
 from terraino.process.heights import fill_missing
 from terraino.process.layers import GroundLayers, rasterize_map
 from terraino.process.maparea import find_map_area
@@ -71,6 +74,8 @@ EXTENT_ALIGN_M = 16  # SR16's grid, so its cells line up with the world's
 OMAP_ATTRIBUTION = "Orienteering map: © the map's owner"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif", ".tif", ".tiff", ".kmz"}
 DRAPE_PX_PER_M = 2
+# Text anchors count as beside an area's hole within this distance on paper (mm).
+LETTERING_REACH_MM = 1.5
 # Weight for placing trees below the canopy: a base, plus the laser's understorey
 # density (UNKNOWN_MID where it is unknown).
 UNDERSTOREY_BASE_WEIGHT = 0.15
@@ -169,6 +174,14 @@ def _ocad_source(map_path: Path, work: Path, options: BuildOptions) -> MapSource
         if f["properties"]["oid"] in keep and f["properties"]["sym"] not in helpers
     ]
 
+    # Text anchors lie a little outside the holes cut for them in areas.
+    reach = LETTERING_REACH_MM * final.scale / 1000
+    lettering: list[BaseGeometry] = []
+    for f in objects:
+        if f["properties"].get("type") == TEXT_SYMBOL and f.get("geometry"):
+            text = to_geometry(f["geometry"])
+            if text is not None and text.intersects(area.polygon):
+                lettering.append(text.buffer(reach))
     area_symbols = {
         s.number.split(".")[0] for s in final.symbols.values() if s.type == AREA_SYMBOL
     }
@@ -183,7 +196,7 @@ def _ocad_source(map_path: Path, work: Path, options: BuildOptions) -> MapSource
         drape_png=final.drape_png,
         map_png=final.map_png,
         symbols=symbols,
-        layers=rasterize_map(omap, symbols, extent, area.polygon),
+        layers=rasterize_map(omap, symbols, extent, area.polygon, lettering),
         omap=omap,
         features=features,
         cliff_lines=cliff_lines,
@@ -396,6 +409,9 @@ def _add_nature_and_buildings(
             )
             if masts and topo_buildings.ATTRIBUTION not in world.attribution:
                 world.attribution = [*world.attribution, topo_buildings.ATTRIBUTION]
+        dropped = drop_rocks_in_buildings(objects, [fp[0] for fp in footprints])
+        if dropped:
+            log.info("Left out %d rocks standing in buildings", dropped)
         carve_cliffs(dtm, objects.cliffs, extent)
         carve_waterholes(dtm, layers, objects.points, extent)
         paint_cliffs(layers, objects.cliffs, extent)

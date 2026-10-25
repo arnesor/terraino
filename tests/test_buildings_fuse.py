@@ -112,6 +112,31 @@ def test_land_cover_only_outside_map() -> None:
     assert layers.speed[cell(75, 50)] == pytest.approx(0.6)
 
 
+def test_land_cover_grain_has_verges_and_some_grass_fields() -> None:
+    layers = empty_layers(np.zeros(EXTENT.raster_shape(1), dtype=bool))
+    land_cover = np.full(EXTENT.raster_shape(1), Ground.FOREST, dtype=np.uint8)
+    # Ten fields, 8 m wide strips with forest between them.
+    for k in range(10):
+        land_cover[10:90, 10 * k : 10 * k + 8] = Ground.GRAIN
+    apply_land_cover(layers, land_cover)
+    middles = [layers.ground[50, 10 * k + 4] for k in range(10)]
+    assert middles.count(Ground.FIELD) == 1
+    grain = middles.index(Ground.GRAIN)
+    # Grain fields are grass at their edges.
+    assert layers.ground[50, 10 * grain] == Ground.FIELD
+    assert layers.speed[50, 10 * grain + 4] == pytest.approx(0.5)
+    assert layers.speed[50, 10 * grain] == pytest.approx(0.6)
+
+
+def test_osm_roads_through_grain_get_a_verge() -> None:
+    layers = empty_layers(np.zeros(EXTENT.raster_shape(1), dtype=bool))
+    layers.ground[:] = Ground.GRAIN
+    road = OsmFeature(LineString([(0, 50), (100, 50)]), {"highway": "track"}, "way/1")
+    apply_osm(layers, [road], [], EXTENT)
+    assert layers.ground[cell(50, 52.5)] == Ground.FIELD
+    assert layers.ground[cell(50, 60)] == Ground.GRAIN
+
+
 def test_osm_roads_outside_map_and_buildings_everywhere() -> None:
     in_map = np.zeros(EXTENT.raster_shape(1), dtype=bool)
     in_map[:, :50] = True

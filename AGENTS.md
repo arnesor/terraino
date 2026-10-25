@@ -97,7 +97,8 @@ Worlds are never copied into `dist`.
 
 `main.ts` starts the app.
 `world.ts` loads chunks, and `terrain.ts`/`heightfield.ts` build the ground from them.
-`forest.ts`, `undergrowth.ts`, `buildings.ts`, `features.ts` and `tracks.ts` render content.
+`forest.ts`, `undergrowth.ts`, `grain.ts`, `buildings.ts`,
+`features.ts` and `tracks.ts` render content.
 `player.ts` handles movement, and `hud.ts`/`mapview.ts` the UI and in-game map.
 `course.ts` and `ocad/` read OCAD course setting files with the viewer's own reader,
 independent of `tools/ocad-export`.

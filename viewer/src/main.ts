@@ -6,6 +6,7 @@ import { Environment } from './environment'
 import { MapFeatures } from './features'
 import { FAR_DISTANCE, Forest } from './forest'
 import { Gfx, QUALITY } from './gfx'
+import { GrainFields } from './grain'
 import { asLayerTexture } from './groundMaterial'
 import { HeightField } from './heightfield'
 import { Hud } from './hud'
@@ -240,6 +241,8 @@ async function main() {
     : null
   if (undergrowth) undergrowth.tracks = tracks
   if (undergrowth) scene.add(undergrowth.group)
+  const grain = layers ? new GrainFields(layers, heights, gfx.grainSurface) : null
+  if (grain) scene.add(grain.group)
   await pause()
   const buildings = await loadBuildings(world, gfx)
   if (buildings) scene.add(buildings.group)
@@ -340,7 +343,11 @@ async function main() {
     }
   }
   window.addEventListener('keydown', e => {
-    if (e.code === 'KeyO') terrain.setMode(terrain.mode === 'ground' ? 'map' : 'ground')
+    if (e.code === 'KeyO') {
+      terrain.setMode(terrain.mode === 'ground' ? 'map' : 'ground')
+      // The grain surface would hide the map's fields.
+      if (grain) grain.group.visible = terrain.mode === 'ground'
+    }
     if (e.code === 'KeyT') goToStart()
     if (e.code === 'KeyR') run.reset()
     if (e.code === 'KeyG') {
@@ -361,6 +368,7 @@ async function main() {
     await forest.prepare(camera.position)
   }
   undergrowth?.update(camera.position)
+  grain?.fill()
   // Compile the shaders now, in parallel where the browser can, instead of all at once
   // (and waiting for each) when the first frame is drawn.
   setStatus(t('compilingShaders'))
@@ -401,7 +409,7 @@ async function main() {
 
   // For poking at the scene from the browser console while developing.
   if (import.meta.env.DEV) {
-    Object.assign(window, { terraino: { THREE, renderer, scene, camera, gfx, forest, undergrowth, player, run, hud } })
+    Object.assign(window, { terraino: { THREE, renderer, scene, camera, gfx, forest, undergrowth, grain, player, run, hud } })
   }
 
   const timer = new THREE.Timer()
@@ -413,6 +421,7 @@ async function main() {
     terrain.update(camera.position)
     forest?.update(camera.position)
     undergrowth?.update(camera.position)
+    grain?.update()
     if (!player.flying) run.update(camera.position)
     environment.update(camera)
     hud.update(dt)

@@ -71,7 +71,8 @@ export interface Manifest {
   tracks?: { path: string; count: number }
 }
 
-export const SUPPORTED_FORMATS = [4]
+// Format 5 added the grain ground class; format 4 worlds have none and still work.
+export const SUPPORTED_FORMATS = [4, 5]
 
 export class World {
   readonly base: string

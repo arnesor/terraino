@@ -222,7 +222,7 @@ def test_coarse_chunks_hold_every_fourth_sample(tmp_path: Path) -> None:
     out = tmp_path / "world"
     manifest = json.loads(write_world(out, data).read_text())
     h = manifest["height"]
-    assert manifest["format"] == 4
+    assert manifest["format"] == 5
     assert h["coarse"] == {"step": COARSE_STEP, "chunks": [1]}
     raw = np.fromfile(out / "height" / "1_0.bin", dtype="<u2")
     n = CHUNK // COARSE_STEP + 1
