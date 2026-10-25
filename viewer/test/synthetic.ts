@@ -82,6 +82,21 @@ export function uniformLayer(ground: number = Ground.forest, canopy = 10, shrubs
   return new ChunkLayer(pixels, size, new THREE.Texture(), LAYER_INFO)
 }
 
+/** A chunk layer whose ground class at chunk-local sample (col, row) is ground(col, row). */
+export function layerFrom(ground: (col: number, row: number) => number): ChunkLayer {
+  const size = CHUNK + 1
+  const pixels = new Uint8ClampedArray(size * size * 4)
+  for (let row = 0; row < size; row++) {
+    for (let col = 0; col < size; col++) {
+      const i = (row * size + col) * 4
+      pixels[i] = ground(col, row)
+      pixels[i + 2] = Math.round(1 / LAYER_INFO.speedUnit)
+      pixels[i + 3] = 255
+    }
+  }
+  return new ChunkLayer(pixels, size, new THREE.Texture(), LAYER_INFO)
+}
+
 /** What the content classes take from Gfx; textures and shaders only matter on a GPU. */
 export function stubGfx(): Gfx {
   const texture = new THREE.Texture()
@@ -95,5 +110,7 @@ export function stubGfx(): Gfx {
     bushDepth: new THREE.MeshDepthMaterial(),
     logBark: material(),
     coverMaterial: () => material(),
+    grainCard: material(),
+    grainSurface: material(),
   } as unknown as Gfx
 }

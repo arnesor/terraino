@@ -56,7 +56,7 @@ from terraino.process.symbols import Ground
 from terraino.process.tracks import Track
 from terraino.process.trees import Trees
 
-FORMAT_VERSION = 4
+FORMAT_VERSION = 5
 CHUNK = 256
 HEIGHT_STEP_M = 1.0
 # Height chunks this far from the map keep full detail; the others every COARSE_STEP-th sample.

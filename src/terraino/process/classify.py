@@ -19,8 +19,8 @@ from scipy import ndimage
 from shapely import Polygon
 from shapely.geometry import shape
 
-from terraino.process.layers import TREE_RULES, GroundLayers
-from terraino.process.symbols import Ground, SymbolSet
+from terraino.process.layers import TREE_RULES, GroundLayers, split_fields
+from terraino.process.symbols import Ground, SymbolRule, SymbolSet
 
 
 class Colour(IntEnum):
@@ -350,9 +350,9 @@ def classify_map(
     tree_rule = np.zeros(shape_, dtype=np.uint8)
 
     def apply(
-        mask: npt.NDArray[np.bool_], number: str, vegetation: bool = True
+        mask: npt.NDArray[np.bool_], number: str | SymbolRule, vegetation: bool = True
     ) -> None:
-        rule = symbols.rule(number)
+        rule = symbols.rule(number) if isinstance(number, str) else number
         if rule is None:
             return
         if rule.ground is not None:
@@ -369,7 +369,13 @@ def classify_map(
 
     for colour, number in AREA_SYMBOLS.items():
         apply(areas == colour, number)
-    apply(field, FIELD_SYMBOL)
+    field_rule = symbols.rule(FIELD_SYMBOL)
+    if field_rule is not None and field_rule.ground is Ground.GRAIN:
+        grain, _ = split_fields(field & ~path & ~stream, field_rule.grass_share)
+        apply(grain, field_rule)
+        apply(field & ~grain, field_rule.as_grass())
+    else:
+        apply(field, FIELD_SYMBOL)
     apply(marsh & ~(areas == Colour.WATER), MARSH_SYMBOL, vegetation=False)
     apply(stream, STREAM_SYMBOL, vegetation=False)
     apply(path & (areas != Colour.WATER), PATH_SYMBOL, vegetation=False)

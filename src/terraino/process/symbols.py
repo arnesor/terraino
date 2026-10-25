@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import tomllib
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import IntEnum
 from importlib import resources
 from typing import Any, Literal
@@ -94,6 +94,8 @@ class Ground(IntEnum):
     STONY = 12
     SAND = 13
     BUILDING = 14
+    # Standing grain (barley, oats, wheat). The class has four bits: this is the last.
+    GRAIN = 15
 
 
 @dataclass(frozen=True)
@@ -123,6 +125,12 @@ class SymbolRule:
         track: Style of a road or path drawn as its own strip on the terrain (see
             TRACKS), or None. Such lines set speed and clear trees, but do not paint
             the ground layer.
+        grass_share: For grain: the share of the symbol's fields that grow grass (ley)
+            instead. Which fields is picked at random, the same in every build.
+        grass_speed: For grain: running speed in grass fields and in the grass verge
+            along grain fields, or None for ``speed``.
+        field_edge: A line between fields (a cultivation boundary): grain land is
+            split into fields along it, with a grass verge.
     """
 
     ground: Ground | None = None
@@ -139,6 +147,23 @@ class SymbolRule:
     size: float | None = None
     overprint: bool = False
     track: str | None = None
+    grass_share: float = 0.0
+    grass_speed: float | None = None
+    field_edge: bool = False
+
+    def as_grass(self) -> SymbolRule:
+        """The rule for grass fields and verges of a grain symbol.
+
+        Examples:
+            >>> grain = SymbolRule(ground=Ground.GRAIN, speed=0.5, grass_speed=0.7)
+            >>> grass = grain.as_grass()
+            >>> grass.ground.name, grass.speed
+            ('FIELD', 0.7)
+        """
+        speed = self.speed if self.grass_speed is None else self.grass_speed
+        return replace(
+            self, ground=Ground.FIELD, speed=speed, grass_share=0.0, grass_speed=None
+        )
 
     @classmethod
     def from_table(cls, entry: Mapping[str, Any]) -> SymbolRule:
@@ -161,6 +186,10 @@ class SymbolRule:
             raise ValueError(msg)
         if values.get("feature") is not None and values["feature"] not in FEATURES:
             msg = f"Unknown feature {values['feature']!r}"
+            raise ValueError(msg)
+        grain = values.get("ground") is Ground.GRAIN
+        if not grain and ("grass_share" in values or "grass_speed" in values):
+            msg = "grass_share and grass_speed are only for grain"
             raise ValueError(msg)
         for key in ("trees", "narrow_trees"):
             if values.get(key, "keep") not in ("keep", "none", "lidar", "scattered"):

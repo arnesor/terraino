@@ -10,7 +10,16 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 from rasterio.features import rasterize
-from shapely import LineString, MultiLineString, MultiPolygon, Polygon
+from scipy import ndimage
+from shapely import (
+    LineString,
+    MultiLineString,
+    MultiPolygon,
+    Polygon,
+    STRtree,
+    box,
+    unary_union,
+)
 from shapely.geometry.base import BaseGeometry
 
 from terraino.ingest.georef import Extent
@@ -40,6 +49,19 @@ TREE_RULES = {
 
 # Overprinting areas (marsh, stony ground) do not change the vegetation below them.
 _OVERPRINT = {Ground.MARSH, Ground.STONY}
+
+# Width (m) of the grass verge along the edges of grain fields and the roads, paths and
+# streams across them.
+VERGE_M = 2
+# Width (m) of the grass verge on each side of a cultivation boundary between fields.
+FIELD_EDGE_VERGE_M = 1.0
+# A hole in an area with at most this many corners, with a text beside it, is a gap the
+# mapper left for the lettering (to keep a pattern such as cultivated land's dots off the
+# text), not terrain: the area is painted without the hole.
+LETTERING_HOLE_CORNERS = 8
+# Fields numbered k = 1, 2, ... grow grass when frac(k * golden ratio) < grass share:
+# the picks spread evenly, so about that share of any run of fields is grass.
+_GOLDEN = (5**0.5 - 1) / 2
 
 
 @dataclass
@@ -88,11 +110,136 @@ def is_narrow(polygon: Polygon) -> bool:
     )
 
 
+def grass_fields(numbers: npt.NDArray[np.int_], share: float) -> npt.NDArray[np.bool_]:
+    """Which of the fields numbered ``numbers`` (1, 2, ...) grow grass instead of grain.
+
+    Examples:
+        >>> grass_fields(np.arange(1, 21), 0.1).nonzero()[0] + 1
+        array([ 5, 13])
+    """
+    picked: npt.NDArray[np.bool_] = np.modf(numbers * _GOLDEN)[0] < share
+    return picked
+
+
+def split_fields(
+    fields: npt.NDArray[np.bool_], grass_share: float
+) -> tuple[npt.NDArray[np.bool_], npt.NDArray[np.bool_]]:
+    """Split cultivated land into grain and grass.
+
+    Each connected area of ``fields`` is one field. A share of them grow grass, and the
+    others a grass verge VERGE_M wide along their edges.
+
+    Args:
+        fields: Cells of cultivated land, without the roads and streams across it.
+        grass_share: Share of the fields that grow grass.
+
+    Returns:
+        Masks of grain and of grass.
+
+    Examples:
+        >>> fields = np.zeros((9, 9), dtype=bool)
+        >>> fields[:, 1:8] = True
+        >>> grain, grass = split_fields(fields, 0.0)
+        >>> int(grain.sum()), int(grass.sum()), bool(grain[4, 4]), bool(grass[4, 1])
+        (15, 48, True, True)
+    """
+    labels, count = ndimage.label(fields)
+    grass_ids = np.flatnonzero(grass_fields(np.arange(1, count + 1), grass_share)) + 1
+    grain = fields & ~np.isin(labels, grass_ids)
+    y, x = np.ogrid[-VERGE_M : VERGE_M + 1, -VERGE_M : VERGE_M + 1]
+    grain = ndimage.binary_erosion(grain, structure=x * x + y * y <= VERGE_M**2)
+    return grain, fields & ~grain
+
+
+def _polygons(geometry: BaseGeometry) -> list[Polygon]:
+    """The polygons in a geometry."""
+    if isinstance(geometry, Polygon):
+        return [geometry]
+    return [g for g in getattr(geometry, "geoms", []) if isinstance(g, Polygon)]
+
+
+def _sow(
+    areas: Sequence[_Shape], lines: Sequence[_Shape], edges: Sequence[BaseGeometry]
+) -> list[_Shape]:
+    """Shapes for cultivated land.
+
+    The grain areas of a symbol that touch or overlap are one stretch of land: mappers
+    often draw a field in several pieces. The map's cultivation boundaries (``edges``)
+    split it into fields, numbered in a fixed order, and a share of the fields grow
+    grass. The others are grass under grain: a grass verge stays along the edge of the
+    land, along the roads, paths and streams across it, and (narrower) along the
+    boundaries between fields.
+    """
+    tree = STRtree([s.geometry for s in lines])
+    between = unary_union([e.buffer(FIELD_EDGE_VERGE_M) for e in edges])
+    shapes: list[_Shape] = []
+    number = 0
+    for rule in dict.fromkeys(a.rule for a in areas):
+        land = unary_union([a.geometry for a in areas if a.rule == rule])
+        shapes.append(_Shape(land, rule.as_grass(), is_area=True))
+        grain: BaseGeometry = land.buffer(-VERGE_M)
+        crossing = tree.query(grain, predicate="intersects")
+        if len(crossing):
+            strips = unary_union([lines[i].geometry for i in crossing])
+            grain = grain.difference(strips.buffer(VERGE_M))
+        if not between.is_empty:
+            grain = grain.difference(between)
+        for field in _polygons(land.difference(between)):
+            sown = field.intersection(grain)
+            if sown.is_empty:
+                continue
+            number += 1
+            if not grass_fields(np.array([number]), rule.grass_share)[0]:
+                shapes.append(_Shape(sown, rule, is_area=True))
+    return shapes
+
+
+def _without_lettering_holes(
+    geojson: Mapping[str, Any], lettering: STRtree
+) -> Mapping[str, Any]:
+    """A GeoJSON polygon without the holes left for lettering (LETTERING_HOLE_CORNERS).
+
+    This works on the rings as drawn: repairing an invalid polygon can merge a hole
+    with its neighbours into one with many corners.
+
+    Examples:
+        >>> from shapely import Point
+        >>> square = [[0, 0], [100, 0], [100, 100], [0, 100], [0, 0]]
+        >>> hole = [[20, 20], [20, 40], [60, 40], [60, 20], [20, 20]]
+        >>> field = {"type": "Polygon", "coordinates": [square, hole]}
+        >>> near = STRtree([Point(15, 30).buffer(10)])
+        >>> len(_without_lettering_holes(field, near)["coordinates"])
+        1
+        >>> len(_without_lettering_holes(field, STRtree([]))["coordinates"])
+        2
+    """
+
+    def drawn_for_lettering(ring: Sequence[Sequence[float]]) -> bool:
+        if len(ring) < 4 or len(ring) - 1 > LETTERING_HOLE_CORNERS:
+            return False
+        bounds = box(*LineString(ring).bounds)
+        return len(lettering.query(bounds, predicate="intersects")) > 0
+
+    def filled(rings: Sequence[Sequence[Sequence[float]]]) -> list[Any]:
+        return [rings[0], *(r for r in rings[1:] if not drawn_for_lettering(r))]
+
+    if geojson.get("type") == "Polygon":
+        return {**geojson, "coordinates": filled(geojson["coordinates"])}
+    if geojson.get("type") == "MultiPolygon":
+        return {**geojson, "coordinates": [filled(p) for p in geojson["coordinates"]]}
+    return geojson
+
+
 def _shapes(
-    features: Iterable[Mapping[str, Any]], symbols: SymbolSet
+    features: Iterable[Mapping[str, Any]],
+    symbols: SymbolSet,
+    lettering: Sequence[BaseGeometry] = (),
 ) -> tuple[list[_Shape], list[BaseGeometry], set[str]]:
     """Return painted shapes (sorted by order), tree-free strips and unknown symbols."""
+    lettering_tree = STRtree(list(lettering))
     shapes: list[_Shape] = []
+    fields: list[_Shape] = []
+    field_edges: list[BaseGeometry] = []
     clear: list[BaseGeometry] = []
     unknown: set[str] = set()
     for feature in features:
@@ -101,11 +248,17 @@ def _shapes(
         if rule is None:
             unknown.add(number)
             continue
-        geometry = to_geometry(feature.get("geometry"))
+        drawn = feature.get("geometry")
+        if lettering and drawn is not None:
+            drawn = _without_lettering_holes(drawn, lettering_tree)
+        geometry = to_geometry(drawn)
         if geometry is None:
             continue
         if isinstance(geometry, Polygon | MultiPolygon):
-            if rule.ground is not None or rule.overprint:
+            if rule.ground is Ground.GRAIN:
+                for part in getattr(geometry, "geoms", [geometry]):
+                    fields.append(_Shape(part, rule, is_area=True))
+            elif rule.ground is not None or rule.overprint:
                 if rule.narrow_trees is not None:
                     parts = list(getattr(geometry, "geoms", [geometry]))
                     narrow = replace(rule, trees=rule.narrow_trees)
@@ -115,11 +268,16 @@ def _shapes(
                 else:
                     shapes.append(_Shape(geometry, rule, is_area=True))
         elif isinstance(geometry, LineString | MultiLineString):
+            if rule.field_edge:
+                field_edges.append(geometry)
             if rule.ground is not None and rule.width is not None:
                 width = max(rule.width, MIN_RASTER_WIDTH_M)
                 shapes.append(_Shape(geometry.buffer(width / 2), rule, is_area=False))
             if rule.clear is not None:
                 clear.append(geometry.buffer(rule.clear / 2))
+    if fields:
+        shapes += _sow(fields, [s for s in shapes if not s.is_area], field_edges)
+    # A stable sort: each field's grain stays on top of its grass.
     shapes.sort(key=lambda s: s.rule.order)
     return shapes, clear, unknown
 
@@ -179,6 +337,7 @@ def rasterize_map(
     symbols: SymbolSet,
     extent: Extent,
     map_area: Polygon,
+    lettering: Sequence[BaseGeometry] = (),
 ) -> GroundLayers:
     """Paint the map's objects into ground layers.
 
@@ -188,11 +347,13 @@ def rasterize_map(
         extent: World extent; the rasters have 1 m cells.
         map_area: Outline of the mapped area. Inside it the white map background
             means forest with easy running.
+        lettering: Where the map's texts are. Holes left for them in areas are filled
+            (LETTERING_HOLE_CORNERS).
 
     Returns:
         The ground layers.
     """
-    shapes, clear_strips, unknown = _shapes(features, symbols)
+    shapes, clear_strips, unknown = _shapes(features, symbols, lettering)
     if unknown:
         log.info("Symbols without 3D meaning (ignored): %s", ", ".join(sorted(unknown)))
 

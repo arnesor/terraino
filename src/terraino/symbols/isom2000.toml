@@ -1,8 +1,8 @@
 # What ISOM 2000 symbols mean for the 3D world.
 #
 # Keys (all optional):
-#   ground  ground class: forest open rough marsh rock field paved gravel path water
-#           lawn stony sand building (see terraino.process.symbols.Ground)
+#   ground  ground class: forest open rough marsh rock field grain paved gravel path
+#           water lawn stony sand building (see terraino.process.symbols.Ground)
 #   trees   "keep" (laser canopy trees, plus smaller trees below the canopy up to the
 #           SR16 count), "lidar" (only the trees the laser finds), "scattered" (a few
 #           of the laser's trees, the tallest, far apart) or "none"
@@ -25,6 +25,12 @@
 #           lines stream, small_stream and water_channel
 #   overprint  true for a pattern drawn on top of other areas (undergrowth): it only adds
 #           its shrubs and speed, and keeps the ground and trees of the area below
+#   grass_share  for grain: the share of the fields that grow grass (ley) instead,
+#           picked at random but the same in every build. Grain fields get a grass
+#           verge along their edges and along roads and streams across them.
+#   grass_speed  for grain: running speed in the grass fields and verges
+#   field_edge  true for a line between fields (cultivation boundary): touching grain
+#           areas are one stretch of land, split into fields along these lines only
 #
 # A symbol "406.1" uses the entry "406.1" if there is one, otherwise "406".
 # The white map background is forest with easy running.
@@ -80,7 +86,10 @@ name = "ISOM 2000"
 "411" = { ground = "forest", young = 20, speed = 0.05, order = 23 }
 "412" = { ground = "lawn", trees = "lidar", speed = 0.9, order = 15 }
 "413" = { ground = "field", trees = "lidar", speed = 0.7, order = 15 }
-"415" = { ground = "field", trees = "lidar", speed = 0.7, order = 15 }
+# Cultivated land: mostly grain, about 90 cm tall by summer, and some ley.
+"415" = { ground = "grain", grass_share = 0.1, grass_speed = 0.7, trees = "lidar", speed = 0.5, order = 15 }
+
+"414" = { field_edge = true }  # distinct cultivation boundary
 
 # Roads, paths and other man-made features
 "501" = { ground = "paved", trees = "none", width = 12, clear = 13, order = 82, speed = 1.25, track = "paved" }

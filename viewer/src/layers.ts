@@ -20,6 +20,7 @@ export const Ground = {
   stony: 12,
   sand: 13,
   building: 14,
+  grain: 15,
 } as const
 
 export interface LayerSample {
@@ -132,6 +133,14 @@ export class LayerStore {
   put(cx: number, cy: number, layer: ChunkLayer) {
     this.cache.set(this.key(cx, cy), layer)
     this.added++
+  }
+
+  /** The cached layers, with their chunk coordinates. */
+  *entries(): Generator<[number, number, ChunkLayer]> {
+    for (const [key, layer] of this.cache) {
+      const [cx, cy] = key.split('_').map(Number) as [number, number]
+      yield [cx, cy, layer]
+    }
   }
 
   release(cx: number, cy: number) {

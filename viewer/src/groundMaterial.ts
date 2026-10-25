@@ -26,7 +26,8 @@ float gFbm(vec2 p) {
 
 vec3 lin(vec3 c) { return pow(c, vec3(2.2)); }
 
-// Ground texture of a class. uv: position / 3.2 m; n1..n3 as below.
+// Ground texture of a class. uv: position / 3.2 m; n1..n3 as below. Grain is drawn
+// on top near the player (grain.ts), so its ground differs with the layer's step.
 vec3 groundColor(int cls, vec2 uv, float n1, float n2, float n3) {
   if (cls == 2) return gtx(GT_GRASS, uv); // open land
   if (cls == 3) { // rough open: heather, long grass, clear-cut
@@ -34,7 +35,7 @@ vec3 groundColor(int cls, vec2 uv, float n1, float n2, float n3) {
   }
   if (cls == 4) return gtx(GT_MARSH, uv);
   if (cls == 5) return mix(gtx(GT_GRAVEL, uv), gtx(GT_ROCK, uv * 0.5), 0.7); // bare rock
-  if (cls == 6) return mix(gtx(GT_GRASS, uv) * vec3(1.05, 1.05, 0.85), gtx(GT_FIELD, uv), 0.25); // cultivated: mostly ley
+  if (cls == 6) return mix(gtx(GT_GRASS, uv) * vec3(1.05, 1.05, 0.85), gtx(GT_FIELD, uv), 0.25); // ley and verges
   if (cls == 7) return gtx(GT_ASPHALT, uv);
   if (cls == 8 || cls == 14) return gtx(GT_GRAVEL, uv * 2.4);
   if (cls == 9) return gtx(GT_SOIL, uv);
@@ -44,6 +45,12 @@ vec3 groundColor(int cls, vec2 uv, float n1, float n2, float n3) {
     return mix(gtx(GT_FOREST, uv), gtx(GT_GRAVEL, uv * 0.8), smoothstep(0.35, 0.65, n1 * 0.6 + n2 * 0.4));
   }
   if (cls == 13) return gtx(GT_SOIL, uv) * vec3(1.5, 1.4, 1.2); // sand
+  if (cls == 15) { // grain
+    // Near, where the grain stands on the ground: soil and old stubble between the stalks.
+    // Far (the coarse layers), the colour of the ripe ears seen from above.
+    if (layerStep < 1.5) return mix(gtx(GT_SOIL, uv), gtx(GT_FIELD, uv), 0.4) * 0.7;
+    return gtx(GT_FIELD, uv) * vec3(1.3, 1.12, 0.72) * (0.9 + 0.2 * n3);
+  }
   // Forest floor: moss, blueberry, needles.
   return gtx(GT_FOREST, uv);
 }

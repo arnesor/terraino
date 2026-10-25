@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { grainCardMaterial, grainSurfaceMaterial, paintGrainCard } from './grainMaterial'
 import { type Models, OModels, type TreeModel } from './vendor/models.js'
 import { type GroundKind, OTex, type Textures } from './vendor/textures.js'
 
@@ -15,12 +16,14 @@ export interface QualitySettings {
   cover: number
   /** Cover cards per square metre where cover is densest. */
   coverDensity: number
+  /** Grain cards per square metre; they are drawn as far as the cover. */
+  grainDensity: number
 }
 
 export const QUALITY: Record<Quality, QualitySettings> = {
-  high: { near: 110, cover: 40, coverDensity: 1.8 },
-  medium: { near: 85, cover: 32, coverDensity: 1.4 },
-  low: { near: 60, cover: 22, coverDensity: 1.0 },
+  high: { near: 110, cover: 40, coverDensity: 1.8, grainDensity: 3.5 },
+  medium: { near: 85, cover: 32, coverDensity: 1.4, grainDensity: 2.8 },
+  low: { near: 60, cover: 22, coverDensity: 1.0, grainDensity: 2.0 },
 }
 
 /** Tree model variants; trees of a species pick one. */
@@ -153,11 +156,15 @@ export class Gfx {
   /** Near trees dissolve out and impostors in over this distance range. */
   readonly treeFade = { value: new THREE.Vector2(96, 110) }
   readonly coverFade = { value: new THREE.Vector2(30, 40) }
+  /** The grain surface appears over this distance range, as the grain cards end. */
+  readonly grainFade = { value: new THREE.Vector2(22, 32) }
   readonly bushFade = { value: new THREE.Vector2(80, 95) }
   readonly species: Record<TreeSpecies, SpeciesMaterials>
   readonly bush: THREE.MeshLambertMaterial
   readonly bushDepth: THREE.MeshDepthMaterial
   readonly logBark: THREE.MeshLambertMaterial
+  readonly grainCard: THREE.MeshLambertMaterial
+  readonly grainSurface: THREE.MeshLambertMaterial
   impostorAtlas: THREE.Texture | null = null
   readonly multisampled: boolean
 
@@ -209,11 +216,17 @@ export class Gfx {
       { wind: 0.05 },
     )
     this.logBark = new THREE.MeshLambertMaterial({ map: t.bark.spruce, vertexColors: true })
+    const grain = new THREE.CanvasTexture(paintGrainCard())
+    grain.colorSpace = THREE.SRGBColorSpace
+    grain.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy())
+    this.grainCard = grainCardMaterial(this, grain)
+    this.grainSurface = grainSurfaceMaterial(this, this.grainFade)
   }
 
   setQuality(q: QualitySettings) {
     this.treeFade.value.set(q.near - 14, q.near)
     this.coverFade.value.set(q.cover - 10, q.cover)
+    this.grainFade.value.set(q.cover - 18, q.cover - 8)
     this.bushFade.value.set(q.near - 22, q.near - 8)
   }
 

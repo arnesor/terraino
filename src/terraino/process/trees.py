@@ -81,7 +81,7 @@ _GROUND_MIX = {
 # (m). On bog and bare rock they keep their mix above, leaning to pine.
 BIRCH_BEYOND_FOREST_M = 50.0
 FOREST_DISTANCE_STEP = 4
-_BIRCH_GROUND = (Ground.OPEN, Ground.ROUGH, Ground.FIELD, Ground.LAWN)
+_BIRCH_GROUND = (Ground.OPEN, Ground.ROUGH, Ground.FIELD, Ground.GRAIN, Ground.LAWN)
 _PINE_GROUND = (Ground.MARSH, Ground.ROCK)
 # Crown radius = a * height + b, per species (spruce narrow, broadleaf wide).
 _CROWN = {

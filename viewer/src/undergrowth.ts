@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { Gfx, QualitySettings } from './gfx'
+import { GRAIN_HEIGHT } from './grain'
 import type { HeightField } from './heightfield'
 import { type ChunkLayer, Ground, type LayerSample, type LayerStore } from './layers'
 import type { Tracks } from './tracks'
@@ -8,6 +9,7 @@ import type { CoverKind } from './vendor/textures.js'
 const REBUILD_DISTANCE = 8
 const MAX_BUSHES = 12000
 const MAX_COVER = 16000
+const MAX_GRAIN = 24000
 const MAX_LOGS = 600
 const MAX_TWIGS = 6000
 const MAX_STUMPS = 4000
@@ -128,6 +130,7 @@ export class Undergrowth {
   private readonly heights: HeightField
   private readonly bushes: THREE.InstancedMesh
   private readonly cover = new Map<CoverKind, THREE.InstancedMesh>()
+  private readonly grain: THREE.InstancedMesh
   private readonly logs: THREE.InstancedMesh
   private readonly twigs: THREE.InstancedMesh[]
   private readonly stumpMesh: THREE.InstancedMesh
@@ -160,6 +163,7 @@ export class Undergrowth {
     for (const kind of COVER_KINDS) {
       this.cover.set(kind, add(gfx.models.card, gfx.coverMaterial(gfx.textures.cover[kind]), MAX_COVER, false))
     }
+    this.grain = add(gfx.models.card, gfx.grainCard, MAX_GRAIN, false)
     this.logs = add(gfx.models.log, gfx.logBark, MAX_LOGS, true)
     this.twigs = gfx.models.twig.map(g => add(g, gfx.logBark, MAX_TWIGS, false))
     this.stumpMesh = add(stumpGeometry(), gfx.logBark, MAX_STUMPS, true)
@@ -218,6 +222,8 @@ export class Undergrowth {
     const coverRadius = this.quality.cover
     const perCell = this.quality.coverDensity
     const samples = Math.ceil(perCell)
+    const grainPerCell = this.quality.grainDensity
+    const grainSamples = Math.ceil(grainPerCell)
 
     // Only cells inside the world: there are no layers beyond its edge.
     const x0 = Math.max(Math.floor(eye.x - bushRadius), 0)
@@ -280,6 +286,23 @@ export class Undergrowth {
         }
 
         if (d2 > coverRadius * coverRadius) continue
+        if (s.ground === Ground.grain) {
+          // Standing grain fills the sample's square metre, but leaves a road or path free.
+          for (let k = 0; k < grainSamples; k++) {
+            if (k + 1 > grainPerCell && cellRandom(x, z, 200 + k) > grainPerCell % 1) continue
+            const tx = x - 0.5 + cellRandom(x, z, 210 + k)
+            const tz = z - 0.5 + cellRandom(x, z, 220 + k)
+            if (this.onTrack(tx, tz, 0.6)) continue
+            const f = 0.75 + 0.3 * cellRandom(x, z, 230 + k)
+            pos.set(tx, this.heights.heightAt(tx, tz) - 0.03, tz)
+            quat.setFromAxisAngle(up, cellRandom(x, z, 240 + k) * Math.PI * 2)
+            scale.set(f, GRAIN_HEIGHT * (0.9 + 0.2 * cellRandom(x, z, 250 + k)), f)
+            const t = 0.8 + 0.3 * cellRandom(x, z, 260 + k)
+            color.setRGB(t, t, t * 0.92)
+            put(this.grain, MAX_GRAIN)
+          }
+          continue
+        }
         const dry = valueNoise(x / 14, z / 14, 5)
         for (let k = 0; k < samples; k++) {
           if (k + 1 > perCell && cellRandom(x, z, 9 + k) > perCell % 1) continue
@@ -377,7 +400,7 @@ export class Undergrowth {
       }
     }
 
-    for (const mesh of [this.bushes, this.logs, this.stumpMesh, ...this.twigs, ...this.cover.values()]) {
+    for (const mesh of [this.bushes, this.grain, this.logs, this.stumpMesh, ...this.twigs, ...this.cover.values()]) {
       mesh.count = counts.get(mesh) ?? 0
       // Upload only the instances in use; without a range three uploads the whole capacity.
       for (const attribute of [mesh.instanceMatrix, mesh.instanceColor]) {

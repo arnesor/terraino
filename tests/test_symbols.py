@@ -46,6 +46,14 @@ def test_unknown_speed_group_is_rejected() -> None:
         SymbolRule.from_table({"speed": 0.5, "speed_group": "mud"})
 
 
+def test_grass_share_is_only_for_grain() -> None:
+    with pytest.raises(ValueError, match="only for grain"):
+        SymbolRule.from_table({"ground": "field", "grass_share": 0.1})
+    rule = SymbolRule.from_table({"ground": "grain", "grass_share": 0.1, "speed": 0.5})
+    assert rule.as_grass().ground is Ground.FIELD
+    assert rule.as_grass().speed == 0.5
+
+
 def test_detect_symbol_set() -> None:
     assert detect_symbol_set({"521", "520"}) == "isom2017"
     assert detect_symbol_set({"526", "521"}) == "isom2000"

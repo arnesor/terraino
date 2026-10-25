@@ -49,9 +49,12 @@ name = "ISOM 2017-2"
 "409" = { overprint = true, speed_group = "undergrowth", shrubs = 0.8, speed = 0.5, order = 21 }
 "410" = { ground = "forest", young = 15, speed = 0.25, order = 22 }
 "411" = { ground = "forest", young = 20, speed = 0.05, order = 23 }
-"412" = { ground = "field", trees = "lidar", speed = 0.7, order = 15 }
+# Cultivated land: mostly grain, about 90 cm tall by summer, and some ley.
+"412" = { ground = "grain", grass_share = 0.1, grass_speed = 0.7, trees = "lidar", speed = 0.5, order = 15 }
 "413" = { ground = "lawn", trees = "lidar", speed = 0.9, order = 15 }
 "414" = { ground = "field", trees = "lidar", speed = 0.7, order = 15 }
+
+"415" = { field_edge = true }  # distinct cultivation boundary
 
 # Roads, paths and other man-made features
 "501" = { ground = "paved", trees = "none", speed = 1.25, order = 85 }

@@ -31,8 +31,8 @@ ATTRIBUTION = "© NIBIO (AR5 arealressurskart, NLOD 2.0)"
 _WHITE = (255, 255, 255)
 _BOG_HATCH = (181, 236, 252)
 PALETTE: dict[tuple[int, int, int], Ground] = {
-    (255, 209, 110): Ground.FIELD,  # fulldyrka jord
-    (255, 255, 76): Ground.FIELD,  # overflatedyrka jord
+    (255, 209, 110): Ground.GRAIN,  # fulldyrka jord: mostly grain, some ley
+    (255, 255, 76): Ground.FIELD,  # overflatedyrka jord: meadow and pasture
     (255, 255, 173): Ground.OPEN,  # innmarksbeite
     (158, 204, 115): Ground.FOREST,  # skog
     _BOG_HATCH: Ground.MARSH,  # myr
@@ -53,7 +53,7 @@ def decode_land_cover(rgb: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
         >>> img = np.array([[[158, 204, 115], [255, 209, 110], [181, 236, 252]],
         ...                 [[255, 255, 255], [255, 255, 255], [10, 10, 10]]], np.uint8)
         >>> decode_land_cover(img).tolist()
-        [[1, 6, 4], [4, 4, 0]]
+        [[1, 15, 4], [4, 4, 0]]
     """
     colours = np.array([*PALETTE, _WHITE], dtype=np.float32)
     classes = np.array([*PALETTE.values(), Ground.UNKNOWN], dtype=np.uint8)

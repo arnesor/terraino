@@ -3,7 +3,8 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 import pytest
-from shapely import Polygon, box
+from shapely import Point, Polygon, box
+from shapely.geometry import mapping
 
 from terraino.ingest.georef import Extent
 from terraino.process.fuse import fill_unknown_ground
@@ -122,6 +123,100 @@ def test_slowest_speed_group_counts() -> None:
     # Other symbols replace what is below them, marsh included.
     assert layers.speed[cell(65, 65)] == pytest.approx(speed_of("506"))
     assert layers.speed[cell(65, 75)] == pytest.approx(speed_of("310"))
+
+
+@pytest.mark.parametrize(("key", "number"), [("isom2000", "415"), ("isom2017", "412")])
+def test_cultivated_land_is_grain_with_a_grass_verge(key: str, number: str) -> None:
+    symbols = SymbolSet.load(key)
+    features = [
+        area(0, number, box(20, 20, 80, 80)),
+        line(1, "505.0", [(20.0, 50.0), (80.0, 50.0)]),  # a path across the field
+    ]
+    layers = rasterize_map(features, symbols, EXTENT, MAP_AREA)
+    rule = symbols.rule(number)
+    assert rule is not None
+    assert layers.ground[cell(40, 30)] == Ground.GRAIN
+    assert layers.speed[cell(40, 30)] == pytest.approx(rule.speed)
+    for verge in [(20.5, 30), (79.5, 30), (40, 20.5), (40, 52.5), (40, 47.5)]:
+        assert layers.ground[cell(*verge)] == Ground.FIELD, verge
+        assert layers.speed[cell(*verge)] == pytest.approx(rule.as_grass().speed)
+    assert layers.tree_rule[cell(40, 30)] == layers.tree_rule[cell(20.5, 30)]
+
+
+def test_a_share_of_the_fields_grow_grass() -> None:
+    symbols = SymbolSet.load("isom2017")
+    rule = symbols.rule("412")
+    assert rule is not None
+    assert rule.grass_share == pytest.approx(0.1)
+    fields = [area(k, "412", box(10 + 4 * k, 20, 13 + 4 * k, 80)) for k in range(20)]
+    layers = rasterize_map(fields, symbols, EXTENT, MAP_AREA)
+    middles = [layers.ground[cell(11.5 + 4 * k, 50)] for k in range(20)]
+    # Narrow fields have no room for grain inside their verge: all FIELD.
+    assert set(middles) == {Ground.FIELD}
+    wide = [area(k, "412", box(10, 10 + 8 * k, 90, 17 + 8 * k)) for k in range(10)]
+    layers = rasterize_map(wide, symbols, EXTENT, MAP_AREA)
+    middles = [layers.ground[cell(50, 13.5 + 8 * k)] for k in range(10)]
+    assert middles.count(Ground.FIELD) == 1
+    assert middles.count(Ground.GRAIN) == 9
+
+
+def test_a_field_drawn_in_pieces_has_no_verge_between_them() -> None:
+    symbols = SymbolSet.load("isom2000")
+    pieces = [area(0, "415", box(20, 20, 52, 80)), area(1, "415", box(48, 20, 80, 80))]
+    layers = rasterize_map(pieces, symbols, EXTENT, MAP_AREA)
+    assert all(layers.ground[cell(x, 50)] == Ground.GRAIN for x in range(25, 76))
+
+
+def test_cultivation_boundaries_split_fields_with_a_narrow_verge() -> None:
+    symbols = SymbolSet.load("isom2000")
+    land = area(0, "415", box(20, 20, 80, 80))
+    boundary = line(1, "414.0", [(50.0, 20.0), (50.0, 80.0)])
+    layers = rasterize_map([land, boundary], symbols, EXTENT, MAP_AREA)
+    assert layers.ground[cell(50.5, 50)] == Ground.FIELD
+    assert layers.ground[cell(48, 50)] == Ground.GRAIN
+    assert layers.ground[cell(53, 50)] == Ground.GRAIN
+
+
+def test_holes_left_for_lettering_are_filled() -> None:
+    symbols = SymbolSet.load("isom2017")
+    # A field with a rectangular hole for a name, one without a name beside it, and
+    # an irregular hole (a real island of other ground) with a name in it.
+    island = Point(70, 30).buffer(6)
+    field = (
+        box(15, 15, 85, 85)
+        .difference(box(25, 60, 55, 75))
+        .difference(box(25, 25, 45, 40))
+        .difference(island)
+    )
+    feature = {
+        "geometry": mapping(field),
+        "properties": {"oid": 0, "sym": "412"},
+    }
+    lettering = [Point(22, 77).buffer(8), Point(70, 30).buffer(8)]
+    layers = rasterize_map([feature], symbols, EXTENT, MAP_AREA, lettering)
+    assert layers.ground[cell(40, 67)] == Ground.GRAIN
+    assert layers.ground[cell(35, 32)] == Ground.FOREST
+    assert layers.ground[cell(70, 30)] == Ground.FOREST
+    without = rasterize_map([feature], symbols, EXTENT, MAP_AREA)
+    assert without.ground[cell(40, 67)] == Ground.FOREST
+
+
+def test_lettering_hole_overlapping_another_hole_is_filled() -> None:
+    # The hole for the name overlaps the hole of a yard: the polygon as drawn is
+    # invalid, and repairing it would merge the two holes into one with many corners.
+    yard = [list(c) for c in Point(60, 67).buffer(6).exterior.coords]
+    text = [[25, 60], [25, 75], [56, 75], [56, 60], [25, 60]]
+    square = [[15, 15], [85, 15], [85, 85], [15, 85], [15, 15]]
+    feature = {
+        "geometry": {"type": "Polygon", "coordinates": [square, text, yard]},
+        "properties": {"oid": 0, "sym": "412"},
+    }
+    symbols = SymbolSet.load("isom2017")
+    layers = rasterize_map(
+        [feature], symbols, EXTENT, MAP_AREA, [Point(22, 77).buffer(8)]
+    )
+    assert layers.ground[cell(40, 67)] == Ground.GRAIN
+    assert layers.ground[cell(61, 67)] == Ground.FOREST
 
 
 def test_tree_rules_and_clear_strips(layers: GroundLayers) -> None:

@@ -13,7 +13,14 @@ from shapely.geometry.base import BaseGeometry
 
 from terraino.fetch.osm import OsmFeature
 from terraino.ingest.georef import Extent
-from terraino.process.layers import TREES_KEEP, TREES_LIDAR, TREES_NONE, GroundLayers
+from terraino.process.layers import (
+    TREES_KEEP,
+    TREES_LIDAR,
+    TREES_NONE,
+    VERGE_M,
+    GroundLayers,
+    split_fields,
+)
 from terraino.process.symbols import Ground
 
 FOREST_CANOPY_M = 3.0
@@ -32,9 +39,12 @@ _NO_UNDERGROWTH = [
     Ground.PATH,
 ]
 BUILDING_CLEARANCE_M = 0.8
+# Share of AR5's cultivated land fields that grow grass rather than grain.
+AR5_GRASS_SHARE = 0.1
 
 # Tree rule and running speed for each AR5 land type outside the map.
 _LAND_COVER_RULES = {
+    Ground.GRAIN: (TREES_LIDAR, 0.5),
     Ground.FIELD: (TREES_LIDAR, 0.6),
     Ground.OPEN: (TREES_LIDAR, 0.95),
     Ground.LAWN: (TREES_LIDAR, 0.9),
@@ -134,8 +144,16 @@ def add_lidar_undergrowth(layers: GroundLayers, low: npt.NDArray[np.float32]) ->
 
 
 def apply_land_cover(layers: GroundLayers, land_cover: npt.NDArray[np.uint8]) -> None:
-    """Use AR5 land cover outside the mapped area."""
+    """Use AR5 land cover outside the mapped area.
+
+    AR5's cultivated land (fulldyrka jord) is grain, but a share of its fields (as in
+    AR5_GRASS_SHARE) grow grass, and grain fields have a grass verge.
+    """
     outside = ~layers.in_map & (land_cover != Ground.UNKNOWN)
+    land_cover = land_cover.copy()
+    fields = land_cover == Ground.GRAIN
+    grain, _ = split_fields(fields, AR5_GRASS_SHARE)
+    land_cover[fields & ~grain] = Ground.FIELD
     layers.ground[outside] = land_cover[outside]
     for ground, (trees, speed) in _LAND_COVER_RULES.items():
         cells = outside & (land_cover == ground)
@@ -213,6 +231,9 @@ def apply_osm(
     outside = ~layers.in_map
     # Roads are drawn as their own strips (terraino.process.tracks), not as ground.
     _paint(layers.ground, water, extent, outside)
+    # Grain leaves a grass verge along roads and streams.
+    verges = [(g.buffer(VERGE_M), int(Ground.FIELD)) for g, _ in water + roads]
+    _paint(layers.ground, verges, extent, outside & (layers.ground == Ground.GRAIN))
     clear = np.zeros_like(layers.clear)
     _paint(clear, [(g, 1) for g, _ in water + roads], extent, outside)
     layers.clear |= clear
