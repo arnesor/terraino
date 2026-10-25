@@ -260,6 +260,36 @@ def collect_features(
     return features, cliff_lines
 
 
+# Rocks (after _expand_point): mapped next to a building, or a building drawn with a
+# rock symbol that looks alike (black areas), they must not stand in its walls.
+_ROCK_KINDS = frozenset({"boulder", "stone"})
+
+
+def drop_rocks_in_buildings(features: Features, footprints: Sequence[Polygon]) -> int:
+    """Remove rocks that would stand in a building's walls; return how many.
+
+    Examples:
+        >>> from shapely import box
+        >>> found = Features(points=[PointFeature("boulder", 5, 5, 3.0),
+        ...                          PointFeature("boulder", 20, 5, 3.0)])
+        >>> drop_rocks_in_buildings(found, [box(0, 0, 10, 10)])
+        1
+        >>> [p.x for p in found.points]
+        [20]
+    """
+    tree = STRtree(list(footprints))
+    kept = []
+    for p in features.points:
+        if p.kind in _ROCK_KINDS and len(
+            tree.query(Point(p.x, p.y), predicate="dwithin", distance=p.size / 2)
+        ):
+            continue
+        kept.append(p)
+    dropped = len(features.points) - len(kept)
+    features.points = kept
+    return dropped
+
+
 class _Sampler:
     """Nearest-cell DTM lookup in projected coordinates."""
 

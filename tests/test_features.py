@@ -12,6 +12,7 @@ from terraino.process.features import (
     LineFeature,
     carve_cliffs,
     collect_features,
+    drop_rocks_in_buildings,
     measure_cliffs,
     paint_cliffs,
     place_poles,
@@ -186,3 +187,16 @@ def test_boulders_are_high_enough_and_waterholes_hold_water(
     assert min(boulders) >= 1.0
     assert max(boulders) >= 2.0  # the large boulder
     assert by_kind["waterhole"] == [4.0]
+
+
+def test_a_building_drawn_as_a_rock_pillar_leaves_no_rocks() -> None:
+    # ISOM 2000 202 (rock pillar) is black like a building; here it is a farm building.
+    pillar = {
+        "type": "Polygon",
+        "coordinates": [[[52, 52], [60, 52], [60, 58], [52, 58], [52, 52]]],
+    }
+    found, _ = collect_features(
+        [feature(0, "202.0", pillar), feature(1, "206.0", point(80, 80))], ISOM
+    )
+    assert drop_rocks_in_buildings(found, [box(50, 50, 62, 60)]) == 4
+    assert [(p.kind, p.x, p.y) for p in found.points] == [("boulder", 80, 80)]

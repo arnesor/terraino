@@ -35,6 +35,7 @@ from terraino.process.features import (
     carve_cliffs,
     carve_waterholes,
     collect_features,
+    drop_rocks_in_buildings,
     measure_cliffs,
     paint_cliffs,
     place_poles,
@@ -408,6 +409,9 @@ def _add_nature_and_buildings(
             )
             if masts and topo_buildings.ATTRIBUTION not in world.attribution:
                 world.attribution = [*world.attribution, topo_buildings.ATTRIBUTION]
+        dropped = drop_rocks_in_buildings(objects, [fp[0] for fp in footprints])
+        if dropped:
+            log.info("Left out %d rocks standing in buildings", dropped)
         carve_cliffs(dtm, objects.cliffs, extent)
         carve_waterholes(dtm, layers, objects.points, extent)
         paint_cliffs(layers, objects.cliffs, extent)
