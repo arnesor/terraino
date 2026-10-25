@@ -5,6 +5,7 @@ import { formatNumber, renameStoredKey, t, type TextKey } from './i18n'
 import { isTyping } from './keyboard'
 import { fitRectangle, fromScreen, legIndices, toScreen, turnAround } from './mapview'
 import { JOG_SPEED, type Player } from './player'
+import { Tutorial } from './tutorial'
 import type { World } from './world'
 
 const PURPLE = 'rgba(190, 40, 160, 0.9)'
@@ -244,6 +245,8 @@ export class Hud {
       else this.setCompetition(!this.run.competitionMode)
     })
     this.editButton = button(more, t('setCourse'), t('setCourseTitle'), () => this.setEditing(!this.editing))
+    const tutorial = new Tutorial(root)
+    button(more, t('tutorial'), t('tutorialTitle'), () => tutorial.toggle())
     this.mapHelp = el('div', 'hud-map-help', this.mapWindow)
     this.mapImage.src = world.url(world.manifest.map.image)
     const scale = world.manifest.map.scale

@@ -196,6 +196,7 @@ Only runs in **Competition** mode (the button under the map) go on the course's 
 During such a run there is no help beyond the map and the compass: no position on the map,
 no map that follows you, no coordinates, no heading at the top of the screen, no Auto, no flying,
 no jumps on the map and no map on the ground.
+**Tutorial**, next to Competition under the map, explains step by step how to run in it.
 At the finish you give your name, and the results list opens: leg and split times with their places,
 as on WinSplits, sorted by run time or, from a column header, by a leg or split time.
 Tick a result to see its route on the map; several routes can be compared.

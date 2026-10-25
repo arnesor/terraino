@@ -111,6 +111,7 @@ independent of `tools/ocad-export`.
 `resultsView.ts` is the Finished panel and the results list window.
 Competition mode (`Hud.restricted`) turns off every help during a run;
 only competition runs can be saved.
+`tutorial.ts` is the competition mode tutorial, opened from the map window.
 `placement.ts` puts each flag on the side of the feature that its description names.
 
 - All UI text is in `i18n.ts` (English and Norwegian).
