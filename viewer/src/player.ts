@@ -4,7 +4,7 @@ import type { HeightField } from './heightfield'
 import { isTyping } from './keyboard'
 
 const EYE_HEIGHT = 1.7
-const JOG_SPEED = 3.2 // m/s, a steady orienteering pace
+export const JOG_SPEED = 3.2 // m/s, a steady orienteering pace
 const FLY_SPEED = 40
 const GRAVITY = 9.81
 const BODY_RADIUS = 0.3

@@ -26,7 +26,15 @@ const STRINGS = {
   keyLook: { en: 'look around', nb: 'se deg rundt' },
   keyTime: { en: 'time factor up / down (game time runs faster)', nb: 'tidsfaktor opp / ned (spilltida går fortere)' },
   keyFly: { en: 'fly on/off (look up or down to climb or dive)', nb: 'fly av/på (se opp eller ned for å stige eller dykke)' },
-  keyMap: { en: 'map: drag, wheel zoom, double click to go there', nb: 'kart: dra, rulle for zoom, dobbeltklikk for å gå dit' },
+  keyMap: {
+    en: 'map: drag, wheel zoom, click to put the thumb, double click to go there',
+    nb: 'kart: dra, rulle for zoom, klikk for å sette tommelen, dobbeltklikk for å gå dit',
+  },
+  keyNameMouseMap: { en: 'Mouse, map open', nb: 'Mus, kart oppe' },
+  keyMapSteering: {
+    en: 'while steering: hold the left button to move the map, the right to move the thumb; wheel turns the map',
+    nb: 'når du styrer: hold venstre knapp for å flytte kartet, høyre for å flytte tommelen; rulle vrir kartet',
+  },
   keyStart: { en: 'go to the start · R restart the run', nb: 'gå til start · R start løpet på nytt' },
   keyStartScreen: { en: 'pause, on the start screen: choose map and course', nb: 'pause, på startsida: velg kart og løype' },
   keyDescriptions: { en: 'control descriptions on/off', nb: 'postbeskrivelse av/på' },
@@ -118,7 +126,14 @@ const STRINGS = {
     en: 'Click: add control · Right click / Backspace: remove last · Delete: clear · Drag: move · Wheel: zoom',
     nb: 'Klikk: ny post · Høyreklikk / Backspace: fjern siste · Delete: slett alt · Dra: flytt · Rulle: zoom',
   },
-  helpMap: { en: 'Drag: move · Wheel: zoom · Double click: go there', nb: 'Dra: flytt · Rulle: zoom · Dobbeltklikk: gå dit' },
+  helpMap: {
+    en: 'Drag: move · Wheel: zoom · Click: thumb · Double click: go there',
+    nb: 'Dra: flytt · Rulle: zoom · Klikk: tommel · Dobbeltklikk: gå dit',
+  },
+  helpMapSteering: {
+    en: 'Hold left button: move the map · Hold right button: move the thumb · Wheel: turn the map',
+    nb: 'Hold venstre knapp: flytt kartet · Hold høyre knapp: flytt tommelen · Rulle: vri kartet',
+  },
   linkCopied: { en: 'Link to this course copied', nb: 'Lenke til løypa kopiert' },
   competition: { en: 'Competition', nb: 'Konkurranse' },
   competitionTitle: {

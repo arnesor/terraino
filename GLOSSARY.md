@@ -44,3 +44,10 @@ _Avoid_: track, GPS track, trail
 **Competition mode**: A way of running with no help beyond the map and the compass.
 Only runs in competition mode can become results.
 _Avoid_: race mode, ranked mode
+
+### Map
+
+**Thumb**: The runner's own mark on the map of where they think they are,
+as an orienteer keeps a thumb on the map.
+It moves to each control as it is punched; the game never moves it to the runner's position.
+_Avoid_: cursor, marker, pin, position

@@ -71,3 +71,34 @@ export function fitRectangle(
   const centre: Control = [origin[0] + mx * c + my * s, origin[1] + mx * s - my * c]
   return { centre, zoom }
 }
+
+/**
+ * Screen position (pixels right and down from the window centre) of the map point
+ * `[east, north]`, with `centre` in the middle of the window, `zoom` screen pixels per metre
+ * and the map turned by `rotation` (radians, clockwise on screen).
+ */
+export function toScreen([e, n]: Control, centre: Control, zoom: number, rotation: number): [number, number] {
+  const x = (e - centre[0]) * zoom
+  const y = -(n - centre[1]) * zoom
+  const c = Math.cos(rotation)
+  const s = Math.sin(rotation)
+  return [x * c - y * s, x * s + y * c]
+}
+
+/** The map point at a screen position (pixels from the window centre); undoes toScreen. */
+export function fromScreen([x, y]: [number, number], centre: Control, zoom: number, rotation: number): Control {
+  const c = Math.cos(rotation)
+  const s = Math.sin(rotation)
+  const ux = x * c + y * s
+  const uy = -x * s + y * c
+  return [centre[0] + ux / zoom, centre[1] - uy / zoom]
+}
+
+/**
+ * The map centre that keeps `pivot` where it is on screen when the map, now turned by
+ * `rotation`, turns on by `delta`.
+ */
+export function turnAround(pivot: Control, centre: Control, zoom: number, rotation: number, delta: number): Control {
+  const after = fromScreen(toScreen(pivot, centre, zoom, rotation), centre, zoom, rotation + delta)
+  return [centre[0] + pivot[0] - after[0], centre[1] + pivot[1] - after[1]]
+}
