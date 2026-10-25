@@ -102,7 +102,7 @@ describe('run time', () => {
       if (pausing) paused += dt
       real += dt
     }
-    return { splits: run.splits, elapsed: run.elapsed(clock.time), real }
+    return { splits: run.splits, elapsed: run.elapsed(clock.time), real, route: run.route }
   }
 
   // The runner leaves the start at x = 33 and punches 2.5 m before each control.
@@ -127,6 +127,22 @@ describe('run time', () => {
     expect(elapsed).toBe(splits.at(-1))
     // The 49.4 s from x = 30 to the finish take a tenth of that in real time at 10×.
     expect(Math.abs(real - (SPLITS[1]! + 3 / 4) / factor)).toBeLessThanOrEqual(dt)
+  })
+
+  it('records the route, a point per second of game time, at any factor', async () => {
+    for (const [steps, dt] of [
+      [0, DT],
+      [7, 0.1],
+    ] as const) {
+      const { splits, route } = await race(steps, dt)
+      // The start, one point a second, and the finish.
+      expect(route.length).toBe(Math.ceil(splits[1]! - 1e-9) + 1)
+      // Projected positions along the line z = 128 (northing 128), at 4 m/s from x = 33.
+      expect(route[0]![0]).toBeCloseTo(33, 0)
+      expect(route[10]![0]).toBeCloseTo(33 + 40, 0)
+      expect(route.at(-1)![0]).toBeCloseTo(227.5, 0)
+      for (const [, n] of route) expect(n).toBeCloseTo(128, 6)
+    }
   })
 
   it('does not count a pause, even at 10× with long frames', async () => {

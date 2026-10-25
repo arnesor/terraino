@@ -3,10 +3,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Connect, Plugin } from 'vite'
 import { defineConfig } from 'vite'
+import { resultsMiddleware } from './server/results'
 
 // World packages are written by the Python pipeline to ../worlds. Serve them at
 // /worlds/ in both the dev server and `vite preview`, without copying them into dist.
 const worldsDir = fileURLToPath(new URL('../worlds', import.meta.url))
+// Results lists are kept next to the worlds, so rebuilding a world leaves them alone.
+const resultsDir = fileURLToPath(new URL('../results', import.meta.url))
 
 const contentTypes: Record<string, string> = {
   '.json': 'application/json',
@@ -50,9 +53,11 @@ function worldsPlugin(): Plugin {
     name: 'terraino-worlds',
     configureServer(server) {
       server.middlewares.use(serveWorlds)
+      server.middlewares.use(resultsMiddleware(resultsDir))
     },
     configurePreviewServer(server) {
       server.middlewares.use(serveWorlds)
+      server.middlewares.use(resultsMiddleware(resultsDir))
     },
   }
 }

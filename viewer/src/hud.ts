@@ -2,8 +2,8 @@ import { formatFactor, type GameClock } from './clock'
 import { type Course, type CourseRun, encodeCourse, formatPace, formatTime } from './course'
 import { describe, drawDescriptionTable, tableRows } from './descriptions/table'
 import { formatNumber, renameStoredKey, t, type TextKey } from './i18n'
+import { isTyping } from './keyboard'
 import { fitRectangle, legIndices } from './mapview'
-import type { ImportedCourse } from './ocad/courses'
 import type { Player } from './player'
 import type { World } from './world'
 
@@ -36,10 +36,11 @@ interface MapPreferences {
   auto: boolean
   legs: boolean
   position: boolean
+  competition: boolean
 }
 
 function loadPreferences(): MapPreferences {
-  const defaults = { auto: false, legs: true, position: true }
+  const defaults = { auto: false, legs: true, position: true, competition: false }
   try {
     const stored = JSON.parse(localStorage.getItem(PREFERENCES_KEY) ?? '{}') as Partial<MapPreferences>
     return { ...defaults, ...stored }
@@ -76,6 +77,8 @@ export class Hud {
   onMapToggle: (open: boolean) => void = () => {}
   /** Called when the start screen is asked for from the map's title bar. */
   onStartScreen: () => void = () => {}
+  /** Routes to draw on the map (projected positions), each in its own colour. */
+  routes: { points: [number, number][]; color: string }[] = []
   /** Called with a projected position when the map is double-clicked. */
   onTeleport: (east: number, north: number) => void = () => {}
   private readonly world: World
@@ -95,6 +98,9 @@ export class Hud {
   private readonly editButton: HTMLButtonElement
   private readonly autoButton: HTMLButtonElement
   private readonly legsButton: HTMLButtonElement
+  private readonly competitionButton: HTMLButtonElement
+  private readonly toast: HTMLDivElement
+  private toastTimer: ReturnType<typeof setTimeout> | undefined
   private readonly positionBox: HTMLInputElement
   private readonly runPanel: HTMLDivElement
   private readonly descriptions: HTMLDivElement
@@ -204,7 +210,9 @@ export class Hud {
     button(zoom, '−', t('zoomOut'), () => this.zoomAt(1 / BUTTON_ZOOM))
     button(zoom, '+', t('zoomIn'), () => this.zoomAt(BUTTON_ZOOM))
     button(zoom, t('whole'), t('wholeTitle'), () => this.showWhole())
-    button(zoom, t('me'), t('meTitle'), () => this.setView('follow'))
+    button(zoom, t('me'), t('meTitle'), () => {
+      if (this.allow()) this.setView('follow')
+    })
     this.legsButton = button(zoom, t('legs'), t('legsTitle'), () => {
       this.legsWanted = this.view !== 'legs'
       this.setView(this.legsWanted ? 'legs' : 'follow')
@@ -217,11 +225,18 @@ export class Hud {
     this.positionBox.checked = true
     positionLabel.append(` ${t('position')}`)
     this.positionBox.addEventListener('change', () => this.savePreferences())
+    this.competitionButton = button(more, t('competition'), t('competitionTitle'), () => {
+      if (this.run.state === 'running') this.notify(t('competitionLocked'))
+      else this.setCompetition(!this.run.competitionMode)
+    })
     this.editButton = button(more, t('setCourse'), t('setCourseTitle'), () => this.setEditing(!this.editing))
     this.mapHelp = el('div', 'hud-map-help', this.mapWindow)
     this.mapImage.src = world.url(world.manifest.map.image)
     const scale = world.manifest.map.scale
     this.mapTitle.textContent = scale ? `${t('map')} · 1:${formatNumber(scale).replace(/[\s,.]/g, ' ')}` : t('map')
+
+    this.toast = el('div', 'hud-toast', root)
+    this.toast.hidden = true
 
     const credits = el('div', 'hud-credits', root)
     credits.textContent = world.manifest.attribution.join(' · ')
@@ -250,6 +265,36 @@ export class Hud {
     this.legsWanted = preferences.legs
     this.positionBox.checked = preferences.position
     this.setAuto(preferences.auto)
+    this.setCompetition(preferences.competition)
+  }
+
+  /**
+   * True while a run in competition mode is under way: no help beyond the map and the
+   * compass (no position, no flying, no jumps on the map, no map on the ground).
+   */
+  get restricted(): boolean {
+    return this.run.competitionMode && this.run.state === 'running'
+  }
+
+  /** True if a help may be used now; otherwise says why not, and false. */
+  allow(): boolean {
+    if (!this.restricted) return true
+    this.notify(t('notInCompetition'))
+    return false
+  }
+
+  /** A short message in the middle of the screen. */
+  notify(text: string) {
+    this.toast.textContent = text
+    this.toast.hidden = false
+    clearTimeout(this.toastTimer)
+    this.toastTimer = setTimeout(() => (this.toast.hidden = true), 2500)
+  }
+
+  private setCompetition(on: boolean) {
+    this.run.competitionMode = on
+    this.competitionButton.classList.toggle('active', on)
+    this.savePreferences()
   }
 
   get mapOpen(): boolean {
@@ -271,8 +316,9 @@ export class Hud {
   }
 
   private onKey(e: KeyboardEvent) {
+    if (isTyping(e)) return
     if (e.code === 'KeyM') this.toggleMap()
-    if (e.code === 'KeyP') {
+    if (e.code === 'KeyP' && this.allow()) {
       this.positionBox.checked = !this.positionBox.checked
       this.savePreferences()
     }
@@ -336,7 +382,12 @@ export class Hud {
 
   private savePreferences() {
     try {
-      const preferences: MapPreferences = { auto: this.auto, legs: this.legsWanted, position: this.positionBox.checked }
+      const preferences: MapPreferences = {
+        auto: this.auto,
+        legs: this.legsWanted,
+        position: this.positionBox.checked,
+        competition: this.run.competitionMode,
+      }
       localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences))
     } catch {
       // Not remembered; the map still works.
@@ -364,7 +415,7 @@ export class Hud {
         points.push(number, [number[0] + String(i).length * size * 0.6, number[1] + size * 0.75])
       }
     }
-    if (this.run.state === 'running') points.push(this.runnerPosition())
+    if (this.run.state === 'running' && !this.restricted) points.push(this.runnerPosition())
     return points
   }
 
@@ -522,7 +573,7 @@ export class Hud {
   }
 
   private onDoubleClick(e: MouseEvent) {
-    if (this.editing) return
+    if (this.editing || !this.allow()) return
     const [east, north] = this.toProjected(...this.canvasPoint(e))
     const [x0, y0, x1, y1] = this.world.manifest.extent
     if (east < x0 || east > x1 || north < y0 || north > y1) return
@@ -544,7 +595,7 @@ export class Hud {
     const heading = this.player.heading
     this.info.textContent = [
       this.world.manifest.name,
-      `${this.world.manifest.crs}  E ${east.toFixed(0)}  N ${north.toFixed(0)}`,
+      this.restricted ? this.world.manifest.crs : `${this.world.manifest.crs}  E ${east.toFixed(0)}  N ${north.toFixed(0)}`,
       t('infoHeight', { height: formatNumber(pos.y - 1.7, 1), pace: formatPace(this.player.speed) }) +
         (this.player.flying ? t('infoFlying') : ''),
       t('infoRunnability', { percent: Math.round(this.player.runnability * 100) }),
@@ -558,6 +609,8 @@ export class Hud {
     this.updateRunPanel()
     this.updateDescriptions()
     this.legsButton.disabled = !this.hasCourse
+    this.competitionButton.disabled = this.run.state === 'running'
+    this.competitionButton.title = this.run.state === 'running' ? t('competitionLocked') : t('competitionTitle')
     if (this.mapOpen) this.drawMap(heading, dt)
   }
 
@@ -641,8 +694,9 @@ export class Hud {
       this.legKey = ''
       if (this.legsWanted && this.hasCourse) this.setView('legs')
     }
+    // In a competition run the map does not follow the runner: it stays where it is.
     if (this.view === 'legs' && this.hasCourse) this.updateLegs(dt)
-    else if (this.view !== 'free') this.centre = this.runnerPosition()
+    else if (this.view !== 'free' && !this.restricted) this.centre = this.runnerPosition()
 
     const zoom = this.zoom
     const [ce, cn] = this.centre
@@ -667,8 +721,9 @@ export class Hud {
     }
 
     this.drawCourse(ctx, local, zoom)
+    this.drawRoutes(ctx, local)
 
-    if (this.positionBox.checked) {
+    if (this.positionBox.checked && !this.restricted) {
       const [px, py] = local(...this.runnerPosition())
       ctx.save()
       ctx.translate(px, py)
@@ -706,6 +761,30 @@ export class Hud {
    * so its N points to map north. Turning the map until the dial's N and the meridians lie
    * along the needle orients the map to the terrain; Auto keeps it oriented.
    */
+  /** The routes shown from the results list: a line each, with a white edge to stand out. */
+  private drawRoutes(ctx: CanvasRenderingContext2D, local: (e: number, n: number) => [number, number]) {
+    ctx.save()
+    ctx.lineJoin = ctx.lineCap = 'round'
+    for (const [width, white] of [
+      [5, true],
+      [3, false],
+    ] as const) {
+      for (const route of this.routes) {
+        if (route.points.length < 2) continue
+        ctx.beginPath()
+        route.points.forEach(([e, n], i) => {
+          const [x, y] = local(e, n)
+          if (i === 0) ctx.moveTo(x, y)
+          else ctx.lineTo(x, y)
+        })
+        ctx.lineWidth = width
+        ctx.strokeStyle = white ? 'rgba(255, 255, 255, 0.85)' : route.color
+        ctx.stroke()
+      }
+    }
+    ctx.restore()
+  }
+
   private drawCompass(ctx: CanvasRenderingContext2D, cx: number, cy: number, headingRad: number) {
     const r = COMPASS_RADIUS
     ctx.save()
@@ -773,7 +852,6 @@ export class Hud {
     const controls = this.run.course.controls
     if (!controls.length) return
     const imported = this.run.course.imported
-    if (imported) this.drawTable(ctx, imported, local, zoom)
     const scale = this.world.manifest.map.scale ?? 10000
     const radius = ((CIRCLE_MM * scale) / 1000) * zoom
     const pts = controls.map(([e, n]) => local(e, n))
@@ -833,26 +911,6 @@ export class Hud {
         ctx.restore()
       }
     })
-    ctx.restore()
-  }
-
-  /** The description table on the map, where the course setter placed it (or beside the course). */
-  private drawTable(
-    ctx: CanvasRenderingContext2D,
-    course: ImportedCourse,
-    local: (e: number, n: number) => [number, number],
-    zoom: number,
-  ) {
-    let topLeft = course.table?.topLeft
-    const boxM = course.table?.boxM ?? (6 * (this.world.manifest.map.scale ?? 10000)) / 1000
-    if (!topLeft) {
-      const es = course.controls.map(c => c.position[0])
-      const ns = course.controls.map(c => c.position[1])
-      topLeft = [Math.max(...es) + boxM, Math.max(...ns)]
-    }
-    ctx.save()
-    ctx.translate(...local(...topLeft))
-    drawDescriptionTable(ctx, course, boxM * zoom)
     ctx.restore()
   }
 }

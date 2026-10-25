@@ -16,7 +16,9 @@ import { decodePng, LayerStore } from './layers'
 import { type CourseControl, type ImportedCourse, readCourseFile } from './ocad/courses'
 import { OcadError } from './ocad/reader'
 import { blocked, type PlacementData, placeFlag } from './placement'
+import { isTyping } from './keyboard'
 import { Player } from './player'
+import { ResultsView } from './resultsView'
 import { Terrain } from './terrain'
 import { Tracks } from './tracks'
 import { Undergrowth } from './undergrowth'
@@ -29,6 +31,7 @@ const startButton = document.getElementById('start') as HTMLButtonElement
 const worldSelect = document.getElementById('world-select') as HTMLSelectElement
 const langSelect = document.getElementById('lang-select') as HTMLSelectElement
 const courseFileButton = document.getElementById('course-file-button') as HTMLButtonElement
+const resultsButton = document.getElementById('results-button') as HTMLButtonElement
 const courseFile = document.getElementById('course-file') as HTMLInputElement
 const courseLabel = document.getElementById('course-label')!
 const courseSelect = document.getElementById('course-select') as HTMLSelectElement
@@ -280,7 +283,6 @@ async function main() {
   }
   const run = new CourseRun(world, heights, loadCourse(world), (x, z) => blocked(placement, [x, z]))
   scene.add(run.group)
-  run.punchListener = () => beep()
   const qualityNames: Record<typeof environment.quality, TextKey> = {
     high: 'qualityHigh',
     medium: 'qualityMedium',
@@ -296,11 +298,22 @@ async function main() {
     })
   })
   hud.showDescriptions(true)
+  // Results lists are kept per world folder (the map's name may differ between builds).
+  const resultsView = new ResultsView(document.getElementById('hud')!, name, run, hud)
+  run.punchListener = () => {
+    beep()
+    if (run.state === 'finished') resultsView.finished()
+  }
+  resultsButton.addEventListener('click', () => void resultsView.open())
   // The map window gets the mouse when it opens. Pressing on the terrain takes it back
   // for steering (the map stays open), and Esc gives it to the map again.
   const resume = document.getElementById('resume')!
   const updateResume = () => {
-    resume.hidden = !(hud.mapOpen && !player.controls.isLocked && overlay.hidden)
+    resume.hidden = !(hud.mapOpen && !player.controls.isLocked && overlay.hidden && !resultsView.finishOpen)
+  }
+  resultsView.onFinishPanel = open => {
+    if (open) player.controls.unlock()
+    updateResume()
   }
   hud.onMapToggle = open => {
     player.keysWithoutLock = open
@@ -362,8 +375,10 @@ async function main() {
       player.placeAt(start.x, start.z)
     }
   }
+  player.canFly = () => player.flying || hud.allow()
   window.addEventListener('keydown', e => {
-    if (e.code === 'KeyO') {
+    if (isTyping(e)) return
+    if (e.code === 'KeyO' && hud.allow()) {
       terrain.setMode(terrain.mode === 'ground' ? 'map' : 'ground')
       // The grain surface would hide the map's fields.
       if (grain) grain.group.visible = terrain.mode === 'ground'
@@ -440,7 +455,8 @@ async function main() {
   })
   player.controls.addEventListener('unlock', () => {
     unlockedAt = performance.now()
-    overlay.hidden = hud.mapOpen
+    // The Finished panel takes the mouse for the name; the game is paused under it.
+    overlay.hidden = hud.mapOpen || resultsView.finishOpen
     updateResume()
   })
 
@@ -452,13 +468,20 @@ async function main() {
   // A hidden tab gets no frames; the timer then starts afresh instead of counting the time away.
   const timer = new THREE.Timer()
   timer.connect(document)
+  let shownCourse: Course | null = null
   renderer.setAnimationLoop(() => {
     timer.update()
     const dt = Math.min(timer.getDelta(), 0.1)
     // The wind keeps real time; the runner and the run clock go by game time, which stands
     // still while the overlay covers the game (Esc).
     gfx.time.value += dt
-    clock.advance(dt, { paused: !overlay.hidden, flying: player.flying }, step => {
+    // A new course has a results list of its own.
+    if (run.course !== shownCourse) {
+      shownCourse = run.course
+      resultsView.courseChanged()
+      resultsButton.disabled = run.course.controls.length < 2
+    }
+    clock.advance(dt, { paused: !overlay.hidden || resultsView.finishOpen, flying: player.flying }, step => {
       player.update(step)
       if (!player.flying) run.update(camera.position, clock.time)
     })

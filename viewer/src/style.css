@@ -399,3 +399,212 @@ body {
   opacity: 0.5;
   cursor: default;
 }
+
+.hud-toast {
+  position: fixed;
+  left: 50%;
+  top: 40%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: rgba(20, 24, 20, 0.8);
+  color: white;
+  font-size: 14px;
+  pointer-events: none;
+  z-index: 13;
+}
+
+.hud-toast[hidden] {
+  display: none;
+}
+
+/* The Finished panel: the game is paused under it. */
+.finish-panel {
+  position: fixed;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  width: min(380px, calc(100vw - 32px));
+  padding: 20px 24px;
+  background: #fbfaf5;
+  color: #26221d;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+  z-index: 11;
+}
+
+.finish-panel[hidden] {
+  display: none;
+}
+
+.finish-panel h2 {
+  margin: 0 0 12px;
+  font-size: 22px;
+  color: #e0701d;
+}
+
+.finish-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.finish-panel input {
+  font: inherit;
+  font-size: 16px;
+  padding: 6px 8px;
+  border: 1px solid #cfc6b5;
+  border-radius: 4px;
+}
+
+.finish-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.finish-error {
+  min-height: 1em;
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #b3261e;
+}
+
+.finish-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.finish-buttons button {
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: #e0701d;
+  color: white;
+  cursor: pointer;
+}
+
+.finish-buttons button.secondary {
+  background: #efe9dc;
+  color: #26221d;
+}
+
+.finish-buttons button:disabled {
+  opacity: 0.5;
+}
+
+/* The results list: like the map window, on the left, above the start screen too. */
+.results-window {
+  position: fixed;
+  top: 96px;
+  left: 16px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100% - 128px);
+  display: flex;
+  flex-direction: column;
+  background: #f7f4ec;
+  color: #26221d;
+  border-radius: 8px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  resize: both;
+  z-index: 12;
+}
+
+.results-window[hidden] {
+  display: none;
+}
+
+.results-tools {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 6px 10px;
+  border-bottom: 1px solid #ddd5c6;
+  font-size: 13px;
+}
+
+.results-status {
+  color: #6b6458;
+}
+
+.results-body {
+  overflow: auto;
+}
+
+.results-table {
+  border-collapse: collapse;
+  font: 13px ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  white-space: nowrap;
+}
+
+.results-table th {
+  position: sticky;
+  top: 0;
+  padding: 4px 8px;
+  background: #ece6d8;
+  font-family: system-ui, sans-serif;
+  font-weight: 600;
+  text-align: right;
+}
+
+.results-table th.name {
+  text-align: left;
+}
+
+.results-table th.sortable {
+  cursor: pointer;
+}
+
+.results-table th.sorted-leg,
+.results-table th.sorted-split {
+  color: #b30f8e;
+}
+
+.results-table td {
+  padding: 1px 8px;
+  text-align: right;
+}
+
+.results-table td.name {
+  text-align: left;
+  font-family: system-ui, sans-serif;
+}
+
+.results-table tr.legs td {
+  padding-top: 5px;
+  border-top: 1px solid #ddd5c6;
+}
+
+.results-table tr.splits td {
+  padding-bottom: 5px;
+  color: #6b6458;
+}
+
+.results-table .best {
+  font-weight: 700;
+  color: #b3261e;
+}
+
+.results-table .rank {
+  color: #8a8375;
+}
+
+.results-table tr.mine td {
+  background: #fdf0c7;
+}
+
+.results-table td.route,
+.results-table td.delete {
+  vertical-align: middle;
+}
+
+.results-table td.delete .hud-map-button {
+  min-width: 26px;
+  height: 24px;
+  padding: 0 6px;
+}

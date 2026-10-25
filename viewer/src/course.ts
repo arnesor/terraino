@@ -28,6 +28,8 @@ export interface OtherControl {
 }
 
 const PUNCH_DISTANCE = 2.5
+// Seconds of game time between the points of a recorded route.
+const ROUTE_STEP = 1
 const START_LEAVE_DISTANCE = 3
 // Earlier versions kept the last course per world under this key; it is removed on start.
 const OLD_STORAGE_PREFIX = 'otest.course.'
@@ -210,6 +212,11 @@ export class CourseRun {
   /** Game time (seconds) when the runner left the start. */
   startTime = 0
   splits: number[] = []
+  /** Where the runner went (projected), a point per ROUTE_STEP seconds of game time from the start. */
+  route: Control[] = []
+  /** Competition mode as set now; a run started with it on is a competition run. */
+  competitionMode = false
+  competitionRun = false
   private readonly world: World
   private readonly heights: HeightField
   /** True where something solid stands (scene x, z); banners and flags keep clear of it. */
@@ -245,6 +252,8 @@ export class CourseRun {
     this.next = 0
     this.startTime = 0
     this.splits = []
+    this.route = []
+    this.competitionRun = false
   }
 
   /** Scene position of control `i` on the ground: where its flag stands, for punching. */
@@ -404,14 +413,21 @@ export class CourseRun {
       } else if (this.next === 1) {
         this.state = 'running'
         this.startTime = now
+        this.competitionRun = this.competitionMode
+        this.route = [this.world.toProjected(pos.x, pos.z)]
       }
       return
     }
+    if (now - this.startTime >= this.route.length * ROUTE_STEP) this.route.push(this.world.toProjected(pos.x, pos.z))
     if (flat(this.scenePosition(this.next)) < PUNCH_DISTANCE) {
       this.splits.push(now - this.startTime)
-      this.onPunch(this.next)
-      this.next++
-      if (this.next >= n) this.state = 'finished'
+      const punched = this.next++
+      if (this.next >= n) {
+        this.state = 'finished'
+        this.route.push(this.world.toProjected(pos.x, pos.z))
+      }
+      // After the finish punch the run is finished, with its whole route.
+      this.onPunch(punched)
     }
   }
 }

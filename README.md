@@ -167,8 +167,8 @@ You are put a few metres behind the start, looking at the start banner and the s
 All the controls in the file stand in the terrain, not only those on your course,
 so check the code before you punch.
 The course is not kept when you reload the page: open the file again, or use a link to it (L).
-The control description table is drawn on the map where the course setter placed it,
-and shown on screen while you run (K turns it on and off), with the next control highlighted.
+The control description table is shown on screen while you run
+(K turns it on and off), with the next control highlighted.
 Each flag stands where its description says: column G
 (north side, west foot, south-east corner …)
 puts it on that side of the feature from column D
@@ -176,10 +176,22 @@ puts it on that side of the feature from column D
 Each control shows its code on plates on both sides of the stand, readable from a few metres,
 and the start and finish have a control and a banner.
 
-To set a course yourself, open the map (M), press E
+To set a course yourself, open the map (M), press N
 (or Set course) and click the start, the controls and the finish.
 The clock starts when you leave the start triangle,
 and each control is punched when you get within 2.5 m of the flag.
+
+Only runs in **Competition** mode (the button under the map) go on the course's results list.
+During such a run there is no help beyond the map and the compass: no position on the map,
+no map that follows you, no coordinates, no flying, no jumps on the map and no map on the ground.
+At the finish you give your name, and the results list opens: leg and split times with their places,
+as on WinSplits, sorted by run time or, from a column header, by a leg or split time.
+Tick a result to see its route on the map; several routes can be compared.
+**Results** on the start screen opens the list of the chosen course.
+The same course, from a file, a link or set by hand, shares one list.
+The lists are kept by the viewer's server in `results/`, next to `worlds/`,
+and everyone playing through the same server shares them
+(see `docs/adr/0001-results-stored-by-the-vite-server.md`).
 
 The start screen has a language choice (English or Norwegian); the keys are the same in both.
 All texts are in `viewer/src/i18n.ts`: to add a language, add it to `LANGS`,

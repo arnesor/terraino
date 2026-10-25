@@ -92,6 +92,8 @@ The two sides must agree on several things:
 `viewer/vite.config.ts` serves `../worlds/` at `/worlds/`
 (and `/worlds/index.json` lists them) in both dev and preview.
 Worlds are never copied into `dist`.
+It also keeps results lists in `../results/<world>/<course key>.json` through the endpoint in
+`viewer/server/results.ts` (see `docs/adr/0001-results-stored-by-the-vite-server.md`).
 
 ### Viewer (`viewer/src/`)
 
@@ -105,6 +107,10 @@ the game loop moves the player and the run on in its short steps.
 `course.ts` and `ocad/` read OCAD course setting files with the viewer's own reader,
 independent of `tools/ocad-export`.
 `descriptions/` holds the IOF control description table.
+`results.ts` ranks results and talks to the results endpoint;
+`resultsView.ts` is the Finished panel and the results list window.
+Competition mode (`Hud.restricted`) turns off every help during a run;
+only competition runs can be saved.
 `placement.ts` puts each flag on the side of the feature that its description names.
 
 - All UI text is in `i18n.ts` (English and Norwegian).
