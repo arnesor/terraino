@@ -120,6 +120,47 @@ const STRINGS = {
   },
   helpMap: { en: 'Drag: move · Wheel: zoom · Double click: go there', nb: 'Dra: flytt · Rulle: zoom · Dobbeltklikk: gå dit' },
   linkCopied: { en: 'Link to this course copied', nb: 'Lenke til løypa kopiert' },
+  competition: { en: 'Competition', nb: 'Konkurranse' },
+  competitionTitle: {
+    en: 'Competition mode: no position, flying, jumps on the map or map on the ground during a run. Only these runs can be saved.',
+    nb: 'Konkurransemodus: ingen posisjon, flyging, hopp på kartet eller kart på bakken under løpet. Bare slike løp kan lagres.',
+  },
+  competitionLocked: { en: 'Not during a run · R to start again', nb: 'Ikke under løpet · R for å starte på nytt' },
+  notInCompetition: { en: 'Not in competition mode', nb: 'Ikke i konkurransemodus' },
+
+  // Results.
+  finishTitle: { en: 'Finished {time}', nb: 'I mål {time}' },
+  yourName: { en: 'Your name', nb: 'Navnet ditt' },
+  nameMissing: { en: 'Write a name', nb: 'Skriv et navn' },
+  saveResult: { en: 'Save result', nb: 'Lagre resultatet' },
+  dontSave: { en: "Don't save", nb: 'Ikke lagre' },
+  saveFailed: { en: 'Could not save: {message}', nb: 'Kunne ikke lagre: {message}' },
+  notSaved: {
+    en: 'Not saved: competition mode was off. Turn it on under the map before the start to get on the results list.',
+    nb: 'Ikke lagret: konkurransemodus var av. Slå den på under kartet før start for å komme på resultatlista.',
+  },
+  showResults: { en: 'Show results', nb: 'Vis resultater' },
+  close: { en: 'Close', nb: 'Lukk' },
+  results: { en: 'Results', nb: 'Resultater' },
+  resultsButton: { en: 'Results', nb: 'Resultater' },
+  resultsButtonTitle: { en: 'The results list of the chosen course', nb: 'Resultatlista for løypa du har valgt' },
+  resultsFailed: { en: 'Could not read the results list: {message}', nb: 'Kunne ikke lese resultatlista: {message}' },
+  noResults: { en: 'No results yet', nb: 'Ingen resultater ennå' },
+  allRuns: { en: 'Show all runs', nb: 'Vis alle løp' },
+  handSetCourseOne: {
+    en: 'Course set by hand · 1 control · {length} km',
+    nb: 'Løype lagt for hånd · 1 post · {length} km',
+  },
+  handSetCourse: {
+    en: 'Course set by hand · {controls} controls · {length} km',
+    nb: 'Løype lagt for hånd · {controls} poster · {length} km',
+  },
+  nameHeader: { en: 'Name', nb: 'Navn' },
+  notOnList: { en: 'Your run (not saved)', nb: 'Ditt løp (ikke lagret)' },
+  showRoute: { en: 'Show the route on the map', nb: 'Vis veivalget på kartet' },
+  sortHint: { en: 'Click: sort by leg time · again: by split time', nb: 'Klikk: sorter etter strekktid · igjen: etter mellomtid' },
+  deleteResult: { en: 'Delete this result', nb: 'Slett dette resultatet' },
+  confirmDelete: { en: "Delete {name}'s {time}?", nb: 'Slette {time} for {name}?' },
 
   // Running a course.
   atStart: { en: 'At the start – run when ready', nb: 'På start – løp når du er klar' },

@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js'
 import type { HeightField } from './heightfield'
+import { isTyping } from './keyboard'
 
 const EYE_HEIGHT = 1.7
 const JOG_SPEED = 3.2 // m/s, a steady orienteering pace
@@ -62,6 +63,8 @@ export class Player {
   /** Running speed factor of the ground under the player, for the HUD. */
   runnability = 1
   surroundings: Surroundings | null = null
+  /** Whether F may start flying now (not in a competition run); says why not itself. */
+  canFly: () => boolean = () => true
   /** Accept movement keys without pointer lock (while the map window has the mouse). */
   keysWithoutLock = false
 
@@ -71,8 +74,9 @@ export class Player {
     this.bounds = bounds
     this.controls = new PointerLockControls(camera, dom)
     window.addEventListener('keydown', e => {
+      if (isTyping(e)) return
       this.keys.add(e.code)
-      if (e.code === 'KeyF' && this.acceptsKeys) this.toggleFlying()
+      if (e.code === 'KeyF' && this.acceptsKeys && this.canFly()) this.toggleFlying()
     })
     window.addEventListener('keyup', e => this.keys.delete(e.code))
     window.addEventListener('blur', () => this.keys.clear())
