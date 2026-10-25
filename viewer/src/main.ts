@@ -250,7 +250,7 @@ async function main() {
   const buildings = await loadBuildings(world, gfx)
   if (buildings) scene.add(buildings.group)
   await pause()
-  const features = await MapFeatures.load(world, heights, gfx, QUALITY[environment.quality])
+  const features = await MapFeatures.load(world, heights, gfx, QUALITY[environment.quality], tracks)
   if (features && undergrowth) undergrowth.setStumps(features.stumps)
   if (features) scene.add(features.group)
 

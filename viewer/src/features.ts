@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { type Gfx, type QualitySettings, rockMaterial } from './gfx'
 import type { HeightField } from './heightfield'
+import { type TrackFinder, WALL_KINDS, Walls } from './walls'
 import type { World } from './world'
 
 export interface FeatureFile {
@@ -16,7 +17,6 @@ export interface FeatureFile {
 const ROCK = new THREE.Color(0x77756e)
 const WOOD = new THREE.Color(0x7d6f5c)
 const DARK_WOOD = new THREE.Color(0x4f4336)
-const STONE_WALL = new THREE.Color(0x85827a)
 const POLE = new THREE.Color(0x5a4a38)
 // Boulders sink this far below the lowest ground around them.
 const BOULDER_SINK_M = 0.25
@@ -130,6 +130,7 @@ export class MapFeatures {
   private readonly rockMeshes: THREE.InstancedMesh[] = []
   private rocksAt: THREE.Vector3 | null = null
   private quality: QualitySettings
+  private walls: Walls | null = null
 
   private readonly gfx: Gfx
 
@@ -139,7 +140,14 @@ export class MapFeatures {
     this.group.name = 'features'
   }
 
-  static async load(world: World, heights: HeightField, gfx: Gfx, quality: QualitySettings): Promise<MapFeatures | null> {
+  /** `tracks` turn the ruins' doors towards the nearest path or road. */
+  static async load(
+    world: World,
+    heights: HeightField,
+    gfx: Gfx,
+    quality: QualitySettings,
+    tracks: TrackFinder | null = null,
+  ): Promise<MapFeatures | null> {
     const info = world.manifest.features
     if (!info) return null
     const response = await fetch(world.url(info.path))
@@ -147,7 +155,7 @@ export class MapFeatures {
     const data = (await response.json()) as FeatureFile
     const features = new MapFeatures(gfx, quality)
     features.data = data
-    features.build(data, heights)
+    features.build(data, heights, tracks)
     return features
   }
 
@@ -161,10 +169,15 @@ export class MapFeatures {
   setQuality(quality: QualitySettings) {
     this.quality = quality
     this.rocksAt = null
+    this.walls?.setQuality(quality)
   }
 
-  /** Draw the rocks near `eye`: boulders within `boulders`, stones within `cover`. */
+  /**
+   * Draw the rocks near `eye` (boulders within `boulders`, stones within `cover`), and
+   * the walls' single stones.
+   */
   update(eye: THREE.Vector3) {
+    this.walls?.update(eye)
     if (this.rocksAt && this.rocksAt.distanceTo(eye) < ROCK_REBUILD_DISTANCE) return
     this.rocksAt = eye.clone()
     // Reach a little farther, so rocks are already there when the player has moved on.
@@ -216,7 +229,7 @@ export class MapFeatures {
     return [x, z]
   }
 
-  private build(data: FeatureFile, heights: HeightField) {
+  private build(data: FeatureFile, heights: HeightField, tracks: TrackFinder | null) {
     const parts: THREE.BufferGeometry[] = []
     const ground = (x: number, z: number) => heights.heightAt(x, z)
 
@@ -293,12 +306,16 @@ export class MapFeatures {
       else if (kind === 'stump') this.stumps.push(x, z, size)
     }
 
+    const walls = data.lines.filter(line => WALL_KINDS.has(line.kind))
+    if (walls.length) {
+      this.walls = new Walls(walls, heights, this.gfx, this.quality, tracks)
+      this.group.add(this.walls.group)
+    }
+
     const wires: number[] = []
     for (const line of data.lines) {
       const pts = line.points.map(([x, z]) => new THREE.Vector3(x, ground(x, z), z))
-      if (line.kind === 'stone_wall' || line.kind === 'ruined_wall' || line.kind === 'ruin') {
-        parts.push(...this.wall(pts, line.size, line.kind !== 'stone_wall'))
-      } else if (line.kind === 'fence' || line.kind === 'ruined_fence') {
+      if (line.kind === 'fence' || line.kind === 'ruined_fence') {
         parts.push(...this.fence(pts, line.size, line.kind === 'ruined_fence'))
       } else if (line.kind === 'power_line' || line.kind === 'pylon_line') {
         const poles = line.poles?.length ? line.poles.map(([x, z]) => new THREE.Vector3(x, ground(x, z), z)) : null
@@ -330,21 +347,6 @@ export class MapFeatures {
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(wires, 3))
       this.group.add(new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0x2a2a2a })))
     }
-  }
-
-  private wall(pts: THREE.Vector3[], height: number, ruined: boolean): THREE.BufferGeometry[] {
-    const out: THREE.BufferGeometry[] = []
-    for (let i = 0; i + 1 < pts.length; i++) {
-      const a = pts[i]!.clone()
-      const b = pts[i + 1]!.clone()
-      if (ruined && rand(a.x, a.z, 9) < 0.35) continue
-      const h = height * (0.75 + 0.4 * rand(a.x, a.z, 5))
-      a.y -= 0.2
-      b.y -= 0.2
-      const shade = 0.85 + 0.25 * rand(a.x, a.z, 6)
-      out.push(beam(a, b, 0.7, h + 0.2, STONE_WALL.clone().multiplyScalar(shade)))
-    }
-    return out
   }
 
   private fence(pts: THREE.Vector3[], height: number, ruined: boolean): THREE.BufferGeometry[] {

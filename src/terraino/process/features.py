@@ -290,6 +290,42 @@ def drop_rocks_in_buildings(features: Features, footprints: Sequence[Polygon]) -
     return dropped
 
 
+# A ruin that shares more than this much ground (m²) with a building is left out.
+_RUIN_OVERLAP_M2 = 1.0
+
+
+def drop_ruins_in_buildings(features: Features, footprints: Sequence[Polygon]) -> int:
+    """Remove ruins that overlap a building; return how many.
+
+    The building data is newer than the map: a building standing on a ruin has been
+    built since, or the ruin is drawn where the building is.
+
+    Examples:
+        >>> from shapely import box
+        >>> ring = [(0, 0), (8, 0), (8, 8), (0, 8), (0, 0)]
+        >>> found = Features(lines=[LineFeature("ruin", ring, 0.6),
+        ...     LineFeature("ruin", [(x + 20, y) for x, y in ring], 0.6)])
+        >>> drop_ruins_in_buildings(found, [box(6, 2, 12, 6)])
+        1
+        >>> [line.coords[0] for line in found.lines]
+        [(20, 0)]
+    """
+    tree = STRtree(list(footprints))
+    kept = []
+    for line in features.lines:
+        if line.kind == "ruin" and len(line.coords) >= 4:
+            ruin = Polygon(line.coords)
+            if ruin.is_valid and any(
+                ruin.intersection(footprints[i]).area > _RUIN_OVERLAP_M2
+                for i in tree.query(ruin, predicate="intersects")
+            ):
+                continue
+        kept.append(line)
+    dropped = len(features.lines) - len(kept)
+    features.lines = kept
+    return dropped
+
+
 class _Sampler:
     """Nearest-cell DTM lookup in projected coordinates."""
 

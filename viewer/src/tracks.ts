@@ -535,6 +535,31 @@ export class Tracks {
     return false
   }
 
+  /** The nearest point within `maxDistance` on a track of one of `kinds`, or null. */
+  nearestPoint(x: number, z: number, maxDistance: number, kinds: ReadonlySet<string>): { x: number; z: number } | null {
+    let best: { x: number; z: number } | null = null
+    let bestDistance = maxDistance
+    const g0x = Math.floor((x - maxDistance) / INDEX_CELL)
+    const g1x = Math.floor((x + maxDistance) / INDEX_CELL)
+    const g0z = Math.floor((z - maxDistance) / INDEX_CELL)
+    const g1z = Math.floor((z + maxDistance) / INDEX_CELL)
+    for (let gx = g0x; gx <= g1x; gx++) {
+      for (let gz = g0z; gz <= g1z; gz++) {
+        for (const s of this.index.get(this.cellKey(gx, gz)) ?? []) {
+          if (!kinds.has(s.kind)) continue
+          const d = Tracks.distance(s, x, z)
+          if (d >= bestDistance) continue
+          const dx = s.x1 - s.x0
+          const dz = s.z1 - s.z0
+          const t = Math.max(0, Math.min(1, ((x - s.x0) * dx + (z - s.z0) * dz) / (dx * dx + dz * dz || 1)))
+          best = { x: s.x0 + dx * t, z: s.z0 + dz * t }
+          bestDistance = d
+        }
+      }
+    }
+    return best
+  }
+
   /** Distance from (x, z) to the edge of the nearest track within 2 m, and its kind. */
   edgeDistance(x: number, z: number): { distance: number; kind: string } | null {
     const list = this.index.get(this.cellKey(Math.floor(x / INDEX_CELL), Math.floor(z / INDEX_CELL)))

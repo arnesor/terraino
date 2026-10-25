@@ -13,6 +13,7 @@ from terraino.process.features import (
     carve_cliffs,
     collect_features,
     drop_rocks_in_buildings,
+    drop_ruins_in_buildings,
     measure_cliffs,
     paint_cliffs,
     place_poles,
@@ -200,3 +201,23 @@ def test_a_building_drawn_as_a_rock_pillar_leaves_no_rocks() -> None:
     )
     assert drop_rocks_in_buildings(found, [box(50, 50, 62, 60)]) == 4
     assert [(p.kind, p.x, p.y) for p in found.points] == [("boulder", 80, 80)]
+
+
+def test_a_ruin_under_a_building_is_left_out() -> None:
+    # ISOM 2000 530 (ruin): one half under a barn, one touching a shed, one on its own.
+    def ruin(x: float) -> dict[str, Any]:
+        ring = [[x, 10], [x + 8, 10], [x + 8, 18], [x, 18], [x, 10]]
+        return {"type": "Polygon", "coordinates": [ring]}
+
+    found, _ = collect_features(
+        [
+            feature(0, "530.0", ruin(0)),
+            feature(1, "530.0", ruin(20)),
+            feature(2, "530.0", ruin(40)),
+        ],
+        ISOM,
+    )
+    barn = box(4, 8, 14, 20)
+    shed = box(28, 12, 32, 16)  # shares only the ruin's east edge
+    assert drop_ruins_in_buildings(found, [barn, shed]) == 1
+    assert sorted(line.coords[0][0] for line in found.lines) == [20, 40]

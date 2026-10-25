@@ -20,6 +20,8 @@ export interface QualitySettings {
   grainDensity: number
   /** Boulders are drawn this far; small stones only as far as the cover. */
   boulders: number
+  /** Stone walls and ruins are built of single stones this far, one painted mesh beyond. */
+  wallStones: number
   /** The terrain's level-of-detail distances are scaled by this: coarser terrain nearer. */
   terrainDetail: number
   /** Road, path and stream strips are drawn this far; beyond, the ground paints them. */
@@ -27,9 +29,9 @@ export interface QualitySettings {
 }
 
 export const QUALITY: Record<Quality, QualitySettings> = {
-  high: { near: 110, cover: 40, coverDensity: 1.8, grainDensity: 3.5, boulders: 600, terrainDetail: 1, tracks: Infinity },
-  medium: { near: 85, cover: 32, coverDensity: 1.4, grainDensity: 2.8, boulders: 450, terrainDetail: 1, tracks: Infinity },
-  low: { near: 60, cover: 22, coverDensity: 1.0, grainDensity: 2.0, boulders: 300, terrainDetail: 0.5, tracks: 300 },
+  high: { near: 110, cover: 40, coverDensity: 1.8, grainDensity: 3.5, boulders: 600, wallStones: 70, terrainDetail: 1, tracks: Infinity },
+  medium: { near: 85, cover: 32, coverDensity: 1.4, grainDensity: 2.8, boulders: 450, wallStones: 50, terrainDetail: 1, tracks: Infinity },
+  low: { near: 60, cover: 22, coverDensity: 1.0, grainDensity: 2.0, boulders: 300, wallStones: 30, terrainDetail: 0.5, tracks: 300 },
 }
 
 /** Tree model variants; trees of a species pick one. */
@@ -431,14 +433,16 @@ vec3 gtx(float layer, vec2 p) {
 
 /**
  * Rock material: the rock texture projected from three sides (no seams on any shape),
- * with moss and lichen on the upward faces when `moss` is set.
+ * with moss and lichen on the upward faces when `moss` is set. With `fade`, instances
+ * dissolve between its two distances (x to y) from the camera.
  */
-export function rockMaterial(gfx: Gfx, moss: boolean): THREE.MeshLambertMaterial {
+export function rockMaterial(gfx: Gfx, moss: boolean, fade?: { value: THREE.Vector2 }): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial({ vertexColors: true })
   material.onBeforeCompile = shader => {
     shader.uniforms['groundTex'] = { value: gfx.groundArray }
+    if (fade) shader.uniforms['uFade'] = fade
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRockPos;\nvarying vec3 vRockNormal;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRockPos;\nvarying vec3 vRockNormal;\nvarying float vRockD;')
       .replace(
         '#include <worldpos_vertex>',
         `#include <worldpos_vertex>
@@ -449,10 +453,23 @@ export function rockMaterial(gfx: Gfx, moss: boolean): THREE.MeshLambertMaterial
           rockNormal = mat3(instanceMatrix) * rockNormal;
         #endif
         vRockPos = (modelMatrix * rockPos).xyz;
-        vRockNormal = normalize(mat3(modelMatrix) * rockNormal);`,
+        vRockNormal = normalize(mat3(modelMatrix) * rockNormal);
+        vRockD = 0.0;
+        #ifdef USE_INSTANCING
+          vRockD = distance((modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xz, cameraPosition.xz);
+        #endif`,
       )
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vRockPos;\nvarying vec3 vRockNormal;\n${GROUND_TEX_GLSL}`)
+      .replace(
+        '#include <common>',
+        `#include <common>\nvarying vec3 vRockPos;\nvarying vec3 vRockNormal;\nvarying float vRockD;\n${GROUND_TEX_GLSL}
+        ${fade ? 'uniform vec2 uFade;\nfloat vegDither(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }' : ''}`,
+      )
+      .replace(
+        '#include <clipping_planes_fragment>',
+        `#include <clipping_planes_fragment>
+        ${fade ? 'if (smoothstep(uFade.x, uFade.y, vRockD) > vegDither(gl_FragCoord.xy)) discard;' : ''}`,
+      )
       .replace(
         '#include <map_fragment>',
         `vec3 bw = pow(abs(vRockNormal), vec3(4.0));
@@ -481,6 +498,6 @@ export function rockMaterial(gfx: Gfx, moss: boolean): THREE.MeshLambertMaterial
         diffuseColor.rgb *= rc;`,
       )
   }
-  material.customProgramCacheKey = () => `terraino-rock${moss ? '-moss' : ''}`
+  material.customProgramCacheKey = () => `terraino-rock${moss ? '-moss' : ''}${fade ? '-fade' : ''}`
   return material
 }
