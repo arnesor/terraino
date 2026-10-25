@@ -1,10 +1,11 @@
 import { formatFactor, type GameClock } from './clock'
-import { type Course, type CourseRun, encodeCourse, formatPace, formatTime } from './course'
+import { type Course, type CourseRun, encodeCourse, formatPace, formatTime, type RunState } from './course'
 import { describe, drawDescriptionTable, tableRows } from './descriptions/table'
 import { formatNumber, renameStoredKey, t, type TextKey } from './i18n'
 import { isTyping } from './keyboard'
-import { fitRectangle, legIndices } from './mapview'
-import type { Player } from './player'
+import { fitRectangle, fromScreen, legIndices, toScreen, turnAround } from './mapview'
+import { JOG_SPEED, type Player } from './player'
+import { Tutorial } from './tutorial'
 import type { World } from './world'
 
 const PURPLE = 'rgba(190, 40, 160, 0.9)'
@@ -14,6 +15,10 @@ const CIRCLE_MM = 3
 const MAX_ZOOM = 8
 const BUTTON_ZOOM = 1.4
 const ROTATE_STEP = Math.PI / 12
+// How far a wheel notch turns the map while steering.
+const WHEEL_TURN = (5 * Math.PI) / 180
+// How far the compass needle swings either way at a jog; less when slower, more when faster.
+const NEEDLE_SWING = (6 * Math.PI) / 180
 // Box size of the description panel, in CSS pixels.
 const PANEL_BOX = 24
 // The leg view: at least this much ground across, and how the map moves to it.
@@ -87,6 +92,7 @@ export class Hud {
   private readonly clock: GameClock
   private readonly status: () => string
   private readonly info: HTMLDivElement
+  private readonly compass: HTMLDivElement
   private readonly compassStrip: HTMLDivElement
   private readonly compassValue: HTMLDivElement
   private readonly clockTime: HTMLSpanElement
@@ -134,6 +140,12 @@ export class Hud {
   private frames = 0
   private fpsSince = performance.now()
   private fps = 0
+  /** What a held mouse button moves while steering instead of the view: the map or the thumb. */
+  private holding: 'map' | 'thumb' | null = null
+  /** Where the runner says they are on the map, in projected coordinates. */
+  private thumb: [number, number] | null = null
+  /** The course, run state and next control last seen, to follow punches and restarts. */
+  private seen: { course: Course | null; state: RunState; next: number } = { course: null, state: 'ready', next: 0 }
 
   constructor(
     root: HTMLElement,
@@ -152,6 +164,7 @@ export class Hud {
     this.info = el('div', 'hud-info', root)
 
     const compass = el('div', 'hud-compass', root)
+    this.compass = compass
     this.compassStrip = el('div', 'hud-compass-strip', compass)
     const compassKeys: Record<number, TextKey> = {
       0: 'compassN',
@@ -205,7 +218,9 @@ export class Hud {
     button(rotate, '⟲', t('rotateLeft'), () => this.rotate(-ROTATE_STEP))
     button(rotate, '⟳', t('rotateRight'), () => this.rotate(ROTATE_STEP))
     button(rotate, `${t('compassN')}↑`, t('northUp'), () => this.rotate(-this.rotation))
-    this.autoButton = button(rotate, t('auto'), t('autoTitle'), () => this.setAuto(!this.auto))
+    this.autoButton = button(rotate, t('auto'), t('autoTitle'), () => {
+      if (this.allow()) this.setAuto(!this.auto)
+    })
     const zoom = el('div', 'hud-map-group', tools)
     button(zoom, '−', t('zoomOut'), () => this.zoomAt(1 / BUTTON_ZOOM))
     button(zoom, '+', t('zoomIn'), () => this.zoomAt(BUTTON_ZOOM))
@@ -230,6 +245,8 @@ export class Hud {
       else this.setCompetition(!this.run.competitionMode)
     })
     this.editButton = button(more, t('setCourse'), t('setCourseTitle'), () => this.setEditing(!this.editing))
+    const tutorial = new Tutorial(root)
+    button(more, t('tutorial'), t('tutorialTitle'), () => tutorial.toggle())
     this.mapHelp = el('div', 'hud-map-help', this.mapWindow)
     this.mapImage.src = world.url(world.manifest.map.image)
     const scale = world.manifest.map.scale
@@ -266,11 +283,82 @@ export class Hud {
     this.positionBox.checked = preferences.position
     this.setAuto(preferences.auto)
     this.setCompetition(preferences.competition)
+
+    // While steering with the map open, a held button moves the map (left) or the thumb
+    // (right) instead of the view, and the wheel turns the map.
+    document.addEventListener('mousedown', e => {
+      if (e.button === 0) this.hold('map')
+      if (e.button === 2) this.hold('thumb')
+    })
+    document.addEventListener('mouseup', e => {
+      if ((e.button === 0 && this.holding === 'map') || (e.button === 2 && this.holding === 'thumb')) this.hold(null)
+    })
+    document.addEventListener('contextmenu', e => {
+      if (player.controls.isLocked) e.preventDefault()
+    })
+    document.addEventListener('mousemove', e => {
+      if (this.holding === 'map') this.pan(e.movementX, e.movementY)
+      if (this.holding === 'thumb') this.moveThumb(e.movementX, e.movementY)
+    })
+    document.addEventListener(
+      'wheel',
+      e => {
+        if (!player.controls.isLocked || !this.mapOpen) return
+        e.preventDefault()
+        const notches = e.deltaMode === 1 ? e.deltaY / 3 : e.deltaY / 100
+        this.rotate(notches * WHEEL_TURN)
+      },
+      { passive: false },
+    )
+    window.addEventListener('blur', () => this.hold(null))
+    player.controls.addEventListener('lock', () => this.updateHelp())
+    player.controls.addEventListener('unlock', () => {
+      this.hold(null)
+      this.updateHelp()
+    })
+  }
+
+  /** Hold the map or the thumb with the mouse (only while steering with the map open), or let go. */
+  private hold(what: 'map' | 'thumb' | null) {
+    if (what && !(this.player.controls.isLocked && this.mapOpen)) return
+    if (what === this.holding) return
+    this.holding = what
+    // The view stays as it is while the mouse holds something.
+    this.player.controls.enabled = what === null
+    if (what === 'thumb' && !this.thumb) {
+      const [w, h] = this.canvasSize()
+      this.thumb = this.toProjected(w / 2, h / 2)
+    }
+  }
+
+  /** Move the thumb by (dx, dy) screen pixels, keeping it in the map window. */
+  private moveThumb(dx: number, dy: number) {
+    if (!this.thumb) return
+    const [w, h] = this.canvasSize()
+    const [x, y] = this.toCanvas(...this.thumb)
+    this.thumb = this.toProjected(Math.min(Math.max(x + dx, 0), w), Math.min(Math.max(y + dy, 0), h))
+  }
+
+  /**
+   * Put the thumb on the start when the run starts and on each control as it is punched,
+   * and glide to the next legs (even if the map was moved). A restart or another course
+   * takes the thumb off the map.
+   */
+  private followPunches() {
+    const run = this.run
+    const seen = this.seen
+    if (run.course === seen.course && run.state === seen.state && run.next === seen.next) return
+    if (run.course !== seen.course || (run.state === 'ready' && seen.state !== 'ready')) this.thumb = null
+    this.seen = { course: run.course, state: run.state, next: run.next }
+    if (run.state === 'ready') return
+    this.thumb = run.course.controls[run.next - 1] ?? this.thumb
+    if (this.legsWanted && this.hasCourse) this.setView('legs')
   }
 
   /**
    * True while a run in competition mode is under way: no help beyond the map and the
-   * compass (no position, no flying, no jumps on the map, no map on the ground).
+   * compass (no position, no heading, no Auto, no flying, no jumps on the map, no map on
+   * the ground).
    */
   get restricted(): boolean {
     return this.run.competitionMode && this.run.state === 'running'
@@ -309,8 +397,9 @@ export class Hud {
       if (this.zoom === 0) this.zoom = 1
       this.setView(this.legsWanted && this.hasCourse ? 'legs' : 'follow')
       this.snap = true
-    } else if (this.editing) {
-      this.setEditing(false)
+    } else {
+      this.hold(null)
+      if (this.editing) this.setEditing(false)
     }
     this.onMapToggle(open)
   }
@@ -358,10 +447,17 @@ export class Hud {
     this.savePreferences()
   }
 
-  /** Turn the map by hand; it keeps the turn it had (also from Auto) and adds to it. */
+  /**
+   * Turn the map by hand, around the thumb if there is one; it keeps the turn it had (also
+   * from Auto) and adds to it.
+   */
   private rotate(delta: number) {
     const current = this.rotation
-    this.setAuto(false)
+    if (this.auto) this.setAuto(false)
+    if (this.thumb) {
+      this.setView('free')
+      this.centre = turnAround(this.thumb, this.centre, this.zoom, current, delta)
+    }
     this.rotation = current + delta
   }
 
@@ -473,7 +569,11 @@ export class Hud {
   }
 
   private updateHelp() {
-    this.mapHelp.textContent = this.editing ? t('helpEditing') : t('helpMap')
+    this.mapHelp.textContent = this.editing
+      ? t('helpEditing')
+      : this.player.controls.isLocked
+        ? t('helpMapSteering')
+        : t('helpMap')
   }
 
   private setCourse(course: Course) {
@@ -509,18 +609,20 @@ export class Hud {
 
   /** Screen offset (CSS pixels from the canvas centre) to a ground offset (east, north). */
   private screenToGround(dx: number, dy: number): [number, number] {
-    const c = Math.cos(-this.rotation)
-    const s = Math.sin(-this.rotation)
-    const ux = dx * c - dy * s
-    const uy = dx * s + dy * c
-    return [ux / this.zoom, -uy / this.zoom]
+    return fromScreen([dx, dy], [0, 0], this.zoom, this.rotation)
   }
 
   /** Projected coordinates of a point on the map canvas (CSS pixels). */
   private toProjected(sx: number, sy: number): [number, number] {
     const [w, h] = this.canvasSize()
-    const [de, dn] = this.screenToGround(sx - w / 2, sy - h / 2)
-    return [this.centre[0] + de, this.centre[1] + dn]
+    return fromScreen([sx - w / 2, sy - h / 2], this.centre, this.zoom, this.rotation)
+  }
+
+  /** Point on the map canvas (CSS pixels) of projected coordinates; undoes toProjected. */
+  private toCanvas(east: number, north: number): [number, number] {
+    const [w, h] = this.canvasSize()
+    const [x, y] = toScreen([east, north], this.centre, this.zoom, this.rotation)
+    return [x + w / 2, y + h / 2]
   }
 
   private canvasPoint(e: MouseEvent): [number, number] {
@@ -555,11 +657,14 @@ export class Hud {
     this.drag.moved += Math.hypot(dx, dy)
     this.drag.x = e.clientX
     this.drag.y = e.clientY
-    if (this.drag.moved > 4) {
-      this.setView('free')
-      const [de, dn] = this.screenToGround(dx, dy)
-      this.centre = [this.centre[0] - de, this.centre[1] - dn]
-    }
+    if (this.drag.moved > 4) this.pan(dx, dy)
+  }
+
+  /** Move the map by (dx, dy) screen pixels, as when dragging it. */
+  private pan(dx: number, dy: number) {
+    this.setView('free')
+    const [de, dn] = this.screenToGround(dx, dy)
+    this.centre = [this.centre[0] - de, this.centre[1] - dn]
   }
 
   private onPointerUp(e: PointerEvent) {
@@ -569,6 +674,8 @@ export class Hud {
     if (click && this.editing) {
       const point = this.toProjected(...this.canvasPoint(e))
       this.setCourse({ controls: [...this.run.course.controls, point] })
+    } else if (click) {
+      this.thumb = this.toProjected(...this.canvasPoint(e))
     }
   }
 
@@ -602,6 +709,8 @@ export class Hud {
       `${formatNumber(this.fps, this.fps < 10 ? 1 : 0)} fps · ${this.status()}`,
     ].join('\n')
 
+    // In a competition run the compass on the map is the only one.
+    this.compass.hidden = this.restricted
     this.compassStrip.style.transform = `translateX(${-heading * 4}px)`
     this.compassValue.textContent = `${Math.round(heading).toString().padStart(3, '0')}°`
 
@@ -609,8 +718,10 @@ export class Hud {
     this.updateRunPanel()
     this.updateDescriptions()
     this.legsButton.disabled = !this.hasCourse
+    this.autoButton.disabled = this.restricted
     this.competitionButton.disabled = this.run.state === 'running'
     this.competitionButton.title = this.run.state === 'running' ? t('competitionLocked') : t('competitionTitle')
+    this.followPunches()
     if (this.mapOpen) this.drawMap(heading, dt)
   }
 
@@ -686,7 +797,7 @@ export class Hud {
     if (!ctx || w === 0 || h === 0) return
     this.zoom = Math.min(Math.max(this.zoom, this.fitZoom()), MAX_ZOOM)
     const headingRad = (heading * Math.PI) / 180
-    if (this.auto) this.rotation = -headingRad
+    if (this.auto && !this.restricted) this.rotation = -headingRad
     // A new course (opened or set by hand) is shown leg by leg, if that is wanted.
     if (this.run.course !== this.shownCourse) {
       this.shownCourse = this.run.course
@@ -752,7 +863,32 @@ export class Hud {
     ctx.font = '600 11px system-ui, sans-serif'
     ctx.fillText(`${metres} m`, 20, h - 22)
 
+    if (this.thumb) this.drawThumb(ctx, ...this.toCanvas(...this.thumb))
+
     this.drawCompass(ctx, w - COMPASS_INSET, COMPASS_INSET, headingRad)
+  }
+
+  /** The thumb: a see-through arrow from below, its tip on (x, y), stronger while it is moved. */
+  private drawThumb(ctx: CanvasRenderingContext2D, x: number, y: number) {
+    const moving = this.holding === 'thumb'
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.beginPath()
+    ctx.moveTo(0, 0)
+    ctx.lineTo(11, 16)
+    ctx.lineTo(4, 16)
+    ctx.lineTo(4, 44)
+    ctx.lineTo(-4, 44)
+    ctx.lineTo(-4, 16)
+    ctx.lineTo(-11, 16)
+    ctx.closePath()
+    ctx.fillStyle = moving ? 'rgba(30, 100, 220, 0.45)' : 'rgba(30, 100, 220, 0.3)'
+    ctx.fill()
+    ctx.lineJoin = 'round'
+    ctx.lineWidth = moving ? 2 : 1.5
+    ctx.strokeStyle = moving ? 'rgba(10, 50, 140, 0.95)' : 'rgba(10, 50, 140, 0.7)'
+    ctx.stroke()
+    ctx.restore()
   }
 
   /**
@@ -825,7 +961,10 @@ export class Hud {
     }
 
     // The needle: red toward north in the terrain, seen with the view direction up.
-    ctx.rotate(-headingRad)
+    // It swings as you run, more the faster you go: a careful reading means slowing down.
+    const time = performance.now() / 1000
+    const swing = (Math.sin(time * 1.7) + 0.6 * Math.sin(time * 4.3 + 1) + 0.3 * Math.sin(time * 9.1 + 2)) / 1.9
+    ctx.rotate(-headingRad + NEEDLE_SWING * Math.min(this.player.speed / JOG_SPEED, 1.5) * swing)
     const length = r - 6
     ctx.fillStyle = '#e8222a'
     ctx.beginPath()

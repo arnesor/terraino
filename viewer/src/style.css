@@ -497,8 +497,9 @@ body {
   opacity: 0.5;
 }
 
-/* The results list: like the map window, on the left, above the start screen too. */
-.results-window {
+/* The results list and the tutorial: like the map window, on the left, above the start screen too. */
+.results-window,
+.tutorial-window {
   position: fixed;
   top: 96px;
   left: 16px;
@@ -515,7 +516,8 @@ body {
   z-index: 12;
 }
 
-.results-window[hidden] {
+.results-window[hidden],
+.tutorial-window[hidden] {
   display: none;
 }
 
@@ -607,4 +609,55 @@ body {
   min-width: 26px;
   height: 24px;
   padding: 0 6px;
+}
+
+/* The competition mode tutorial: a step at a time, Back and Next under it. */
+.tutorial-window {
+  width: min(440px, calc(100vw - 32px));
+  height: min(540px, calc(100% - 128px));
+}
+
+.tutorial-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 18px 10px;
+  font: 14px/1.5 system-ui, sans-serif;
+}
+
+.tutorial-body h3 {
+  margin: 10px 0 6px;
+  font-size: 16px;
+}
+
+.tutorial-body p,
+.tutorial-body ul {
+  margin: 6px 0;
+}
+
+.tutorial-body ul {
+  padding-left: 20px;
+}
+
+.tutorial-body li {
+  margin: 3px 0;
+}
+
+.tutorial-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-top: 1px solid #ddd5c6;
+}
+
+.tutorial-count {
+  font-size: 13px;
+  color: #6b6458;
+}
+
+.tutorial-tools .hud-map-button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
