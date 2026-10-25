@@ -28,7 +28,10 @@ export interface LayerInfo {
   overview: string
   overviewStep: number
   canopyUnit: number
+  /** Undergrowth levels: density = level / levels. */
   levels: number
+  /** Running speed = blue channel value × speedUnit. */
+  speedUnit: number
   ground: Record<string, number>
   /** 'lidar' when the undergrowth layer comes from a laser point cloud as well. */
   undergrowth?: 'lidar' | 'map'
@@ -68,7 +71,7 @@ export interface Manifest {
   tracks?: { path: string; count: number }
 }
 
-export const SUPPORTED_FORMATS = [1, 2, 3]
+export const SUPPORTED_FORMATS = [4]
 
 export class World {
   readonly base: string

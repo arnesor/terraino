@@ -190,6 +190,14 @@ async function main() {
 
   const scene = new THREE.Scene()
   const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.25, 30000)
+  // Follow the window from the start: it can change size (or move to another screen)
+  // while the world loads, and the canvas must still fill it afterwards.
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight
+    camera.updateProjectionMatrix()
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.setSize(window.innerWidth, window.innerHeight)
+  })
   const environment = new Environment(scene, renderer)
   const quality = new URLSearchParams(location.search).get('quality')
   if (quality === 'high' || quality === 'medium' || quality === 'low') environment.setQuality(quality)
@@ -389,12 +397,6 @@ async function main() {
   player.controls.addEventListener('unlock', () => {
     overlay.hidden = hud.mapOpen
     updateResume()
-  })
-
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight
-    camera.updateProjectionMatrix()
-    renderer.setSize(window.innerWidth, window.innerHeight)
   })
 
   // For poking at the scene from the browser console while developing.

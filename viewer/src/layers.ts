@@ -49,11 +49,11 @@ export class ChunkLayer {
     const col = Math.min(Math.max(Math.round(x), 0), n)
     const row = Math.min(Math.max(Math.round(z), 0), n)
     const i = (row * this.size + col) * 4
-    const b = this.pixels[i + 2]!
-    out.ground = this.pixels[i]!
+    const r = this.pixels[i]!
+    out.ground = r & 15
     out.canopy = this.pixels[i + 1]! * this.info.canopyUnit
-    out.shrubs = (b >> 4) / this.info.levels
-    out.speed = (b & 15) / this.info.levels
+    out.shrubs = (r >> 4) / this.info.levels
+    out.speed = this.pixels[i + 2]! * this.info.speedUnit
     return out
   }
 

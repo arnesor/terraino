@@ -421,6 +421,14 @@ export function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+// Slower than this (m/s, about 83 min/km) shows no pace: standing still.
+const MIN_PACE_SPEED = 0.2
+
+/** Pace in minutes per kilometre (m:ss) for a speed in m/s, or a dash when standing still. */
+export function formatPace(speed: number): string {
+  return speed < MIN_PACE_SPEED ? '–:––' : formatTime(Math.round(1000 / speed))
+}
+
 /** A short electronic beep, like an SI/EMIT punch. */
 export function beep() {
   try {

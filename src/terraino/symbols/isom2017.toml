@@ -11,11 +11,11 @@ name = "ISOM 2017-2"
 "205" = { feature = "boulder", size = 2.0 }
 "206" = { ground = "rock", trees = "none", speed = 0, order = 32, feature = "boulder_cluster", size = 3 }
 "207" = { feature = "boulder_cluster", size = 1.0 }
-"208" = { ground = "stony", speed = 0.6, order = 30, feature = "boulder_field" }
-"209" = { ground = "stony", speed = 0.8, order = 30, feature = "boulder_field" }
-"210" = { ground = "stony", speed = 0.8, order = 30, feature = "stones" }
-"211" = { ground = "stony", speed = 0.6, order = 30 }
-"212" = { ground = "stony", speed = 0.4, order = 30 }
+"208" = { ground = "stony", speed_group = "stony", speed = 0.6, order = 30, feature = "boulder_field" }
+"209" = { ground = "stony", speed_group = "stony", speed = 0.8, order = 30, feature = "boulder_field" }
+"210" = { ground = "stony", speed_group = "stony", speed = 0.8, order = 30, feature = "stones" }
+"211" = { ground = "stony", speed_group = "stony", speed = 0.6, order = 30 }
+"212" = { ground = "stony", speed_group = "stony", speed = 0.4, order = 30 }
 "213" = { ground = "sand", trees = "none", speed = 0.8, order = 30 }
 "214" = { ground = "rock", trees = "none", speed = 0.95, order = 31 }
 
@@ -28,41 +28,41 @@ name = "ISOM 2017-2"
 "305" = { ground = "water", speed = 0.7, width = 0.8, clear = 1.5, order = 61, track = "small_stream" }
 # Minor/seasonal water channel: a ditch, wet or with a trickle of water.
 "306" = { ground = "water", speed = 0.8, width = 0.8, clear = 1.5, order = 61, track = "water_channel" }
-"307" = { ground = "marsh", trees = "none", speed = 0.15, order = 42 }
-"308" = { ground = "marsh", speed = 0.6, order = 40 }
-"309" = { ground = "marsh", speed = 0.7, width = 2, order = 41 }
-"310" = { ground = "marsh", speed = 0.85, order = 39 }
+"307" = { ground = "marsh", speed_group = "wet", trees = "none", speed = 0, order = 42 }
+"308" = { ground = "marsh", speed_group = "wet", speed = 0.75, order = 40 }
+"309" = { ground = "marsh", speed_group = "wet", speed = 0.8, width = 2, order = 41 }
+"310" = { ground = "marsh", speed_group = "wet", speed = 0.9, order = 39 }
 
 # Vegetation
-"401" = { ground = "open", trees = "lidar", speed = 1.0, order = 10 }
+"401" = { ground = "open", trees = "lidar", speed = 1.2, order = 10 }
 # Scattered trees, as 404.
-"402" = { ground = "open", trees = "scattered", speed = 1.0, order = 10 }
+"402" = { ground = "open", trees = "scattered", speed = 1.15, order = 10 }
 # Rough open land has no trees, but narrow strips of it (verges, field edges) keep
 # the laser's trees: often a row of trees the mapper drew as part of the verge.
-"403" = { ground = "rough", trees = "none", narrow_trees = "lidar", speed = 0.85, order = 11 }
+"403" = { ground = "rough", trees = "none", narrow_trees = "lidar", speed = 1.0, order = 11 }
 # Scattered trees: often a cut with seed trees left, newer than the laser data.
-"404" = { ground = "rough", trees = "scattered", speed = 0.85, order = 11 }
+"404" = { ground = "rough", trees = "scattered", speed = 0.95, order = 11 }
 "405" = { ground = "forest", speed = 1.0, order = 12 }
-"406" = { ground = "forest", young = 3, speed = 0.75, order = 20 }
-"407" = { overprint = true, shrubs = 0.45, speed = 0.75, order = 20 }
+"406" = { ground = "forest", young = 3, speed = 0.7, order = 20 }
+"407" = { overprint = true, speed_group = "undergrowth", shrubs = 0.45, speed = 0.7, order = 20 }
 "408" = { ground = "forest", young = 8, speed = 0.5, order = 21 }
-"409" = { overprint = true, shrubs = 0.8, speed = 0.5, order = 21 }
+"409" = { overprint = true, speed_group = "undergrowth", shrubs = 0.8, speed = 0.5, order = 21 }
 "410" = { ground = "forest", young = 15, speed = 0.25, order = 22 }
 "411" = { ground = "forest", young = 20, speed = 0.05, order = 23 }
-"412" = { ground = "field", trees = "lidar", speed = 0.6, order = 15 }
+"412" = { ground = "field", trees = "lidar", speed = 0.7, order = 15 }
 "413" = { ground = "lawn", trees = "lidar", speed = 0.9, order = 15 }
 "414" = { ground = "field", trees = "lidar", speed = 0.7, order = 15 }
 
 # Roads, paths and other man-made features
-"501" = { ground = "paved", trees = "none", speed = 1.0, order = 85 }
-"502" = { ground = "paved", trees = "none", width = 8, clear = 9, order = 82, speed = 1.0, track = "paved" }
-"503" = { ground = "gravel", trees = "none", width = 4, clear = 5, order = 80, speed = 1.0, track = "gravel" }
-"504" = { ground = "gravel", width = 2.5, clear = 3.5, order = 79, speed = 1.0, track = "vehicle_track" }
-"505" = { ground = "path", width = 1.0, clear = 2, order = 78, speed = 1.0, track = "path" }
-"506" = { ground = "path", width = 0.6, clear = 1.5, order = 77, speed = 1.0, track = "small_path" }
-"507" = { ground = "path", width = 0.4, clear = 1, order = 76, speed = 1.0, track = "faint_path" }
+"501" = { ground = "paved", trees = "none", speed = 1.25, order = 85 }
+"502" = { ground = "paved", trees = "none", width = 8, clear = 9, order = 82, speed = 1.25, track = "paved" }
+"503" = { ground = "gravel", trees = "none", width = 4, clear = 5, order = 80, speed = 1.25, track = "gravel" }
+"504" = { ground = "gravel", width = 2.5, clear = 3.5, order = 79, speed = 1.2, track = "vehicle_track" }
+"505" = { ground = "path", width = 1.0, clear = 2, order = 78, speed = 1.15, track = "path" }
+"506" = { ground = "path", width = 0.6, clear = 1.5, order = 77, speed = 1.1, track = "small_path" }
+"507" = { ground = "path", width = 0.4, clear = 1, order = 76, speed = 1.05, track = "faint_path" }
 # Narrow ride: drawn like a less distinct small path, in a 4 m tree-free corridor.
-"508" = { ground = "path", width = 1.0, clear = 4, order = 75, speed = 1.0, track = "faint_path" }
+"508" = { ground = "path", width = 1.0, clear = 4, order = 75, speed = 1.05, track = "faint_path" }
 "509" = { ground = "gravel", trees = "none", width = 5, clear = 12, order = 81 }
 "510" = { clear = 12, feature = "power_line" }
 "511" = { clear = 30, feature = "pylon_line" }

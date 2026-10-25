@@ -24,10 +24,10 @@ sample in both directions; the manifest lists them (``height.coarse``).
 
 Layer pixels match the height samples one to one. Their channels are:
 
-- R: ground class (terraino.process.symbols.Ground)
+- R: ground class (terraino.process.symbols.Ground) in the low nibble, undergrowth
+  level (0..15, density = level / LEVELS) in the high nibble
 - G: canopy height in units of CANOPY_UNIT_M
-- B: undergrowth level (0..15) in the high nibble, running speed level (0..15,
-  speed = level / 15) in the low nibble
+- B: running speed in units of SPEED_UNIT (0 = impassable, 1 = easy forest)
 
 Tree positions are relative to the chunk's north-west sample, in scene axes
 (x east, z south), sorted from tallest to smallest. Building outlines are in scene
@@ -56,7 +56,7 @@ from terraino.process.symbols import Ground
 from terraino.process.tracks import Track
 from terraino.process.trees import Trees
 
-FORMAT_VERSION = 3
+FORMAT_VERSION = 4
 CHUNK = 256
 HEIGHT_STEP_M = 1.0
 # Height chunks this far from the map keep full detail; the others every COARSE_STEP-th sample.
@@ -67,6 +67,7 @@ JPEG_QUALITY = 88
 UINT16_MAX = 65535
 CANOPY_UNIT_M = 0.25
 LEVELS = 15
+SPEED_UNIT = 0.01
 LAYER_OVERVIEW_STEP = 4
 TREE_POS_SCALE = 256  # 1/256 m
 TREE_HEIGHT_SCALE = 100  # cm
@@ -228,18 +229,17 @@ def encode_layers(
     from terraino.process.tracks import Track
         >>> one = np.ones((1, 1), dtype=np.float32)
         >>> layers = GroundLayers(
-        ...     ground=np.full((1, 1), 4, np.uint8), speed=one * 0.6, young=one * 0,
+        ...     ground=np.full((1, 1), 4, np.uint8), speed=one * 1.15, young=one * 0,
         ...     shrubs=one * 0.5, tree_rule=np.zeros((1, 1), np.uint8),
         ...     clear=one < 0, in_map=one > 0)
         >>> encode_layers(layers, one * 12.3).tolist()
-        [[[4, 49, 137]]]
+        [[[132, 49, 115]]]
     """
     rgb = np.empty((*layers.ground.shape, 3), dtype=np.uint8)
-    rgb[..., 0] = layers.ground
-    rgb[..., 1] = np.clip(np.rint(canopy / CANOPY_UNIT_M), 0, 255)
     shrubs = np.clip(np.rint(layers.shrubs * LEVELS), 0, LEVELS).astype(np.uint8)
-    speed = np.clip(np.rint(layers.speed * LEVELS), 0, LEVELS).astype(np.uint8)
-    rgb[..., 2] = (shrubs << 4) | speed
+    rgb[..., 0] = (shrubs << 4) | layers.ground
+    rgb[..., 1] = np.clip(np.rint(canopy / CANOPY_UNIT_M), 0, 255)
+    rgb[..., 2] = np.clip(np.rint(layers.speed / SPEED_UNIT), 0, 255)
     return rgb
 
 
@@ -521,6 +521,7 @@ def write_world(out_dir: Path, world: WorldData) -> Path:
             "overviewStep": LAYER_OVERVIEW_STEP,
             "canopyUnit": CANOPY_UNIT_M,
             "levels": LEVELS,
+            "speedUnit": SPEED_UNIT,
             "ground": {g.name.lower(): int(g) for g in Ground},
             # Where undergrowth comes from: the map only, or also the laser point cloud.
             "undergrowth": "lidar" if world.lidar else "map",

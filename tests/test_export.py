@@ -138,9 +138,9 @@ def test_layers_written(world: World) -> None:
     assert manifest["layers"]["size"] == CHUNK + 1
     tile = np.asarray(Image.open(out / "layers" / "1_2.png"))
     assert tile.shape == (CHUNK + 1, CHUNK + 1, 3)
-    assert (tile[..., 0] == 1).all()  # forest
+    assert (tile[..., 0] == 1).all()  # forest, no undergrowth
     assert (tile[..., 1] == 32).all()  # 8 m canopy in 0.25 m units
-    assert (tile[..., 2] == 15).all()  # no undergrowth, full speed
+    assert (tile[..., 2] == 100).all()  # easy forest, speed 1
     assert (out / "layers_overview.png").is_file()
 
 
@@ -222,7 +222,7 @@ def test_coarse_chunks_hold_every_fourth_sample(tmp_path: Path) -> None:
     out = tmp_path / "world"
     manifest = json.loads(write_world(out, data).read_text())
     h = manifest["height"]
-    assert manifest["format"] == 3
+    assert manifest["format"] == 4
     assert h["coarse"] == {"step": COARSE_STEP, "chunks": [1]}
     raw = np.fromfile(out / "height" / "1_0.bin", dtype="<u2")
     n = CHUNK // COARSE_STEP + 1
