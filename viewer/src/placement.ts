@@ -93,7 +93,7 @@ function distanceToLine(p: XZ, points: XZ[], closed = false): number {
   return points.length ? length(sub(closestOnLine(p, points, closed), p)) : Infinity
 }
 
-function inside(p: XZ, polygon: XZ[]): boolean {
+export function inside(p: XZ, polygon: XZ[]): boolean {
   let result = false
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
     const [xi, zi] = polygon[i]!

@@ -380,6 +380,11 @@ body {
   margin: 0 14px 6px 0;
 }
 
+/* display above would otherwise show hidden labels (the race and course lists). */
+.panel label[hidden] {
+  display: none;
+}
+
 .panel .course-row {
   display: flex;
   flex-wrap: wrap;

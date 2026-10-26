@@ -126,6 +126,23 @@ Reading them takes about a minute; the result is cached in `data-cache/lidar/`.
 
 Maps must be georeferenced in UTM zone 32, 33 or 35 (ETRS89 or WGS 84).
 
+### Races
+
+A race puts the courses of an event on the start screen,
+so runners do not need the course setting file:
+
+```console
+npm run add-race --prefix viewer -- Langvatnet trlop_260521.ocd
+```
+
+The first argument is the world (the folder in `worlds/`).
+The command checks that the courses lie on the world's map,
+copies the file to `races/<world>/` and lists it there.
+The race is named by the event title in the file and dated by a date in the file name
+(`260521`, `20260521` or `2026-05-21`);
+give `--name "O-karusell 4"` or `--date 2026-05-21` when the file has neither.
+Adding a race with the same name and date again replaces it.
+
 ### In the viewer
 
 | Key         | Action                                            |

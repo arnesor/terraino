@@ -13,7 +13,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "add-race": "node scripts/add-race.ts"
   },
   "dependencies": {
     "three": "0.186.1"

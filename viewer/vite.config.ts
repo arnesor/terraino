@@ -5,11 +5,13 @@ import type { Connect, Plugin } from 'vite'
 import { defineConfig } from 'vite'
 import { resultsMiddleware } from './server/results'
 
-// World packages are written by the Python pipeline to ../worlds. Serve them at
-// /worlds/ in both the dev server and `vite preview`, without copying them into dist.
+// World packages are written by the Python pipeline to ../worlds, and races by
+// `npm run add-race` to ../races. Serve them at /worlds/ and /races/ in both the dev
+// server and `vite preview`, without copying them into dist.
 const worldsDir = fileURLToPath(new URL('../worlds', import.meta.url))
-// Results lists are kept next to the worlds, so rebuilding a world leaves them alone.
+// Results lists and races are kept next to the worlds, so rebuilding a world leaves them alone.
 const resultsDir = fileURLToPath(new URL('../results', import.meta.url))
+const racesDir = fileURLToPath(new URL('../races', import.meta.url))
 
 const contentTypes: Record<string, string> = {
   '.json': 'application/json',
@@ -18,6 +20,7 @@ const contentTypes: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
+  '.ocd': 'application/octet-stream',
 }
 
 function listWorlds(): string[] {
@@ -29,36 +32,41 @@ function listWorlds(): string[] {
     .sort()
 }
 
-const serveWorlds: Connect.NextHandleFunction = (req, res, next) => {
-  const url = new URL(req.url ?? '/', 'http://localhost')
-  if (!url.pathname.startsWith('/worlds/')) return next()
-  if (url.pathname === '/worlds/index.json') {
-    res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify(listWorlds()))
-    return
+/** Serve the files in `dir` at `/<prefix>/`. */
+function serveDir(prefix: string, dir: string): Connect.NextHandleFunction {
+  return (req, res, next) => {
+    const url = new URL(req.url ?? '/', 'http://localhost')
+    if (!url.pathname.startsWith(`/${prefix}/`)) return next()
+    const file = path.resolve(dir, decodeURIComponent(url.pathname.slice(prefix.length + 2)))
+    if (!file.startsWith(dir + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
+      res.statusCode = 404
+      res.end('Not found')
+      return
+    }
+    res.setHeader('Content-Type', contentTypes[path.extname(file)] ?? 'application/octet-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    fs.createReadStream(file).pipe(res)
   }
-  const file = path.resolve(worldsDir, decodeURIComponent(url.pathname.slice('/worlds/'.length)))
-  if (!file.startsWith(worldsDir + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
-    res.statusCode = 404
-    res.end('Not found')
-    return
-  }
-  res.setHeader('Content-Type', contentTypes[path.extname(file)] ?? 'application/octet-stream')
-  res.setHeader('Cache-Control', 'no-cache')
-  fs.createReadStream(file).pipe(res)
+}
+
+const listWorldsHandler: Connect.NextHandleFunction = (req, res, next) => {
+  if (new URL(req.url ?? '/', 'http://localhost').pathname !== '/worlds/index.json') return next()
+  res.setHeader('Content-Type', 'application/json')
+  res.end(JSON.stringify(listWorlds()))
+}
+
+function useMiddlewares(app: Connect.Server) {
+  app.use(listWorldsHandler)
+  app.use(serveDir('worlds', worldsDir))
+  app.use(serveDir('races', racesDir))
+  app.use(resultsMiddleware(resultsDir))
 }
 
 function worldsPlugin(): Plugin {
   return {
     name: 'terraino-worlds',
-    configureServer(server) {
-      server.middlewares.use(serveWorlds)
-      server.middlewares.use(resultsMiddleware(resultsDir))
-    },
-    configurePreviewServer(server) {
-      server.middlewares.use(serveWorlds)
-      server.middlewares.use(resultsMiddleware(resultsDir))
-    },
+    configureServer: server => useMiddlewares(server.middlewares),
+    configurePreviewServer: server => useMiddlewares(server.middlewares),
   }
 }
 

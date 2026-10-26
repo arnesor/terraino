@@ -179,6 +179,7 @@ __marimo__/
 # Terrain-O: generated worlds, downloaded data and Node packages
 /worlds/
 /results/
+/races/
 /data-cache/
 node_modules/
 /viewer/dist/

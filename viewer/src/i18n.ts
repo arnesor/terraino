@@ -19,6 +19,8 @@ const STRINGS = {
   courseFileTitle: { en: 'An OCAD course setting file (.ocd)', nb: 'En OCAD-fil med løyper (.ocd)' },
   courseLabel: { en: 'Course', nb: 'Løype' },
   chooseCourse: { en: 'Choose a course', nb: 'Velg løype' },
+  raceLabel: { en: 'Race', nb: 'Løp' },
+  chooseRace: { en: 'Choose a race', nb: 'Velg løp' },
   startButton: { en: 'Click to start', nb: 'Klikk for å starte' },
   starting: { en: 'Starting …', nb: 'Starter …' },
   keyNameMouse: { en: 'Mouse', nb: 'Mus' },
