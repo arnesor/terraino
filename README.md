@@ -151,8 +151,8 @@ Adding a race with the same name and date again replaces it.
 | Mouse       | Look around                                       |
 | E / Q       | Time factor up / down: game time runs up to 10 times as fast |
 | F           | Fly on/off; look up or down to climb or dive      |
-| M           | Map window: drag to move, wheel to zoom, click to put the thumb, double click to go there |
-| Mouse, map open | While steering: hold the left button to move the map, the right to move the thumb; the wheel turns the map |
+| M           | Map window: drag to move, wheel to zoom, click to put the thumb (competition mode), double click to go there |
+| Mouse, map open | While steering: hold the left button to move the map, the right to move the thumb (competition mode); the wheel turns the map |
 | H           | Pause, on the start screen: choose another map or course |
 | K           | Control descriptions on/off                       |
 | N           | With the map open: set a course by clicking (or Set course) |
@@ -169,10 +169,10 @@ Esc again, or H at any time, pauses the game on the start screen,
 where game time stands still and you can choose another map or course.
 Auto turns the map with your running direction; ⟲, ⟳ and N↑ turn it by hand.
 While you steer with the map open, the mouse can hold the map instead of turning the view:
-hold the left button to move the map, or the right button to move the thumb.
+hold the left button to move the map, or in competition mode the right button to move the thumb.
 Your direction stays as it was while you hold, and W A S D keep you running.
-The wheel turns the map 5° a notch, around the thumb.
-The thumb is a see-through arrow that marks where you think you are.
+The wheel turns the map 5° a notch, around the thumb if there is one.
+In competition mode, the thumb is a see-through arrow that marks where you think you are.
 Put it with a click on the map while the mouse is free;
 it moves to the start when you leave the start triangle, and to each control you punch.
 A restart or another course takes it off the map.
@@ -186,7 +186,7 @@ and its dial turns with the map.
 The needle swings as you run, more the faster you go, so a careful reading means slowing down.
 Turn the map (⟲ ⟳) until the dial's N and the meridians lie along the needle,
 and the map matches the terrain; Auto keeps it that way.
-Auto, Legs and Position are remembered.
+Auto, Legs and Position are remembered; competition mode is off each time the page loads.
 
 To run a course from an OCAD course setting file
 (OCAD 12 or newer),
@@ -214,6 +214,7 @@ During such a run there is no help beyond the map and the compass: no position o
 no map that follows you, no coordinates, no heading at the top of the screen, no Auto, no flying,
 no jumps on the map and no map on the ground.
 **Tutorial**, next to Competition under the map, explains step by step how to run in it.
+A run started outside competition mode gets a reminder that it will not be saved.
 At the finish you give your name, and the results list opens: leg and split times with their places,
 as on WinSplits, sorted by run time or, from a column header, by a leg or split time.
 Tick a result to see its route on the map; several routes can be compared.

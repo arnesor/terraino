@@ -47,13 +47,13 @@ const STRINGS = {
   keyTime: { en: 'time factor up / down (game time runs faster)', nb: 'tidsfaktor opp / ned (spilltida går fortere)' },
   keyFly: { en: 'fly on/off (look up or down to climb or dive)', nb: 'fly av/på (se opp eller ned for å stige eller dykke)' },
   keyMap: {
-    en: 'map: drag, wheel zoom, click to put the thumb, double click to go there',
-    nb: 'kart: dra, rulle for zoom, klikk for å sette tommelen, dobbeltklikk for å gå dit',
+    en: 'map: drag, wheel zoom, click to put the thumb (competition mode), double click to go there',
+    nb: 'kart: dra, rulle for zoom, klikk for å sette tommelen (konkurransemodus), dobbeltklikk for å gå dit',
   },
   keyNameMouseMap: { en: 'Mouse, map open', nb: 'Mus, kart oppe' },
   keyMapSteering: {
-    en: 'while steering: hold the left button to move the map, the right to move the thumb; wheel turns the map',
-    nb: 'når du styrer: hold venstre knapp for å flytte kartet, høyre for å flytte tommelen; rulle vrir kartet',
+    en: 'while steering: hold the left button to move the map, the right to move the thumb (competition mode); wheel turns the map',
+    nb: 'når du styrer: hold venstre knapp for å flytte kartet, høyre for å flytte tommelen (konkurransemodus); rulle vrir kartet',
   },
   keyStart: { en: 'go to the start · R restart the run', nb: 'gå til start · R start løpet på nytt' },
   keyStartScreen: { en: 'pause, on the start screen: choose map and course', nb: 'pause, på startsida: velg kart og løype' },
@@ -147,10 +147,19 @@ const STRINGS = {
     nb: 'Klikk: ny post · Høyreklikk / Backspace: fjern siste · Delete: slett alt · Dra: flytt · Rulle: zoom',
   },
   helpMap: {
+    en: 'Drag: move · Wheel: zoom · Double click: go there',
+    nb: 'Dra: flytt · Rulle: zoom · Dobbeltklikk: gå dit',
+  },
+  // In competition mode, with the thumb.
+  helpMapThumb: {
     en: 'Drag: move · Wheel: zoom · Click: thumb · Double click: go there',
     nb: 'Dra: flytt · Rulle: zoom · Klikk: tommel · Dobbeltklikk: gå dit',
   },
   helpMapSteering: {
+    en: 'Hold left button: move the map · Wheel: turn the map',
+    nb: 'Hold venstre knapp: flytt kartet · Rulle: vri kartet',
+  },
+  helpMapSteeringThumb: {
     en: 'Hold left button: move the map · Hold right button: move the thumb · Wheel: turn the map',
     nb: 'Hold venstre knapp: flytt kartet · Hold høyre knapp: flytt tommelen · Rulle: vri kartet',
   },
@@ -162,6 +171,10 @@ const STRINGS = {
   },
   competitionLocked: { en: 'Not during a run · R to start again', nb: 'Ikke under løpet · R for å starte på nytt' },
   notInCompetition: { en: 'Not in competition mode', nb: 'Ikke i konkurransemodus' },
+  notCompetitionRun: {
+    en: 'Not in competition mode: this run will not be saved. Competition is under the map.',
+    nb: 'Ikke i konkurransemodus: dette løpet blir ikke lagret. Konkurranse er under kartet.',
+  },
 
   // Competition mode tutorial (tutorial.ts): a line is a paragraph, "- " a list item.
   tutorial: { en: 'Tutorial', nb: 'Veiledning' },

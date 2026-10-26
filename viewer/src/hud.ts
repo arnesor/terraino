@@ -37,15 +37,15 @@ renameStoredKey('otest.map', PREFERENCES_KEY)
  */
 type MapView = 'legs' | 'follow' | 'free'
 
+// Competition mode is not among them: it is off each time the page loads.
 interface MapPreferences {
   auto: boolean
   legs: boolean
   position: boolean
-  competition: boolean
 }
 
 function loadPreferences(): MapPreferences {
-  const defaults = { auto: false, legs: true, position: true, competition: false }
+  const defaults = { auto: false, legs: true, position: true }
   try {
     const stored = JSON.parse(localStorage.getItem(PREFERENCES_KEY) ?? '{}') as Partial<MapPreferences>
     return { ...defaults, ...stored }
@@ -282,7 +282,6 @@ export class Hud {
     this.legsWanted = preferences.legs
     this.positionBox.checked = preferences.position
     this.setAuto(preferences.auto)
-    this.setCompetition(preferences.competition)
 
     // While steering with the map open, a held button moves the map (left) or the thumb
     // (right) instead of the view, and the wheel turns the map.
@@ -321,6 +320,7 @@ export class Hud {
   /** Hold the map or the thumb with the mouse (only while steering with the map open), or let go. */
   private hold(what: 'map' | 'thumb' | null) {
     if (what && !(this.player.controls.isLocked && this.mapOpen)) return
+    if (what === 'thumb' && !this.run.competitionMode) return
     if (what === this.holding) return
     this.holding = what
     // The view stays as it is while the mouse holds something.
@@ -340,18 +340,20 @@ export class Hud {
   }
 
   /**
-   * Put the thumb on the start when the run starts and on each control as it is punched,
-   * and glide to the next legs (even if the map was moved). A restart or another course
-   * takes the thumb off the map.
+   * Put the thumb (in competition mode) on the start when the run starts and on each control
+   * as it is punched, and glide to the next legs (even if the map was moved). A restart or
+   * another course takes the thumb off the map. A run started outside competition mode
+   * gets a reminder that it will not be saved.
    */
   private followPunches() {
     const run = this.run
     const seen = this.seen
     if (run.course === seen.course && run.state === seen.state && run.next === seen.next) return
     if (run.course !== seen.course || (run.state === 'ready' && seen.state !== 'ready')) this.thumb = null
+    if (run.state === 'running' && seen.state === 'ready' && !run.competitionMode) this.notify(t('notCompetitionRun'))
     this.seen = { course: run.course, state: run.state, next: run.next }
     if (run.state === 'ready') return
-    this.thumb = run.course.controls[run.next - 1] ?? this.thumb
+    if (run.competitionMode) this.thumb = run.course.controls[run.next - 1] ?? this.thumb
     if (this.legsWanted && this.hasCourse) this.setView('legs')
   }
 
@@ -379,10 +381,12 @@ export class Hud {
     this.toastTimer = setTimeout(() => (this.toast.hidden = true), 2500)
   }
 
+  /** Competition mode on or off; there is a thumb only while it is on. */
   private setCompetition(on: boolean) {
     this.run.competitionMode = on
     this.competitionButton.classList.toggle('active', on)
-    this.savePreferences()
+    if (!on) this.thumb = null
+    this.updateHelp()
   }
 
   get mapOpen(): boolean {
@@ -482,7 +486,6 @@ export class Hud {
         auto: this.auto,
         legs: this.legsWanted,
         position: this.positionBox.checked,
-        competition: this.run.competitionMode,
       }
       localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences))
     } catch {
@@ -572,8 +575,8 @@ export class Hud {
     this.mapHelp.textContent = this.editing
       ? t('helpEditing')
       : this.player.controls.isLocked
-        ? t('helpMapSteering')
-        : t('helpMap')
+        ? t(this.run.competitionMode ? 'helpMapSteeringThumb' : 'helpMapSteering')
+        : t(this.run.competitionMode ? 'helpMapThumb' : 'helpMap')
   }
 
   private setCourse(course: Course) {
@@ -674,7 +677,7 @@ export class Hud {
     if (click && this.editing) {
       const point = this.toProjected(...this.canvasPoint(e))
       this.setCourse({ controls: [...this.run.course.controls, point] })
-    } else if (click) {
+    } else if (click && this.run.competitionMode) {
       this.thumb = this.toProjected(...this.canvasPoint(e))
     }
   }
