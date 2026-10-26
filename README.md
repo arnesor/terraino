@@ -61,7 +61,7 @@ and run through it in the browser like in a first-person game.
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv/) (Python 3.12 or newer is installed by uv)
-- [Node.js](https://nodejs.org/) 20 or newer
+- [Node.js](https://nodejs.org/) 24 (the version in `.node-version`; 22.12 or newer works)
 - An internet connection when building a world (data is cached in `data-cache/`)
 
 ## Installation

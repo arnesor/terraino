@@ -5,6 +5,9 @@
   "description": "Walk through Terrain-O worlds in the browser",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
