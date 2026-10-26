@@ -9,21 +9,26 @@
     "node": ">=22.12"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev": "wrangler d1 migrations apply terraino-results --local && vite",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "npm run types && tsc --noEmit && tsc --noEmit -p worker",
     "test": "vitest run",
-    "add-race": "node scripts/add-race.ts"
+    "add-race": "node scripts/add-race.ts",
+    "deploy": "node scripts/deploy.ts",
+    "import-results": "node scripts/import-results.ts",
+    "types": "wrangler types worker/worker-configuration.d.ts"
   },
   "dependencies": {
     "three": "0.186.1"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "1.65.0",
     "@types/node": "24.19.0",
     "@types/three": "0.186.0",
     "typescript": "7.0.2",
     "vite": "8.3.1",
-    "vitest": "5.0.3"
+    "vitest": "5.0.3",
+    "wrangler": "4.153.0"
   }
 }

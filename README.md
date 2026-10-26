@@ -225,9 +225,10 @@ as on WinSplits, sorted by run time or, from a column header, by a leg or split 
 Tick a result to see its route on the map; several routes can be compared.
 **Results** on the start screen opens the list of the chosen course.
 The same course, from a file, a link or set by hand, shares one list.
-The lists are kept by the viewer's server in `results/`, next to `worlds/`,
-and everyone playing through the same server shares them
-(see `docs/adr/0001-results-stored-by-the-vite-server.md`).
+The lists are kept by the viewer's results Worker in a database,
+and everyone playing the same viewer shares them
+(see `docs/adr/0003-results-stored-in-d1-by-a-worker.md`).
+Only the browser that saved a result, or one with the admin key, can delete it.
 
 The start screen has a language choice (English or Norwegian); the keys are the same in both.
 All texts are in `viewer/src/i18n.ts`: to add a language, add it to `LANGS`,
@@ -240,6 +241,186 @@ northing and an optional height above ground
 `look` is the compass heading and pitch in degrees,
 `course` is a list of `easting,northing` pairs separated by `;`, and `lang` is the language
 (`en` or `nb`).
+
+## Publishing on Cloudflare
+
+The viewer runs at <https://terraino.arnesor.workers.dev>, on Cloudflare's free Workers plan.
+Cloudflare serves the app, the worlds and the races as static files,
+and a Worker (`viewer/worker/`) keeps the results lists in a D1 database, `terraino-results`.
+`viewer/wrangler.jsonc` holds the configuration,
+and `docs/adr/0003-results-stored-in-d1-by-a-worker.md` explains the design.
+
+### Before the first deploy
+
+On the machine you deploy from, after the [Installation](#installation) steps:
+
+1. Log Wrangler, Cloudflare's command-line tool, in to the Cloudflare account,
+   and check that it worked:
+
+   ```console
+   cd viewer
+   npx wrangler login     # opens the browser: click Allow
+   npx wrangler whoami    # shows the account
+   ```
+
+   In WSL the browser may not open by itself; open the link Wrangler prints instead.
+2. Keep the admin key at hand.
+   It deletes any result online, and it is a Cloudflare secret, so it is not in git.
+   It was made with the first deploy and kept in `~/.terraino-admin-key.env` on the machine
+   that deployed it.
+   To use it in a browser, open the viewer once with `?admin=<key>` at the end of the address;
+   the browser keeps it, and a ✕ shows on every result.
+   To change it, run `npx wrangler secret put ADMIN_KEY` in `viewer/` and type the new key.
+
+The Worker, the database and the `ADMIN_KEY` secret already exist in the account.
+For another Cloudflare account, create the database with `npx wrangler d1 create terraino-results`,
+put its `database_id` in `viewer/wrangler.jsonc`, and deploy once as below.
+That first deploy stops at the last step, since the Worker has no `ADMIN_KEY` yet;
+finish it from `viewer/` with `npx wrangler deploy --secrets-file <file>`,
+where the file holds the line `ADMIN_KEY=<a long random key>`.
+The address is `terraino.<subdomain>.workers.dev`;
+the subdomain is set under **Workers & Pages → Account details** in the Cloudflare dashboard.
+
+### What a deploy does
+
+Every change goes online the same way, with one command run from the repository:
+
+```console
+npm run deploy --prefix viewer -- Langvatnet
+```
+
+It:
+
+1. type-checks and builds the viewer (`viewer/dist/`);
+2. copies the worlds named on the command line from `worlds/` (without `_work/`)
+   and their races from `races/` into the build, and writes the list of worlds;
+3. stops if there are more than 20,000 files, or a file larger than 25 MiB:
+   the free plan's limits, enough for about 12 worlds the size of Langvatnet;
+4. applies new database migrations (`viewer/worker/migrations/`) to the online database;
+5. uploads the Worker and the files, and switches the site to them.
+
+Only new and changed files are uploaded, so a deploy takes a minute or so.
+**The site then has exactly the worlds named.**
+Name every world that should be online, every time: a world left out goes offline,
+though its results stay in the database and come back with it.
+Without names, every world in `worlds/` goes online, test worlds such as `LangvatnetUtsnitt` too.
+
+### 1. Deploying new code
+
+1. Merge the change into `main` and deploy from there:
+
+   ```console
+   git switch main
+   git pull
+   npm ci --prefix viewer      # when package-lock.json has changed
+   ```
+
+2. Run the viewer's checks (`npm run typecheck --prefix viewer` and `npm test --prefix viewer`);
+   the deploy type-checks again, but does not run the tests.
+3. Deploy, naming the worlds that are online:
+
+   ```console
+   npm run deploy --prefix viewer -- Langvatnet
+   ```
+
+4. Open <https://terraino.arnesor.workers.dev> and try the change.
+   The page and the worlds are checked for changes on each visit, so a reload is enough.
+
+A change to the database is a new migration file in `viewer/worker/migrations/`,
+numbered after the last one (`0002_….sql`).
+`npm run dev` applies it to the local database, and the deploy to the online one.
+Never change a migration that has been deployed: the online database has run it already.
+
+If a deploy breaks the site, check out the last good commit and deploy it again.
+`npx wrangler deployments list` in `viewer/` shows the recent deploys,
+and `npx wrangler rollback` switches the Worker back to the one before;
+neither changes the database.
+`npx wrangler tail` in `viewer/` shows the Worker's log as requests come in;
+the dashboard has the same under **Workers & Pages → terraino → Observability**.
+
+### 2. Deploying or updating a map
+
+A map online is a world, named by its folder in `worlds/`.
+The races in `races/<world>/` and the results online belong to that name,
+so build an updated map into the same folder:
+
+1. Build the world.
+   `--out` keeps the folder name even when the map file is named differently;
+   `--spawn` and `--heading` set where runners stand and look when it opens (see [Usage](#usage)):
+
+   ```console
+   uv run terraino build path/to/Langvatnet_261025.ocd --out worlds/Langvatnet
+   ```
+
+2. Try it locally (see [Locally](#locally)): `npm run dev --prefix viewer`,
+   then <http://localhost:5173/?world=Langvatnet>.
+3. Deploy it with the other worlds that are online:
+
+   ```console
+   npm run deploy --prefix viewer -- Langvatnet
+   ```
+
+A new map gets a new folder name, and is added to the list:
+`npm run deploy --prefix viewer -- Langvatnet Hornasen`.
+To take a map offline, deploy without its name.
+To change only where a world opens, edit its `manifest.json` and deploy; no rebuild is needed.
+`spawn` is the easting and northing, and `spawnHeading` the heading in degrees.
+
+Results are kept by course, that is by the positions of its controls.
+They stay with an updated map as long as the controls stay where they were;
+a map moved with `--offset` moves the courses on it, which then start new results lists.
+
+### 3. Deploying or updating a race
+
+A race is the courses of one event, from one OCAD course setting file (see [Races](#races)):
+
+1. Add the course file to the world it was set on.
+   In WSL, Windows files are under `/mnt/c/`:
+
+   ```console
+   npm run add-race --prefix viewer -- Langvatnet /mnt/c/Users/arnes/Downloads/otest/trlop_260521.ocd
+   ```
+
+   The name comes from the event title in the file and the date from the file name;
+   give `--name "O-karusell 4"` or `--date 2026-05-21` when the file has neither.
+   The command stops if the file does not fit the world: another UTM zone, no courses,
+   or controls off the map.
+2. Try it locally: the race is in the **Race** list at <http://localhost:5173/?world=Langvatnet>
+   after a reload.
+3. Deploy the world it belongs to, with the others online:
+
+   ```console
+   npm run deploy --prefix viewer -- Langvatnet
+   ```
+
+To correct a race, add the corrected file with the same name and date: it replaces the old one.
+A course whose controls changed starts a new results list,
+and the results on the old course are no longer shown from the race.
+To remove a race, delete its `.ocd` file from `races/<world>/`
+and its entry from `races/<world>/index.json`, then deploy.
+Course files opened with **Open course file …** stay in the browser and are never uploaded.
+
+### Locally
+
+`npm run dev --prefix viewer` runs the viewer at <http://localhost:5173/> the way it runs online,
+with three differences:
+
+- Worlds and races are read straight from `worlds/` and `races/`,
+  so a rebuilt world or an added race shows after a reload, with nothing to deploy.
+  Every world in `worlds/` is in the list.
+- The results Worker runs on your machine, with its own database in `viewer/.wrangler/`.
+  `npm run dev` brings its schema up to date first.
+  Results saved there stay there, apart from those online.
+  To copy results lists kept as files by earlier versions (`results/`) to it,
+  run `npm run import-results --prefix viewer -- http://localhost:5173` while it runs;
+  with the online address, the same command copies them online.
+- There is no admin key unless `viewer/.dev.vars` (not in git) holds a line `ADMIN_KEY=<key>`;
+  restart `npm run dev` after adding it, and open the viewer once with `?admin=<key>`.
+
+`npm run preview --prefix viewer` serves the last `npm run build` the same way,
+to try the production build before deploying.
+`npx wrangler d1 execute terraino-results --local --command "SELECT …"` in `viewer/` queries the
+local database; with `--remote` instead of `--local`, the online one.
 
 ## Development
 

@@ -1,16 +1,15 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { cloudflare } from '@cloudflare/vite-plugin'
 import type { Connect, Plugin } from 'vite'
 import { defineConfig } from 'vite'
-import { resultsMiddleware } from './server/results'
 
 // World packages are written by the Python pipeline to ../worlds, and races by
 // `npm run add-race` to ../races. Serve them at /worlds/ and /races/ in both the dev
-// server and `vite preview`, without copying them into dist.
+// server and `vite preview`, without copying them into dist; `npm run deploy` uploads them.
 const worldsDir = fileURLToPath(new URL('../worlds', import.meta.url))
-// Results lists and races are kept next to the worlds, so rebuilding a world leaves them alone.
-const resultsDir = fileURLToPath(new URL('../results', import.meta.url))
+// Races are kept next to the worlds, so rebuilding a world leaves them alone.
 const racesDir = fileURLToPath(new URL('../races', import.meta.url))
 
 const contentTypes: Record<string, string> = {
@@ -59,7 +58,6 @@ function useMiddlewares(app: Connect.Server) {
   app.use(listWorldsHandler)
   app.use(serveDir('worlds', worldsDir))
   app.use(serveDir('races', racesDir))
-  app.use(resultsMiddleware(resultsDir))
 }
 
 function worldsPlugin(): Plugin {
@@ -70,7 +68,8 @@ function worldsPlugin(): Plugin {
   }
 }
 
+// The Cloudflare plugin runs the results Worker (worker/index.ts) with a local D1 database.
 export default defineConfig({
-  plugins: [worldsPlugin()],
+  plugins: [worldsPlugin(), cloudflare()],
   server: { port: 5173 },
 })

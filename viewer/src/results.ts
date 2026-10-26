@@ -1,36 +1,12 @@
-import type { Control, Course } from './course'
+import type { Course } from './course'
+import type { Result, ResultsCourse, ResultsFile, SavedResults } from '../worker/results'
 
-// Results lists, one per course. The Vite server keeps them in results/<map>/<key>.json
-// (docs/adr/0001-results-stored-by-the-vite-server.md); this module is what the viewer
+// Results lists, one per course. The results Worker keeps them in D1
+// (docs/adr/0003-results-stored-in-d1-by-a-worker.md); this module is what the viewer
 // needs to read, write and rank them.
 
-/** One finished run in competition mode. */
-export interface Result {
-  id: string
-  name: string
-  /** When the run was finished (real time), as an ISO date. */
-  date: string
-  /** Split times in seconds of game time, one per control after the start; the last is the run time. */
-  splits: number[]
-  /** Where the runner went: projected positions, one per second of game time from the start. */
-  route: Control[]
-}
-
-/** What a results list is for: the course as it was when its first result was saved. */
-export interface ResultsCourse {
-  /** The course name from the course file, or null for a course set by hand. */
-  name: string | null
-  controls: Control[]
-  /** Control codes from the course file, one per control, or null. */
-  codes: string[] | null
-}
-
-export interface ResultsFile {
-  course: ResultsCourse
-  results: Result[]
-}
-
-export const MAX_NAME_LENGTH = 40
+export type { Result, ResultsCourse, ResultsFile } from '../worker/results'
+export { MAX_NAME_LENGTH } from '../worker/results'
 
 /**
  * The results list's key for a course: a hash of its control positions in order, rounded
@@ -136,6 +112,53 @@ export function resultsTable(
 
 const url = (map: string, key: string) => `/results/${encodeURIComponent(map)}/${key}.json`
 
+// The key that deletes each result saved in this browser, by result id.
+const DELETE_KEYS = 'terraino.deleteKeys'
+// The admin key, which deletes any result; ?admin=<key> stores it.
+const ADMIN_KEY = 'terraino.adminKey'
+
+function deleteKeys(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(DELETE_KEYS) ?? '{}') as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+
+function storeDeleteKeys(keys: Record<string, string>) {
+  try {
+    localStorage.setItem(DELETE_KEYS, JSON.stringify(keys))
+  } catch {
+    // Not remembered: the result can then only be deleted with the admin key.
+  }
+}
+
+function adminKey(): string | null {
+  try {
+    return localStorage.getItem(ADMIN_KEY)
+  } catch {
+    return null
+  }
+}
+
+/** Keep an admin key given as ?admin=<key>, and take it out of the address. */
+export function takeAdminKey() {
+  const params = new URLSearchParams(location.search)
+  const key = params.get('admin')
+  if (key === null) return
+  try {
+    if (key) localStorage.setItem(ADMIN_KEY, key)
+    else localStorage.removeItem(ADMIN_KEY)
+  } catch {
+    // Not remembered.
+  }
+  params.delete('admin')
+  history.replaceState(null, '', `${location.pathname}${params.size ? `?${params}` : ''}${location.hash}`)
+}
+
+/** Whether this browser may delete a result: it saved it, or it has the admin key. */
+export const canDelete = (id: string): boolean => id in deleteKeys() || adminKey() !== null
+
 /** The results list for a course on a map, or null if it has none yet. */
 export async function fetchResults(map: string, key: string): Promise<ResultsFile | null> {
   const response = await fetch(url(map, key), { cache: 'no-store' })
@@ -144,7 +167,7 @@ export async function fetchResults(map: string, key: string): Promise<ResultsFil
   return (await response.json()) as ResultsFile
 }
 
-/** Add a result to a course's list; returns the list as saved. */
+/** Add a result to a course's list, keeping the key that deletes it; returns the list as saved. */
 export async function saveResult(map: string, key: string, course: ResultsCourse, result: Result): Promise<ResultsFile> {
   const response = await fetch(url(map, key), {
     method: 'POST',
@@ -152,12 +175,20 @@ export async function saveResult(map: string, key: string, course: ResultsCourse
     body: JSON.stringify({ course, result }),
   })
   if (!response.ok) throw new Error(`${response.status} ${await response.text()}`)
-  return (await response.json()) as ResultsFile
+  const { deleteKey, ...file } = (await response.json()) as SavedResults
+  storeDeleteKeys({ ...deleteKeys(), [result.id]: deleteKey })
+  return file
 }
 
 /** Delete a result from a course's list; returns the list as left. */
 export async function deleteResult(map: string, key: string, id: string): Promise<ResultsFile> {
-  const response = await fetch(`${url(map, key)}?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+  const keys = deleteKeys()
+  const response = await fetch(`${url(map, key)}?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${keys[id] ?? adminKey() ?? ''}` },
+  })
   if (!response.ok) throw new Error(`${response.status} ${await response.text()}`)
+  delete keys[id]
+  storeDeleteKeys(keys)
   return (await response.json()) as ResultsFile
 }

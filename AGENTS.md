@@ -91,9 +91,23 @@ The two sides must agree on several things:
 
 `viewer/vite.config.ts` serves `../worlds/` at `/worlds/`
 (and `/worlds/index.json` lists them) and `../races/` at `/races/` in both dev and preview.
-Worlds and races are never copied into `dist`.
-It also keeps results lists in `../results/<world>/<course key>.json` through the endpoint in
-`viewer/server/results.ts` (see `docs/adr/0001-results-stored-by-the-vite-server.md`).
+Worlds and races are never copied into `dist`;
+`npm run deploy` (`viewer/scripts/deploy.ts`) adds them to the build it uploads to Cloudflare.
+
+### Results Worker (`viewer/worker/`)
+
+The viewer runs on Cloudflare at <https://terraino.arnesor.workers.dev>: the app,
+worlds and races are static assets, and `worker/index.ts` answers `/results/`,
+keeping results lists in the D1 database `terraino-results`
+(see `docs/adr/0003-results-stored-in-d1-by-a-worker.md`).
+`viewer/wrangler.jsonc` configures it, and `worker/migrations/` holds the schema.
+`worker/results.ts` is the endpoint's contract and checks, shared with the browser,
+so it must not use Workers types.
+The Worker has its own `worker/tsconfig.json`,
+with the binding and runtime types that `npm run types` writes to `worker-configuration.d.ts`
+(not in git); `npm run typecheck` runs it first.
+`npm run dev` runs the Worker through the Cloudflare Vite plugin with a local database;
+the tests use `vitest.config.ts`, without that plugin.
 
 ### Viewer (`viewer/src/`)
 

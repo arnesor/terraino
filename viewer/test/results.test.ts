@@ -1,11 +1,5 @@
-import fs from 'node:fs'
-import http from 'node:http'
-import type { AddressInfo } from 'node:net'
-import os from 'node:os'
-import path from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { resultsMiddleware } from '../server/results'
-import { courseKey, type Result, type ResultsCourse, resultsTable } from '../src/results'
+import { describe, expect, it } from 'vitest'
+import { courseKey, type Result, resultsTable } from '../src/results'
 
 /** A result with these split times (seconds) on a three-leg course. */
 function result(name: string, splits: number[], date = '2026-10-25T12:00:00Z'): Result {
@@ -68,63 +62,5 @@ describe('course key', () => {
     expect(courseKey({ controls: [[665399.9, 6645000.1], [665500.3, 6645099.8]] })).toBe(a)
     expect(courseKey({ controls: [[665401, 6645000], [665500, 6645100]] })).not.toBe(a)
     expect(courseKey({ controls: [[665500, 6645100], [665400, 6645000]] })).not.toBe(a)
-  })
-})
-
-describe('results server', () => {
-  let dir: string
-  let server: http.Server
-  let base: string
-  const course: ResultsCourse = { name: 'Kort', controls: [[0, 0], [100, 0], [100, 100], [0, 100]], codes: null }
-  const key = courseKey(course)
-
-  beforeAll(async () => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'terraino-results-'))
-    const middleware = resultsMiddleware(dir)
-    server = http.createServer((req, res) =>
-      middleware(req, res, () => {
-        res.statusCode = 418
-        res.end()
-      }),
-    )
-    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
-    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
-  })
-  afterAll(() => {
-    server.close()
-    fs.rmSync(dir, { recursive: true, force: true })
-  })
-
-  const post = (map: string, body: unknown) =>
-    fetch(`${base}/results/${encodeURIComponent(map)}/${key}.json`, { method: 'POST', body: JSON.stringify(body) })
-
-  it('keeps results per map and course, and deletes them', async () => {
-    expect((await fetch(`${base}/results/Langvatnet/${key}.json`)).status).toBe(404)
-    const ola = result('Ola', [60, 200, 300])
-    const saved = await post('Langvatnet', { course, result: ola })
-    expect(saved.status).toBe(200)
-    await post('Langvatnet', { course, result: result('Kari', [70, 180, 290]) })
-    const list = await (await fetch(`${base}/results/Langvatnet/${key}.json`)).json()
-    expect(list.course).toEqual(course)
-    expect(list.results.map((r: Result) => r.name)).toEqual(['Ola', 'Kari'])
-    expect(fs.existsSync(path.join(dir, 'Langvatnet', `${key}.json`))).toBe(true)
-
-    const left = await fetch(`${base}/results/Langvatnet/${key}.json?id=${ola.id}`, { method: 'DELETE' })
-    expect((await left.json()).results.map((r: Result) => r.name)).toEqual(['Kari'])
-    expect((await fetch(`${base}/results/Other/${key}.json`)).status).toBe(404)
-  })
-
-  it('refuses results that do not fit the course, and paths out of its folder', async () => {
-    const bad = [
-      { course, result: result('', [60, 200, 300]) }, // no name
-      { course, result: result('Ola', [60, 200]) }, // a split missing
-      { course, result: result('Ola', [60, 50, 300]) }, // time going backwards
-      { course, result: result('x'.repeat(41), [60, 200, 300]) }, // name too long
-    ]
-    for (const body of bad) expect((await post('Langvatnet', body)).status).toBe(400)
-    // An encoded backslash reaches the server; '..' is resolved away by the URL already.
-    expect((await post('..\\..\\x', { course, result: result('Ola', [60, 200, 300]) })).status).toBe(400)
-    expect((await post('..', { course, result: result('Ola', [60, 200, 300]) })).status).not.toBe(200)
-    expect(fs.readdirSync(dir)).toEqual(['Langvatnet'])
   })
 })

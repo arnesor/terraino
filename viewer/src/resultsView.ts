@@ -2,6 +2,7 @@ import { type CourseRun, formatTime } from './course'
 import type { Hud } from './hud'
 import { formatNumber, t } from './i18n'
 import {
+  canDelete,
   courseKey,
   deleteResult,
   fetchResults,
@@ -300,7 +301,7 @@ export class ResultsView {
 
       const deleteCell = el('td', 'delete', legs)
       deleteCell.rowSpan = 2
-      if (id !== UNSAVED) {
+      if (id !== UNSAVED && canDelete(id)) {
         const remove = el('button', 'hud-map-button', deleteCell, '✕')
         remove.title = t('deleteResult')
         remove.addEventListener('click', () => void this.remove(row.result))
