@@ -118,7 +118,8 @@ only competition runs can be saved.
 `placement.ts` puts each flag on the side of the feature that its description names.
 
 - All UI text is in `i18n.ts` (English and Norwegian).
-  To add a language, add it to `LANGS`; `npm run typecheck` lists the texts still missing.
+  To add a language, add it to `LANGS`;
+  `npm run typecheck` lists the texts and the flag still missing.
 - `vendor/` (textures, tree/bush/rock models) comes from another project, under its own licence.
 - `descriptions/symbols.json` is generated from Purple Pen's `symbols.xml` by
   `uv run scripts/convert_symbols.py symbols.xml viewer/src/descriptions/symbols.json`.

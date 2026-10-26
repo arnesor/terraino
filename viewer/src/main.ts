@@ -11,7 +11,7 @@ import { GrainFields } from './grain'
 import { asLayerTexture } from './groundMaterial'
 import { HeightField } from './heightfield'
 import { Hud } from './hud'
-import { applyTranslations, formatNumber, setupLanguageSelect, t, type TextKey } from './i18n'
+import { applyTranslations, formatNumber, setupLanguageFlags, t, type TextKey } from './i18n'
 import { decodePng, LayerStore } from './layers'
 import { type CourseControl, type CourseFile, type ImportedCourse, readCourseFile } from './ocad/courses'
 import { OcadError } from './ocad/reader'
@@ -30,7 +30,7 @@ const overlay = document.getElementById('overlay')!
 const status = document.getElementById('status')!
 const startButton = document.getElementById('start') as HTMLButtonElement
 const worldSelect = document.getElementById('world-select') as HTMLSelectElement
-const langSelect = document.getElementById('lang-select') as HTMLSelectElement
+const langFlags = document.getElementById('lang-flags')!
 const raceLabel = document.getElementById('race-label')!
 const raceSelect = document.getElementById('race-select') as HTMLSelectElement
 const courseFileButton = document.getElementById('course-file-button') as HTMLButtonElement
@@ -40,7 +40,7 @@ const courseLabel = document.getElementById('course-label')!
 const courseSelect = document.getElementById('course-select') as HTMLSelectElement
 
 applyTranslations()
-setupLanguageSelect(langSelect)
+setupLanguageFlags(langFlags)
 
 /** Let the browser draw and handle input between heavy startup steps. */
 function pause(): Promise<void> {

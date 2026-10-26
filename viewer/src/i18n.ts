@@ -1,11 +1,29 @@
 // All text shown in the user interface, in every language, in one place.
 //
 // To add a language, add it to LANGS: the type check (npm run typecheck) then lists
-// every string that still needs a translation. Texts may hold {name} placeholders,
+// every string that still needs a translation, and the flag. Texts may hold {name} placeholders,
 // filled in by t(key, { name: value }). Keyboard shortcuts are the same in every language.
 
 export const LANGS = { en: 'English', nb: 'Norsk' } as const
 export type Lang = keyof typeof LANGS
+
+/**
+ * The flag on each language's button on the start screen, as SVG (flag emoji are letters on
+ * Windows). All are drawn at 3:2, so the buttons have the same size.
+ */
+const FLAGS: Record<Lang, string> = {
+  en:
+    '<svg viewBox="0 0 60 40"><clipPath id="flag-en-clip"><path d="M30 20h30v20zv20H0zH0V0zV0h30z"/></clipPath>' +
+    '<path d="M0 0h60v40H0z" fill="#012169"/>' +
+    '<path d="M0 0l60 40m0-40L0 40" stroke="#fff" stroke-width="8"/>' +
+    '<path d="M0 0l60 40m0-40L0 40" clip-path="url(#flag-en-clip)" stroke="#c8102e" stroke-width="5"/>' +
+    '<path d="M30 0v40M0 20h60" stroke="#fff" stroke-width="13"/>' +
+    '<path d="M30 0v40M0 20h60" stroke="#c8102e" stroke-width="8"/></svg>',
+  nb:
+    '<svg viewBox="0 0 24 16"><path d="M0 0h24v16H0z" fill="#ba0c2f"/>' +
+    '<path d="M6 0h4v16H6zM0 6h24v4H0z" fill="#fff"/>' +
+    '<path d="M7 0h2v16H7zM0 7h24v2H0z" fill="#00205b"/></svg>',
+}
 
 const STRINGS = {
   // Start screen.
@@ -440,15 +458,20 @@ export function applyTranslations(root: ParentNode = document) {
 }
 
 /** Fill a <select> with the languages and switch when another is chosen. */
-export function setupLanguageSelect(select: HTMLSelectElement) {
-  for (const [code, name] of Object.entries(LANGS)) {
-    const option = document.createElement('option')
-    option.value = code
-    option.textContent = name
-    select.appendChild(option)
+/** A flag button for each language in `group`; the current one is pressed. */
+export function setupLanguageFlags(group: HTMLElement) {
+  for (const [code, name] of Object.entries(LANGS) as [Lang, string][]) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'lang-flag'
+    button.title = name
+    button.lang = code
+    button.setAttribute('aria-label', name)
+    button.setAttribute('aria-pressed', String(code === current))
+    button.innerHTML = FLAGS[code]
+    button.addEventListener('click', () => {
+      if (code !== current) switchLang(code)
+    })
+    group.appendChild(button)
   }
-  select.value = current
-  select.addEventListener('change', () => {
-    if (isLang(select.value)) switchLang(select.value)
-  })
 }
