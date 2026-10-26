@@ -6,12 +6,15 @@
   "type": "module",
   "bin": "export.mjs",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12"
   },
   "dependencies": {
     "@resvg/resvg-js": "2.6.2",
-    "ocad2geojson": "2.1.23",
-    "xmldom": "0.6.0"
+    "@xmldom/xmldom": "0.9.12",
+    "ocad2geojson": "2.1.23"
   },
-  "license": "AGPL-3.0-only"
+  "license": "AGPL-3.0-only",
+  "overrides": {
+    "xmldom": "npm:@xmldom/xmldom@0.9.12"
+  }
 }

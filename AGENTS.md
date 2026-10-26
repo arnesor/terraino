@@ -90,8 +90,8 @@ The two sides must agree on several things:
   both relative to the north-west height sample.
 
 `viewer/vite.config.ts` serves `../worlds/` at `/worlds/`
-(and `/worlds/index.json` lists them) in both dev and preview.
-Worlds are never copied into `dist`.
+(and `/worlds/index.json` lists them) and `../races/` at `/races/` in both dev and preview.
+Worlds and races are never copied into `dist`.
 It also keeps results lists in `../results/<world>/<course key>.json` through the endpoint in
 `viewer/server/results.ts` (see `docs/adr/0001-results-stored-by-the-vite-server.md`).
 
@@ -106,6 +106,9 @@ It also keeps results lists in `../results/<world>/<course key>.json` through th
 the game loop moves the player and the run on in its short steps.
 `course.ts` and `ocad/` read OCAD course setting files with the viewer's own reader,
 independent of `tools/ocad-export`.
+`races.ts` checks that a course file fits a world and lists the races of a world;
+`scripts/add-race.ts` (`npm run add-race`) adds one
+(see `docs/adr/0002-races-kept-as-files-next-to-the-worlds.md`).
 `descriptions/` holds the IOF control description table.
 `results.ts` ranks results and talks to the results endpoint;
 `resultsView.ts` is the Finished panel and the results list window.
@@ -115,7 +118,8 @@ only competition runs can be saved.
 `placement.ts` puts each flag on the side of the feature that its description names.
 
 - All UI text is in `i18n.ts` (English and Norwegian).
-  To add a language, add it to `LANGS`; `npm run typecheck` lists the texts still missing.
+  To add a language, add it to `LANGS`;
+  `npm run typecheck` lists the texts and the flag still missing.
 - `vendor/` (textures, tree/bush/rock models) comes from another project, under its own licence.
 - `descriptions/symbols.json` is generated from Purple Pen's `symbols.xml` by
   `uv run scripts/convert_symbols.py symbols.xml viewer/src/descriptions/symbols.json`.

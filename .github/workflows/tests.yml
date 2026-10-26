@@ -57,6 +57,54 @@ jobs:
       - name: Run documentation examples
         run: uv run python -m xdoctest --modname=terraino --command=all --colored=1
 
+  viewer:
+    name: Viewer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Get uv version from constraints
+        id: uv-version
+        shell: pwsh
+        run: |
+          $UV_VERSION = (Get-Content .github/workflows/constraints.txt | Where-Object { $_ -match '^uv==' } | ForEach-Object { ($_ -split '==')[1] })
+          echo "version=$UV_VERSION" >> $env:GITHUB_OUTPUT
+
+      # The world tests build the fixture world with the Python pipeline first.
+      - name: Install uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+        with:
+          enable-cache: true
+          version: ${{ steps.uv-version.outputs.version }}
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Install Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            tools/ocad-export/package-lock.json
+            viewer/package-lock.json
+
+      - name: Install the OCAD exporter
+        run: npm ci --prefix tools/ocad-export
+
+      - name: Install the viewer
+        run: npm ci --prefix viewer
+
+      - name: Run typecheck
+        run: npm run typecheck --prefix viewer
+
+      - name: Run tests
+        run: npm test --prefix viewer
+
   tests:
     name: Tests / Python ${{ matrix.python }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -92,6 +140,13 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --locked
+
+      - name: Install Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: tools/ocad-export/package-lock.json
 
       - name: Install the OCAD exporter
         run: npm ci --prefix tools/ocad-export

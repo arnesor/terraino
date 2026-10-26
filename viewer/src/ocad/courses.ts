@@ -49,10 +49,15 @@ export interface CourseFile {
   controls: CourseControl[]
   /** UTM zone of the file's georeferencing, if it is known. */
   zone: number | null
+  /** The event title from the course setting settings, or '' if the file has none. */
+  event: string
+  /** File name of the map the courses were set on (OCAD's background map), if it is known. */
+  setOn: string | null
 }
 
 // Parameter string types.
 const COURSE = 2
+const BACKGROUND_MAP = 8
 const COURSE_SETTING = 1031
 const SCALE_PAR = 1039
 // Course setting symbols are numbered 7xx; OCAD stores symbol numbers times 1000.
@@ -208,7 +213,9 @@ export function coursesFromOcad(file: OcadFile, offset: Point = [0, 0]): CourseF
   const all = [...controls.values()]
     .filter(c => c.kind === 'c')
     .map(c => ({ kind: 'control' as const, code: c.code, position: georef.toProjected(c.at), description: c.description }))
-  return { courses, controls: all, zone: utmZone(scalePar) }
+  // Background maps are stored with the course setter's full path, often a Windows one.
+  const setOn = byType(BACKGROUND_MAP)[0]?.first.split(/[\\/]/).pop() || null
+  return { courses, controls: all, zone: utmZone(scalePar), event, setOn }
 }
 
 export function readCourseFile(buffer: ArrayBuffer, offset: Point = [0, 0]): CourseFile {

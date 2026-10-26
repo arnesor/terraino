@@ -37,6 +37,42 @@ body {
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
 }
 
+.panel .panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel .lang-flags {
+  display: flex;
+  gap: 6px;
+}
+
+.panel button.lang-flag {
+  display: flex;
+  padding: 0;
+  border-radius: 2px;
+  background: none;
+  opacity: 0.45;
+  outline-offset: 2px;
+}
+
+.panel button.lang-flag:hover {
+  opacity: 0.8;
+}
+
+.panel button.lang-flag[aria-pressed='true'] {
+  opacity: 1;
+  outline: 2px solid #e0701d;
+}
+
+.panel button.lang-flag svg {
+  width: 27px;
+  height: 18px;
+  display: block;
+}
+
 .panel h1 {
   margin: 0;
   font-size: 22px;
@@ -378,6 +414,11 @@ body {
   align-items: center;
   gap: 6px;
   margin: 0 14px 6px 0;
+}
+
+/* display above would otherwise show hidden labels (the race and course lists). */
+.panel label[hidden] {
+  display: none;
 }
 
 .panel .course-row {

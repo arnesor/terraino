@@ -11,13 +11,14 @@ import { GrainFields } from './grain'
 import { asLayerTexture } from './groundMaterial'
 import { HeightField } from './heightfield'
 import { Hud } from './hud'
-import { applyTranslations, formatNumber, setupLanguageSelect, t, type TextKey } from './i18n'
+import { applyTranslations, formatNumber, setupLanguageFlags, t, type TextKey } from './i18n'
 import { decodePng, LayerStore } from './layers'
-import { type CourseControl, type ImportedCourse, readCourseFile } from './ocad/courses'
+import { type CourseControl, type CourseFile, type ImportedCourse, readCourseFile } from './ocad/courses'
 import { OcadError } from './ocad/reader'
 import { blocked, type PlacementData, placeFlag } from './placement'
 import { isTyping } from './keyboard'
 import { Player } from './player'
+import { courseFileProblem, fetchRaceFile, listRaces, outsideMap, type Race } from './races'
 import { ResultsView } from './resultsView'
 import { Terrain } from './terrain'
 import { Tracks } from './tracks'
@@ -29,7 +30,9 @@ const overlay = document.getElementById('overlay')!
 const status = document.getElementById('status')!
 const startButton = document.getElementById('start') as HTMLButtonElement
 const worldSelect = document.getElementById('world-select') as HTMLSelectElement
-const langSelect = document.getElementById('lang-select') as HTMLSelectElement
+const langFlags = document.getElementById('lang-flags')!
+const raceLabel = document.getElementById('race-label')!
+const raceSelect = document.getElementById('race-select') as HTMLSelectElement
 const courseFileButton = document.getElementById('course-file-button') as HTMLButtonElement
 const resultsButton = document.getElementById('results-button') as HTMLButtonElement
 const courseFile = document.getElementById('course-file') as HTMLInputElement
@@ -37,7 +40,7 @@ const courseLabel = document.getElementById('course-label')!
 const courseSelect = document.getElementById('course-select') as HTMLSelectElement
 
 applyTranslations()
-setupLanguageSelect(langSelect)
+setupLanguageFlags(langFlags)
 
 /** Let the browser draw and handle input between heavy startup steps. */
 function pause(): Promise<void> {
@@ -68,6 +71,11 @@ async function chooseWorld(): Promise<string | null> {
   return name
 }
 
+/** Look towards a heading (degrees clockwise from north), tilted up or down by a pitch. */
+function face(player: Player, headingDeg: number, pitchDeg = 0) {
+  player.camera.rotation.set(THREE.MathUtils.degToRad(pitchDeg), -THREE.MathUtils.degToRad(headingDeg), 0, 'YXZ')
+}
+
 /**
  * Viewpoint from the URL, for sharing a spot or for screenshots:
  * at=E,N[,heightAboveGround] in the world's CRS, look=headingDeg[,pitchDeg].
@@ -84,17 +92,7 @@ function applyViewParams(player: Player, world: World) {
     }
   }
   const look = params.get('look')?.split(',').map(Number)
-  if (look && look.every(Number.isFinite)) {
-    const heading = THREE.MathUtils.degToRad(look[0] ?? 0)
-    const pitch = THREE.MathUtils.degToRad(look[1] ?? 0)
-    player.camera.rotation.set(pitch, -heading, 0, 'YXZ')
-  }
-}
-
-/** UTM zone of an EPSG code such as EPSG:25832 or EPSG:32632. */
-function utmZone(crs: string): number | null {
-  const code = Number(crs.split(':')[1])
-  return (code > 25800 && code <= 25860) || (code > 32600 && code <= 32660) ? code % 100 : null
+  if (look && look.every(Number.isFinite)) face(player, look[0] ?? 0, look[1] ?? 0)
 }
 
 /**
@@ -122,40 +120,58 @@ function ocadMessage(err: unknown): string {
   return t('error', { message: err instanceof Error ? err.message : String(err) })
 }
 
-/** Course file button and course list on the start screen. */
-function setupCourseImport(world: World, placement: PlacementData, choose: (course: Course) => void) {
+/** Race list, course file button and course list on the start screen. */
+function setupCourseImport(name: string, world: World, placement: PlacementData, choose: (course: Course) => void) {
   let courses: ImportedCourse[] = []
   let allControls: CourseControl[] = []
-  courseFileButton.disabled = false
-  courseFileButton.addEventListener('click', () => courseFile.click())
-  courseFile.addEventListener('change', async () => {
-    const file = courseFile.files?.[0]
-    courseFile.value = ''
-    if (!file) return
-    setStatus(t('readingCourses', { file: file.name }))
+  /** Offer the courses of a course file, from a race or opened by the runner. */
+  const offer = (read: CourseFile, label: string) => {
+    const problem = courseFileProblem(read, world.manifest)
+    if (problem) throw new Error(t(problem.kind, problem))
+    courses = read.courses
+    allControls = read.controls
+    courseSelect.replaceChildren(new Option(t('chooseCourse'), ''))
+    courses.forEach((c, i) => courseSelect.add(new Option(c.name, String(i))))
+    courseLabel.hidden = false
+    setStatus(t('coursesFound', { count: courses.length, file: label }))
+  }
+  const read = async (label: string, buffer: () => Promise<ArrayBuffer>) => {
+    setStatus(t('readingCourses', { file: label }))
     try {
-      const read = readCourseFile(await file.arrayBuffer(), world.manifest.map.offset ?? [0, 0])
-      const mapZone = utmZone(world.manifest.crs)
-      if (read.zone !== null && mapZone !== null && read.zone !== mapZone) {
-        throw new Error(t('wrongZone', { course: read.zone, map: mapZone }))
-      }
-      if (!read.courses.length) throw new Error(t('noCourses'))
-      courses = read.courses
-      allControls = read.controls
-      courseSelect.replaceChildren(new Option(t('chooseCourse'), ''))
-      courses.forEach((c, i) => courseSelect.add(new Option(c.name, String(i))))
-      courseLabel.hidden = false
-      setStatus(t('coursesFound', { count: courses.length, file: file.name }))
+      offer(readCourseFile(await buffer(), world.manifest.map.offset ?? [0, 0]), label)
     } catch (err) {
       setStatus(err instanceof OcadError ? ocadMessage(err) : err instanceof Error ? err.message : String(err))
     }
+  }
+
+  let races: Race[] = []
+  listRaces(name).then(
+    list => {
+      races = list
+      raceSelect.replaceChildren(new Option(t('chooseRace'), ''))
+      races.forEach((r, i) => raceSelect.add(new Option(`${r.date} · ${r.name}`, String(i))))
+      raceLabel.hidden = !races.length
+    },
+    (err: unknown) => console.warn('No races:', err),
+  )
+  raceSelect.addEventListener('change', () => {
+    const race = races[Number(raceSelect.value)]
+    if (raceSelect.value && race) void read(race.name, () => fetchRaceFile(name, race))
+  })
+
+  courseFileButton.disabled = false
+  courseFileButton.addEventListener('click', () => courseFile.click())
+  courseFile.addEventListener('change', () => {
+    const file = courseFile.files?.[0]
+    courseFile.value = ''
+    if (!file) return
+    raceSelect.value = ''
+    void read(file.name, () => file.arrayBuffer())
   })
   courseSelect.addEventListener('change', () => {
     const imported = courses[Number(courseSelect.value)]
     if (!courseSelect.value || !imported) return
-    const [x0, y0, x1, y1] = world.manifest.extent
-    const inside = ({ position: [e, n] }: { position: Control }) => e >= x0 && e <= x1 && n >= y0 && n <= y1
-    if (!imported.controls.every(inside)) {
+    if (outsideMap(imported, world.manifest)) {
       setStatus(t('outsideMap', { name: imported.name }))
       return
     }
@@ -275,6 +291,7 @@ async function main() {
   }
   const [sx, sz] = world.toScene(...world.manifest.spawn)
   player.placeAt(sx, sz)
+  face(player, world.manifest.spawnHeading ?? 0)
   applyViewParams(player, world)
   const placement: PlacementData = {
     ...(features?.data ?? { kinds: [], points: [], lines: [], cliffs: [] }),
@@ -424,7 +441,7 @@ async function main() {
   await pause()
   await renderer.compileAsync(scene, camera)
 
-  setupCourseImport(world, placement, course => {
+  setupCourseImport(name, world, placement, course => {
     run.setCourse(course)
     hud.showDescriptions(true)
     goToStart()

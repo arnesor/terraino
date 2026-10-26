@@ -81,6 +81,24 @@ def main(verbose: bool) -> None:
     help="Coordinate system of an image map's world file, e.g. 25832 or 25833.",
 )
 @click.option(
+    "--spawn",
+    nargs=2,
+    type=float,
+    metavar="E N",
+    help=(
+        "Where the runner stands when the world opens: easting and northing in the"
+        " map's coordinate system, as the viewer shows them. Default: a point inside"
+        " the map."
+    ),
+)
+@click.option(
+    "--heading",
+    type=click.FloatRange(0, 360, max_open=True),
+    default=0.0,
+    show_default=True,
+    help="Where the runner looks when the world opens, in degrees clockwise from north.",
+)
+@click.option(
     "--no-forest",
     is_flag=True,
     help="Build terrain only, without ground layers, buildings and trees.",
@@ -95,6 +113,8 @@ def build(
     lidar_dirs: tuple[Path, ...],
     symbol_set: str | None,
     epsg: int | None,
+    spawn: tuple[float, float] | None,
+    heading: float,
     no_forest: bool,
 ) -> None:
     """Build a 3D world from MAP_PATH.
@@ -112,6 +132,8 @@ def build(
         epsg=epsg,
         forest=not no_forest,
         lidar_dirs=tuple(lidar_dirs),
+        spawn=spawn,
+        heading=heading,
     )
     manifest = build_world(map_path, out, options)
     click.echo(f"World written to {manifest.parent}")

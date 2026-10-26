@@ -27,7 +27,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import ocad2geojson from 'ocad2geojson'
-import xmldom from 'xmldom'
+import xmldom from '@xmldom/xmldom'
 import { Resvg } from '@resvg/resvg-js'
 
 const { readOcad, ocadToGeoJson, ocadToSvg } = ocad2geojson

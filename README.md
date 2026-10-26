@@ -61,7 +61,7 @@ and run through it in the browser like in a first-person game.
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv/) (Python 3.12 or newer is installed by uv)
-- [Node.js](https://nodejs.org/) 20 or newer
+- [Node.js](https://nodejs.org/) 24 (the version in `.node-version`; 22.12 or newer works)
 - An internet connection when building a world (data is cached in `data-cache/`)
 
 ## Installation
@@ -107,6 +107,11 @@ Useful build options (see `uv run terraino build --help`):
 - `--sr16-dir` points to SR16 GeoTIFFs downloaded from Geonorge (or set `TERRAINO_SR16_DIR`);
   they add the number of trees per hectare to the species from the SR16 web map.
 - `--symbols` sets the symbol standard of an OCAD map if the guess is wrong.
+- `--spawn E N` and `--heading DEG` set where you stand and look when the world opens:
+  easting and northing in the map's coordinate system, and degrees clockwise from north.
+  To find them, walk to the spot in the viewer and read E and N in the top-left corner
+  and the heading on the compass bar.
+  By default you stand inside the map, looking north.
 - `--no-forest` builds the terrain only.
 - `--lidar FOLDER` uses a laser point cloud (see below).
 
@@ -126,6 +131,23 @@ Reading them takes about a minute; the result is cached in `data-cache/lidar/`.
 
 Maps must be georeferenced in UTM zone 32, 33 or 35 (ETRS89 or WGS 84).
 
+### Races
+
+A race puts the courses of an event on the start screen,
+so runners do not need the course setting file:
+
+```console
+npm run add-race --prefix viewer -- Langvatnet trlop_260521.ocd
+```
+
+The first argument is the world (the folder in `worlds/`).
+The command checks that the courses lie on the world's map,
+copies the file to `races/<world>/` and lists it there.
+The race is named by the event title in the file and dated by a date in the file name
+(`260521`, `20260521` or `2026-05-21`);
+give `--name "O-karusell 4"` or `--date 2026-05-21` when the file has neither.
+Adding a race with the same name and date again replaces it.
+
 ### In the viewer
 
 | Key         | Action                                            |
@@ -134,8 +156,8 @@ Maps must be georeferenced in UTM zone 32, 33 or 35 (ETRS89 or WGS 84).
 | Mouse       | Look around                                       |
 | E / Q       | Time factor up / down: game time runs up to 10 times as fast |
 | F           | Fly on/off; look up or down to climb or dive      |
-| M           | Map window: drag to move, wheel to zoom, click to put the thumb, double click to go there |
-| Mouse, map open | While steering: hold the left button to move the map, the right to move the thumb; the wheel turns the map |
+| M           | Map window: drag to move, wheel to zoom, click to put the thumb (competition mode), double click to go there |
+| Mouse, map open | While steering: hold the left button to move the map, the right to move the thumb (competition mode); the wheel turns the map |
 | H           | Pause, on the start screen: choose another map or course |
 | K           | Control descriptions on/off                       |
 | N           | With the map open: set a course by clicking (or Set course) |
@@ -152,10 +174,10 @@ Esc again, or H at any time, pauses the game on the start screen,
 where game time stands still and you can choose another map or course.
 Auto turns the map with your running direction; ⟲, ⟳ and N↑ turn it by hand.
 While you steer with the map open, the mouse can hold the map instead of turning the view:
-hold the left button to move the map, or the right button to move the thumb.
+hold the left button to move the map, or in competition mode the right button to move the thumb.
 Your direction stays as it was while you hold, and W A S D keep you running.
-The wheel turns the map 5° a notch, around the thumb.
-The thumb is a see-through arrow that marks where you think you are.
+The wheel turns the map 5° a notch, around the thumb if there is one.
+In competition mode, the thumb is a see-through arrow that marks where you think you are.
 Put it with a click on the map while the mouse is free;
 it moves to the start when you leave the start triangle, and to each control you punch.
 A restart or another course takes it off the map.
@@ -169,7 +191,7 @@ and its dial turns with the map.
 The needle swings as you run, more the faster you go, so a careful reading means slowing down.
 Turn the map (⟲ ⟳) until the dial's N and the meridians lie along the needle,
 and the map matches the terrain; Auto keeps it that way.
-Auto, Legs and Position are remembered.
+Auto, Legs and Position are remembered; competition mode is off each time the page loads.
 
 To run a course from an OCAD course setting file
 (OCAD 12 or newer),
@@ -197,6 +219,7 @@ During such a run there is no help beyond the map and the compass: no position o
 no map that follows you, no coordinates, no heading at the top of the screen, no Auto, no flying,
 no jumps on the map and no map on the ground.
 **Tutorial**, next to Competition under the map, explains step by step how to run in it.
+A run started outside competition mode gets a reminder that it will not be saved.
 At the finish you give your name, and the results list opens: leg and split times with their places,
 as on WinSplits, sorted by run time or, from a column header, by a leg or split time.
 Tick a result to see its route on the map; several routes can be compared.

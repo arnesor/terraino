@@ -14,7 +14,7 @@ import numpy.typing as npt
 from PIL import Image
 from rasterio.transform import Affine
 from rasterio.warp import Resampling
-from shapely import LineString, Polygon
+from shapely import LineString, Point, Polygon
 from shapely.geometry import mapping
 from shapely.geometry.base import BaseGeometry
 
@@ -97,6 +97,10 @@ class BuildOptions:
         epsg: Coordinate system of an image map's world file.
         forest: Set False to build terrain only.
         lidar_dirs: Folders with laser point clouds (LAZ tiles), most preferred first.
+        spawn: Where the runner stands when the world opens ``(easting, northing)``,
+            or None for a point inside the map.
+        heading: Where the runner looks when the world opens, in degrees clockwise
+            from grid north.
     """
 
     margin: float = 300.0
@@ -107,6 +111,8 @@ class BuildOptions:
     epsg: int | None = None
     forest: bool = True
     lidar_dirs: tuple[Path, ...] = ()
+    spawn: tuple[float, float] | None = None
+    heading: float = 0.0
 
 
 @dataclass
@@ -263,6 +269,45 @@ def _as_map_buildings(
     ]
 
 
+def choose_spawn(
+    spawn: tuple[float, float] | None, extent: Extent, map_area: Polygon
+) -> tuple[float, float]:
+    """Where the runner stands when the world opens.
+
+    Args:
+        spawn: The position asked for ``(easting, northing)``, or None.
+        extent: World extent; the position must lie inside it.
+        map_area: Outline of the mapped area. A position outside it is allowed,
+            with a warning.
+
+    Returns:
+        ``spawn``, or a point inside the map area if it is None.
+
+    Raises:
+        ValueError: If ``spawn`` is outside the world.
+
+    Examples:
+        >>> area = Polygon([(10, 10), (90, 10), (90, 90), (10, 90)])
+        >>> choose_spawn((20.0, 30.0), Extent(0, 0, 100, 100), area)
+        (20.0, 30.0)
+        >>> choose_spawn(None, Extent(0, 0, 100, 100), area)
+        (50.0, 50.0)
+    """
+    if spawn is None:
+        point = map_area.representative_point()
+        return (point.x, point.y)
+    east, north = spawn
+    if not (extent.x0 <= east <= extent.x1 and extent.y0 <= north <= extent.y1):
+        msg = (
+            f"The spawn position {east:.0f} {north:.0f} is outside the world"
+            f" ({extent.x0:.0f}-{extent.x1:.0f} E, {extent.y0:.0f}-{extent.y1:.0f} N)"
+        )
+        raise ValueError(msg)
+    if not map_area.contains(Point(east, north)):
+        log.warning("The spawn position %.0f %.0f is outside the map", east, north)
+    return spawn
+
+
 def build_world(map_path: Path, out_dir: Path, options: BuildOptions) -> Path:
     """Build the world package for ``map_path`` in ``out_dir``.
 
@@ -297,9 +342,10 @@ def build_world(map_path: Path, out_dir: Path, options: BuildOptions) -> Path:
         extent.width / 1e3,
         extent.height / 1e3,
     )
+    # Before the downloads, so a mistyped position fails at once.
+    spawn = choose_spawn(options.spawn, extent, source.map_area)
     cache = options.cache_dir
     dtm = fill_missing(kartverket.fetch_height_model("dtm", source.epsg, extent, cache))
-    spawn = source.map_area.representative_point()
     world = WorldData(
         name=map_path.stem,
         epsg=source.epsg,
@@ -311,7 +357,8 @@ def build_world(map_path: Path, out_dir: Path, options: BuildOptions) -> Path:
         map_scale=source.scale,
         map_area=source.map_area,
         omap_features=source.omap,
-        spawn=(spawn.x, spawn.y),
+        spawn=spawn,
+        spawn_heading=options.heading,
         attribution=[kartverket.ATTRIBUTION, OMAP_ATTRIBUTION],
         map_offset=options.offset,
     )

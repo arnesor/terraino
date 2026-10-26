@@ -56,7 +56,7 @@ from terraino.process.symbols import Ground
 from terraino.process.tracks import Track
 from terraino.process.trees import Trees
 
-FORMAT_VERSION = 5
+FORMAT_VERSION = 6
 CHUNK = 256
 HEIGHT_STEP_M = 1.0
 # Height chunks this far from the map keep full detail; the others every COARSE_STEP-th sample.
@@ -131,7 +131,8 @@ class WorldData:
             georeference; the viewer applies it to courses read from OCAD files.
         map_area: Outline of the mapped area.
         omap_features: The map's terrain objects (GeoJSON features).
-        spawn: Start position ``(easting, northing)``.
+        spawn: Where the runner stands when the world opens ``(easting, northing)``.
+        spawn_heading: Where the runner looks then, in degrees clockwise from grid north.
         attribution: Data source credits to show in the viewer.
         layers: Ground layers, or None for a terrain-only world.
         canopy: Canopy height at 1 m for distant forest shading (with ``layers``).
@@ -162,6 +163,7 @@ class WorldData:
     tracks: Sequence[Track] | None = None
     lidar: bool = False
     map_offset: tuple[float, float] = (0.0, 0.0)
+    spawn_heading: float = 0.0
 
 
 def _chunk(grid: npt.NDArray[Any], cx: int, cy: int) -> npt.NDArray[Any]:
@@ -508,6 +510,7 @@ def write_world(out_dir: Path, world: WorldData) -> Path:
         },
         "mapArea": [list(p) for p in world.map_area.exterior.simplify(5).coords],
         "spawn": list(world.spawn),
+        "spawnHeading": world.spawn_heading,
         "attribution": list(world.attribution),
     }
 

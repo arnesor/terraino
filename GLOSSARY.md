@@ -32,6 +32,10 @@ _Avoid_: high-score list, leaderboard
 Two courses with the same control positions are the same course, wherever they came from.
 _Avoid_: track (roads and paths are tracks)
 
+**Race**: The courses of one event, set in one course setting file, with the event's name and date.
+Runners choose a race on the start screen instead of opening a course file.
+_Avoid_: event (OCAD's word for it), competition (see competition mode)
+
 **Split time**: The run time when a control is punched, counted from the start.
 _Avoid_: intermediate time
 
@@ -50,4 +54,5 @@ _Avoid_: race mode, ranked mode
 **Thumb**: The runner's own mark on the map of where they think they are,
 as an orienteer keeps a thumb on the map.
 It moves to each control as it is punched; the game never moves it to the runner's position.
+There is a thumb only in competition mode; otherwise the map can show the runner's position.
 _Avoid_: cursor, marker, pin, position

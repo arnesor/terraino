@@ -63,6 +63,8 @@ export interface Manifest {
   map: { image: string; size: [number, number]; scale: number | null; offset?: [number, number] }
   mapArea: [number, number][]
   spawn: [number, number]
+  /** Where the runner looks at the spawn, in degrees clockwise from grid north (format 6). */
+  spawnHeading?: number
   attribution: string[]
   layers?: LayerInfo
   trees?: TreeInfo
@@ -72,7 +74,8 @@ export interface Manifest {
 }
 
 // Format 5 added the grain ground class; format 4 worlds have none and still work.
-export const SUPPORTED_FORMATS = [4, 5]
+// Format 6 added the spawn heading; older worlds open looking north.
+export const SUPPORTED_FORMATS = [4, 5, 6]
 
 export class World {
   readonly base: string
