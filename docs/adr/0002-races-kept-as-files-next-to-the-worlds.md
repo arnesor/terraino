@@ -10,17 +10,17 @@ The Vite server serves `races/` like `worlds/`, and so can any static host.
 The original OCAD file is kept, not courses converted to another format:
 the viewer reads it in the browser as it reads an opened course file,
 so improvements to the reader reach old races too.
-The index holds only what the start screen lists (name, date, courses),
-so the viewer does not download every file to show them.
+The index holds only what the start screen lists
+(name, date, courses), so the viewer does not download every file to show them.
 
 Course files have no date, and the event title is optional,
 so the command takes them from `--name` and `--date`,
 or from the event title and a date in the file name (`trlop_260521.ocd` is 2026-05-21).
-The background map name in the file is only shown:
-it is the course setter's own path, and often another revision of the map than the world's.
+The background map name in the file is only shown: it is the course setter's own path,
+and often another revision of the map than the world's.
 
-Results lists stay keyed by course, not by race,
-so a course run from a race, an opened file or a link shares one list.
+Results lists stay keyed by course, not by race, so a course run from a race,
+an opened file or a link shares one list.
 
 ## Considered Options
 
@@ -32,4 +32,5 @@ so a course run from a race, an opened file or a link shares one list.
 ## Consequences
 
 A new race needs a redeploy.
-Like `worlds/` and `results/`, `races/` is not in git; it is deployed from the machine that holds it.
+Like `worlds/` and `results/`, `races/` is not in git;
+it is deployed from the machine that holds it.

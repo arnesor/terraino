@@ -71,6 +71,11 @@ async function chooseWorld(): Promise<string | null> {
   return name
 }
 
+/** Look towards a heading (degrees clockwise from north), tilted up or down by a pitch. */
+function face(player: Player, headingDeg: number, pitchDeg = 0) {
+  player.camera.rotation.set(THREE.MathUtils.degToRad(pitchDeg), -THREE.MathUtils.degToRad(headingDeg), 0, 'YXZ')
+}
+
 /**
  * Viewpoint from the URL, for sharing a spot or for screenshots:
  * at=E,N[,heightAboveGround] in the world's CRS, look=headingDeg[,pitchDeg].
@@ -87,11 +92,7 @@ function applyViewParams(player: Player, world: World) {
     }
   }
   const look = params.get('look')?.split(',').map(Number)
-  if (look && look.every(Number.isFinite)) {
-    const heading = THREE.MathUtils.degToRad(look[0] ?? 0)
-    const pitch = THREE.MathUtils.degToRad(look[1] ?? 0)
-    player.camera.rotation.set(pitch, -heading, 0, 'YXZ')
-  }
+  if (look && look.every(Number.isFinite)) face(player, look[0] ?? 0, look[1] ?? 0)
 }
 
 /**
@@ -290,6 +291,7 @@ async function main() {
   }
   const [sx, sz] = world.toScene(...world.manifest.spawn)
   player.placeAt(sx, sz)
+  face(player, world.manifest.spawnHeading ?? 0)
   applyViewParams(player, world)
   const placement: PlacementData = {
     ...(features?.data ?? { kinds: [], points: [], lines: [], cliffs: [] }),

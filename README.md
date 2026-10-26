@@ -107,6 +107,11 @@ Useful build options (see `uv run terraino build --help`):
 - `--sr16-dir` points to SR16 GeoTIFFs downloaded from Geonorge (or set `TERRAINO_SR16_DIR`);
   they add the number of trees per hectare to the species from the SR16 web map.
 - `--symbols` sets the symbol standard of an OCAD map if the guess is wrong.
+- `--spawn E N` and `--heading DEG` set where you stand and look when the world opens:
+  easting and northing in the map's coordinate system, and degrees clockwise from north.
+  To find them, walk to the spot in the viewer and read E and N in the top-left corner
+  and the heading on the compass bar.
+  By default you stand inside the map, looking north.
 - `--no-forest` builds the terrain only.
 - `--lidar FOLDER` uses a laser point cloud (see below).
 

@@ -25,7 +25,7 @@ def test_build_help_lists_options(runner: CliRunner) -> None:
     result = runner.invoke(__main__.main, ["build", "--help"])
     assert result.exit_code == 0
     options = ("--out", "--margin", "--offset", "--cache-dir", "--sr16-dir", "--epsg")
-    for option in (*options, "--symbols", "--no-forest"):
+    for option in (*options, "--symbols", "--no-forest", "--spawn", "--heading"):
         assert option in result.output
 
 
@@ -47,3 +47,12 @@ def test_image_without_georeference_is_reported(
     result = runner.invoke(__main__.main, ["build", str(image), "--out", str(tmp_path)])
     assert result.exit_code != 0
     assert "No georeference" in str(result.exception)
+
+
+def test_heading_must_be_a_compass_direction(runner: CliRunner, tmp_path: Path) -> None:
+    ocad = tmp_path / "map.ocd"
+    ocad.write_bytes(b"")
+    args = ["build", str(ocad), "--out", str(tmp_path), "--heading", "360"]
+    result = runner.invoke(__main__.main, args)
+    assert result.exit_code == 2
+    assert "--heading" in result.output
