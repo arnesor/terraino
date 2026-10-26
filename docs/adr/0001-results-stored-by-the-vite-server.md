@@ -1,5 +1,7 @@
 # Results are stored by the Vite server in `results/`, not in the browser
 
+Superseded by `0003-results-stored-in-d1-by-a-worker.md`.
+
 The viewer has no backend, but results lists must survive browser clean-ups
 and be shared by everyone playing through the same viewer, such as a club laptop.
 So the Vite server (dev and preview, the only ways the viewer runs, since it also serves `worlds/`)

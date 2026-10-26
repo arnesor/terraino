@@ -1,0 +1,4 @@
+# Cloudflare static assets. Vite's build files have a hash in their name: keep them a year.
+# Everything else (index.html, worlds, races) is revalidated before each use.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

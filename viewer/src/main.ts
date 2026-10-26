@@ -19,6 +19,7 @@ import { blocked, type PlacementData, placeFlag } from './placement'
 import { isTyping } from './keyboard'
 import { Player } from './player'
 import { courseFileProblem, fetchRaceFile, listRaces, outsideMap, type Race } from './races'
+import { takeAdminKey } from './results'
 import { ResultsView } from './resultsView'
 import { Terrain } from './terrain'
 import { Tracks } from './tracks'
@@ -39,6 +40,7 @@ const courseFile = document.getElementById('course-file') as HTMLInputElement
 const courseLabel = document.getElementById('course-label')!
 const courseSelect = document.getElementById('course-select') as HTMLSelectElement
 
+takeAdminKey()
 applyTranslations()
 setupLanguageFlags(langFlags)
 
