@@ -22,6 +22,22 @@ const FOOTPRINT = Array.from({ length: 8 }, (_, k) => [
 // Time constant (s) of the spring that smooths the eye height over the slope changes at
 // the height samples.
 const EYE_SPRING = 0.03
+// A runner holding a direction slowly veers off it: the turn rate (rad/m) wanders with this
+// spread in easy forest, changing over about this distance (m). Over 300 m that is about 18°
+// off, 50 m to the side, unless the runner checks the compass. Thicker forest spreads it by
+// 1 / runnability (at most 1 / VEER_RUNNABILITY).
+const VEER_TURN = 0.0027
+const VEER_LENGTH = 25
+const VEER_RUNNABILITY = 0.3
+// Across a slope you also turn downhill, by this many rad/m per unit of side slope (5° per
+// 100 m on a slope of 1 in 5), up to a side slope of VEER_SLOPE.
+const DOWNHILL_PULL = 0.0044
+const VEER_SLOPE = 0.5
+
+/** A normally distributed random number, from uniform ones in [0, 1). */
+function gaussian(random: () => number): number {
+  return Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(2 * Math.PI * random())
+}
 
 /**
  * Move `y`, moving at `v`, towards `target` for `dt` seconds on a critically damped spring
@@ -67,6 +83,11 @@ export class Player {
   canFly: () => boolean = () => true
   /** Accept movement keys without pointer lock (while the map window has the mouse). */
   keysWithoutLock = false
+  /** How much the runner veers off a straight line (1 = as set by VEER_TURN, 0 = not at all). */
+  veer = 1
+  /** Uniform random numbers in [0, 1) for veering. */
+  random: () => number = Math.random
+  private turnRate = 0
 
   constructor(camera: THREE.PerspectiveCamera, dom: HTMLElement, heights: HeightField, bounds: [number, number]) {
     this.camera = camera
@@ -99,6 +120,7 @@ export class Player {
     this.bodyY = this.camera.position.y
     this.verticalSpeed = 0
     this.eyeSpeed = 0
+    this.turnRate = 0
   }
 
   toggleFlying() {
@@ -122,6 +144,27 @@ export class Player {
     const dir = this.camera.getWorldDirection(new THREE.Vector3())
     const deg = THREE.MathUtils.radToDeg(Math.atan2(dir.x, -dir.z))
     return (deg + 360) % 360
+  }
+
+  /**
+   * Turn the view a little for `move`, made on foot from the camera's position: the runner
+   * veers, more in thick forest and downhill across a slope. It goes by the distance run, not
+   * the time, so it is the same at any time factor and nothing while standing still.
+   */
+  private turnFor(move: THREE.Vector3) {
+    const dist = move.length()
+    if (dist === 0 || this.veer === 0) return
+    const pos = this.camera.position
+    // The turn rate wanders (exactly for any step), so the path bends rather than the view shaking.
+    const decay = Math.exp(-dist / VEER_LENGTH)
+    const spread = VEER_TURN / Math.max(this.runnability, VEER_RUNNABILITY)
+    this.turnRate = this.turnRate * decay + spread * Math.sqrt(1 - decay * decay) * gaussian(this.random)
+    // The rise of the ground to the right; turning left (a larger yaw) is downhill then.
+    const side = this.heights.slopeAlong(pos.x, pos.z, -move.z, move.x)
+    const pull = DOWNHILL_PULL * THREE.MathUtils.clamp(side, -VEER_SLOPE, VEER_SLOPE)
+    const euler = new THREE.Euler(0, 0, 0, 'YXZ').setFromQuaternion(this.camera.quaternion)
+    euler.y += (this.turnRate + pull) * dist * this.veer
+    this.camera.quaternion.setFromEuler(euler)
   }
 
   /**
@@ -175,6 +218,7 @@ export class Player {
           }
         }
         move.set(nx - pos.x, 0, nz - pos.z)
+        this.turnFor(move)
         pos.x = nx
         pos.z = nz
       }
