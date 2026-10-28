@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { GameClock } from '../src/clock'
+import { GameClock, MAX_STEP } from '../src/clock'
 import type { HeightField } from '../src/heightfield'
 import { Player } from '../src/player'
 import { CHUNK, syntheticWorld } from './synthetic'
@@ -287,16 +287,17 @@ describe('at a high time factor', () => {
 
 describe('veering off a straight line', () => {
   const RUNS = 200
-  const LEG = 200 // m, east from x = 20 on the one-chunk world
+  const LEG = 200 // m, east from x = 20 on the one-chunk world, by default
 
   /**
-   * Run `runs` legs of `LEG` m east in steps of `dt` s, on ground at runnability `speed`.
+   * Run `runs` legs of `leg` m east in steps of `dt` s (by default the longest the game
+   * takes, which is quicker to test), on ground at runnability `speed`.
    * Returns, per leg, the heading off east at the end (radians, positive to the north) and how
    * far to the side the runner ends (m, positive to the north).
    */
   async function legs(
     f: (col: number, row: number) => number,
-    { speed = 1, dt = DT, random = seeded(1), runs = RUNS } = {},
+    { speed = 1, dt = MAX_STEP, random = seeded(1), runs = RUNS, leg = LEG } = {},
   ) {
     const { player, camera, key } = await setup(f)
     player.veer = 1
@@ -309,7 +310,7 @@ describe('veering off a straight line', () => {
       player.placeAt(20, 128)
       faceEast(camera)
       const p = camera.position
-      for (let i = 0; Math.hypot(p.x - 20, p.z - 128) < LEG && i < 1e5; i++) player.update(dt)
+      for (let i = 0; Math.hypot(p.x - 20, p.z - 128) < leg && i < 1e5; i++) player.update(dt)
       heading.push(THREE.MathUtils.degToRad(90 - player.heading))
       side.push(128 - p.z)
     }
@@ -332,9 +333,10 @@ describe('veering off a straight line', () => {
     expect(Math.abs(deg(mean(heading)))).toBeLessThan(3.5)
   })
 
+  // The comparisons need only shorter legs, which keep the tests quick.
   it('veers more in thick forest', async () => {
-    const easy = rms((await legs(() => 100)).heading)
-    const thick = rms((await legs(() => 100, { speed: 0.5 })).heading)
+    const easy = rms((await legs(() => 100, { leg: 100 })).heading)
+    const thick = rms((await legs(() => 100, { speed: 0.5, leg: 100 })).heading)
     expect(thick / easy).toBeGreaterThan(1.7)
     expect(thick / easy).toBeLessThan(2.3)
   })
@@ -351,8 +353,8 @@ describe('veering off a straight line', () => {
   })
 
   it('veers as much at any step length (time factor)', async () => {
-    const short = rms((await legs(() => 100)).heading)
-    const long = rms((await legs(() => 100, { dt: 0.05, random: seeded(2) })).heading)
+    const short = rms((await legs(() => 100, { dt: DT, leg: 100 })).heading)
+    const long = rms((await legs(() => 100, { random: seeded(2), leg: 100 })).heading)
     expect(long / short).toBeGreaterThan(0.85)
     expect(long / short).toBeLessThan(1.15)
   })
