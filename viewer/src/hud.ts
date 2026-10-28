@@ -15,8 +15,13 @@ const CIRCLE_MM = 3
 const MAX_ZOOM = 8
 const BUTTON_ZOOM = 1.4
 const ROTATE_STEP = Math.PI / 12
-// How far a wheel notch turns the map while steering.
+// How far a wheel notch turns the map while steering, or in competition mode.
 const WHEEL_TURN = (5 * Math.PI) / 180
+
+/** Wheel notches turned in `e`, whether it counts lines or pixels. */
+function wheelNotches(e: WheelEvent): number {
+  return e.deltaMode === 1 ? e.deltaY / 3 : e.deltaY / 100
+}
 // How far the compass needle swings either way at a jog; less when slower, more when faster.
 const NEEDLE_SWING = (6 * Math.PI) / 180
 // Box size of the description panel, in CSS pixels.
@@ -24,6 +29,8 @@ const PANEL_BOX = 24
 // The leg view: at least this much ground across, and how the map moves to it.
 const LEGS_MIN_SPAN_M = 150
 const TRANSITION_S = 1
+// How long zooming around the thumb takes to glide there.
+const ZOOM_GLIDE_S = 0.35
 const SMOOTHING_S = 0.3
 // Compass in the map's top-right corner, in CSS pixels.
 const COMPASS_RADIUS = 34
@@ -131,6 +138,8 @@ export class Hud {
   private legKey = ''
   /** A glide from `from` to the leg view, `k` running from 0 to 1. */
   private transition: { centre: [number, number]; zoom: number; k: number } | null = null
+  /** A glide from the centre and zoom `from` to `to` (zooming around the thumb), `k` from 0 to 1. */
+  private zoomGlide: { from: [number, number, number]; to: [number, number, number]; k: number } | null = null
   /** Jump straight to the leg view on the next frame (the map was hidden). */
   private snap = false
   private shownCourse: Course | null = null
@@ -266,11 +275,14 @@ export class Hud {
     this.mapCanvas.addEventListener('contextmenu', e => {
       e.preventDefault()
       if (this.editing) this.removeLastControl()
+      else if (this.run.competitionMode) this.thumb = this.toProjected(...this.canvasPoint(e))
     })
     this.mapCanvas.addEventListener(
       'wheel',
       e => {
         e.preventDefault()
+        // In competition mode the wheel turns the map, as when setting it by hand.
+        if (this.run.competitionMode) return this.rotate(wheelNotches(e) * WHEEL_TURN)
         const [x, y] = this.canvasPoint(e)
         this.zoomAt(Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0016)), x, y)
       },
@@ -304,8 +316,7 @@ export class Hud {
       e => {
         if (!player.controls.isLocked || !this.mapOpen) return
         e.preventDefault()
-        const notches = e.deltaMode === 1 ? e.deltaY / 3 : e.deltaY / 100
-        this.rotate(notches * WHEEL_TURN)
+        this.rotate(wheelNotches(e) * WHEEL_TURN)
       },
       { passive: false },
     )
@@ -381,12 +392,33 @@ export class Hud {
     this.toastTimer = setTimeout(() => (this.toast.hidden = true), 2500)
   }
 
-  /** Competition mode on or off; there is a thumb only while it is on. */
+  /**
+   * Competition mode on or off; there is a thumb only while it is on. Turning it on also
+   * turns off the position and Auto, which a competition run does not allow, and leaves the
+   * map turned as it is.
+   */
   private setCompetition(on: boolean) {
     this.run.competitionMode = on
     this.competitionButton.classList.toggle('active', on)
+    if (on) {
+      this.positionBox.checked = false
+      this.setAuto(false, true)
+    }
     if (!on) this.thumb = null
     this.updateHelp()
+  }
+
+  /**
+   * Get the map ready to run (Click to start): Position ticked and Auto on, so the map is
+   * turned the way you run. Competition mode has neither; the map is turned once instead.
+   */
+  readyToRun() {
+    if (this.run.competitionMode) {
+      this.rotation = (-this.player.heading * Math.PI) / 180
+      return
+    }
+    this.positionBox.checked = true
+    this.setAuto(true)
   }
 
   get mapOpen(): boolean {
@@ -411,9 +443,16 @@ export class Hud {
   private onKey(e: KeyboardEvent) {
     if (isTyping(e)) return
     if (e.code === 'KeyM') this.toggleMap()
-    if (e.code === 'KeyP' && this.allow()) {
-      this.positionBox.checked = !this.positionBox.checked
+    if (e.code === 'KeyP') {
+      if (this.run.competitionMode) this.notify(t('notInCompetition'))
+      else this.positionBox.checked = !this.positionBox.checked
       this.savePreferences()
+    }
+    // In competition mode the wheel turns the map, so Tab and Space zoom (instead of moving
+    // the focus or pressing a button).
+    if (this.run.competitionMode && this.mapOpen && (e.code === 'Tab' || e.code === 'Space')) {
+      e.preventDefault()
+      this.zoomAt(e.code === 'Space' ? BUTTON_ZOOM : 1 / BUTTON_ZOOM)
     }
     if (e.code === 'Equal' || e.code === 'NumpadAdd') this.zoomAt(BUTTON_ZOOM)
     if (e.code === 'Minus' || e.code === 'NumpadSubtract') this.zoomAt(1 / BUTTON_ZOOM)
@@ -444,10 +483,11 @@ export class Hud {
     this.descriptionKey = ''
   }
 
-  private setAuto(auto: boolean) {
+  /** Auto on or off; off turns the map north up, unless `keepTurn`. */
+  private setAuto(auto: boolean, keepTurn = false) {
     this.auto = auto
     this.autoButton.classList.toggle('active', auto)
-    if (!auto) this.rotation = 0
+    if (!auto && !keepTurn) this.rotation = 0
     this.savePreferences()
   }
 
@@ -456,6 +496,7 @@ export class Hud {
    * from Auto) and adds to it.
    */
   private rotate(delta: number) {
+    this.zoomGlide = null
     const current = this.rotation
     if (this.auto) this.setAuto(false)
     if (this.thumb) {
@@ -476,6 +517,7 @@ export class Hud {
       this.legKey = this.currentLegKey()
     }
     if (view !== 'legs') this.transition = null
+    if (view !== 'free') this.zoomGlide = null
     this.view = view
     this.legsButton.classList.toggle('active', view === 'legs')
   }
@@ -633,8 +675,12 @@ export class Hud {
     return [e.clientX - rect.left, e.clientY - rect.top]
   }
 
-  /** Zoom by `factor`, keeping the map point under (sx, sy) in place. */
+  /**
+   * Zoom by `factor`, keeping the map point under (sx, sy) in place; in competition mode,
+   * without a point, around the thumb, gliding it to the middle.
+   */
   private zoomAt(factor: number, sx?: number, sy?: number) {
+    if (this.run.competitionMode && this.thumb && sx === undefined) return this.zoomAroundThumb(this.thumb, factor)
     const [w, h] = this.canvasSize()
     const x = sx ?? w / 2
     const y = sy ?? h / 2
@@ -645,6 +691,28 @@ export class Hud {
       const after = this.toProjected(x, y)
       this.centre = [this.centre[0] + before[0] - after[0], this.centre[1] + before[1] - after[1]]
     }
+  }
+
+  private zoomAroundThumb(thumb: [number, number], factor: number) {
+    this.setView('free')
+    // Presses during a glide add to where it is going.
+    const zoom = this.zoomGlide?.to[2] ?? this.zoom
+    const target = Math.min(Math.max(zoom * factor, this.fitZoom()), MAX_ZOOM)
+    this.zoomGlide = { from: [...this.centre, this.zoom], to: [...thumb, target], k: 0 }
+  }
+
+  /** Move the zoom glide on by `dt` seconds. */
+  private updateZoomGlide(dt: number) {
+    const glide = this.zoomGlide
+    if (!glide) return
+    glide.k = Math.min(glide.k + dt / ZOOM_GLIDE_S, 1)
+    const k = easeInOut(glide.k)
+    const [e0, n0, z0] = glide.from
+    const [e1, n1, z1] = glide.to
+    // Zoom moves evenly in scale (log space), the centre in metres.
+    this.centre = [e0 + (e1 - e0) * k, n0 + (n1 - n0) * k]
+    this.zoom = Math.exp(Math.log(z0) + (Math.log(z1) - Math.log(z0)) * k)
+    if (glide.k >= 1) this.zoomGlide = null
   }
 
   private onPointerDown(e: PointerEvent) {
@@ -665,6 +733,7 @@ export class Hud {
 
   /** Move the map by (dx, dy) screen pixels, as when dragging it. */
   private pan(dx: number, dy: number) {
+    this.zoomGlide = null
     this.setView('free')
     const [de, dn] = this.screenToGround(dx, dy)
     this.centre = [this.centre[0] - de, this.centre[1] - dn]
@@ -677,8 +746,6 @@ export class Hud {
     if (click && this.editing) {
       const point = this.toProjected(...this.canvasPoint(e))
       this.setCourse({ controls: [...this.run.course.controls, point] })
-    } else if (click && this.run.competitionMode) {
-      this.thumb = this.toProjected(...this.canvasPoint(e))
     }
   }
 
@@ -721,7 +788,9 @@ export class Hud {
     this.updateRunPanel()
     this.updateDescriptions()
     this.legsButton.disabled = !this.hasCourse
-    this.autoButton.disabled = this.restricted
+    // Competition mode has no position or Auto, from choosing it until it is turned off.
+    this.autoButton.disabled = this.run.competitionMode
+    this.positionBox.disabled = this.run.competitionMode
     this.competitionButton.disabled = this.run.state === 'running'
     this.competitionButton.title = this.run.state === 'running' ? t('competitionLocked') : t('competitionTitle')
     this.followPunches()
@@ -809,6 +878,7 @@ export class Hud {
       if (this.legsWanted && this.hasCourse) this.setView('legs')
     }
     // In a competition run the map does not follow the runner: it stays where it is.
+    this.updateZoomGlide(dt)
     if (this.view === 'legs' && this.hasCourse) this.updateLegs(dt)
     else if (this.view !== 'free' && !this.restricted) this.centre = this.runnerPosition()
 

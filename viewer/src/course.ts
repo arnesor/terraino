@@ -30,7 +30,6 @@ export interface OtherControl {
 const PUNCH_DISTANCE = 2.5
 // Seconds of game time between the points of a recorded route.
 const ROUTE_STEP = 1
-const START_LEAVE_DISTANCE = 3
 // Earlier versions kept the last course per world under this key; it is removed on start.
 const OLD_STORAGE_PREFIX = 'otest.course.'
 const ORANGE = new THREE.Color(0xf26a1b)
@@ -46,6 +45,10 @@ const PLATE_HEIGHT = 0.62
 const START_VIEW_DISTANCES = [8, 6, 10, 4, 12]
 // Start and finish banners: two poles with a cloth between them, across the course.
 const BANNER_WIDTH = 3
+// The run starts as the runner passes under the start banner: across the line through it,
+// at most this far (m) from its middle, from up to START_AREA m behind it.
+const START_HALF_WIDTH = BANNER_WIDTH / 2 + 1
+const START_AREA = 15
 const BANNER_POLE = 2.4
 const BANNER_CLOTH = 0.6
 const BANNER_ORANGE = '#e8611a'
@@ -237,6 +240,7 @@ export class CourseRun {
     this.rebuild()
   }
 
+  /** Called with the control's index at each punch, and with 0 at the start (leaving the triangle). */
   set punchListener(listener: (index: number) => void) {
     this.onPunch = listener
   }
@@ -285,6 +289,15 @@ export class CourseRun {
     return { centre: new THREE.Vector2(p.x, p.z), side: 1 }
   }
 
+  /** Unit direction (scene x, z) from the start to the first control. */
+  private startDirection(): THREE.Vector2 {
+    const start = this.scenePosition(0)
+    const next = this.scenePosition(1)
+    const dir = new THREE.Vector2(next.x - start.x, next.z - start.z)
+    if (dir.lengthSq() < 1e-6) dir.set(0, -1)
+    return dir.normalize()
+  }
+
   /**
    * Where to put the runner when a course is opened: a few metres behind the start banner,
    * looking at it and the start control. `heading` is in radians, clockwise from north.
@@ -292,10 +305,7 @@ export class CourseRun {
   startView(): { x: number; z: number; heading: number } | null {
     if (this.course.controls.length < 2) return null
     const start = this.scenePosition(0)
-    const next = this.scenePosition(1)
-    const dir = new THREE.Vector2(next.x - start.x, next.z - start.z)
-    if (dir.lengthSq() < 1e-6) dir.set(0, -1)
-    dir.normalize()
+    const dir = this.startDirection()
     const heading = Math.atan2(dir.x, -dir.y)
     for (const d of START_VIEW_DISTANCES) {
       const x = start.x - dir.x * d
@@ -407,14 +417,20 @@ export class CourseRun {
     if (n < 2 || this.state === 'finished') return
     const flat = (p: THREE.Vector3) => Math.hypot(p.x - pos.x, p.z - pos.z)
     if (this.state === 'ready') {
-      // The clock starts when the runner leaves the start triangle.
-      if (flat(this.scenePosition(0)) < START_LEAVE_DISTANCE) {
-        this.next = 1
-      } else if (this.next === 1) {
+      // At the start (next = 1) is behind the banner; the clock starts as the runner passes it.
+      const start = this.scenePosition(0)
+      const dir = this.startDirection()
+      const [dx, dz] = [pos.x - start.x, pos.z - start.z]
+      const along = dx * dir.x + dz * dir.y
+      const across = Math.abs(dz * dir.x - dx * dir.y)
+      if (this.next === 1 && along >= 0 && across <= START_HALF_WIDTH) {
         this.state = 'running'
         this.startTime = now
         this.competitionRun = this.competitionMode
         this.route = [this.world.toProjected(pos.x, pos.z)]
+        this.onPunch(0)
+      } else {
+        this.next = along < 0 && Math.hypot(along, across) < START_AREA ? 1 : 0
       }
       return
     }

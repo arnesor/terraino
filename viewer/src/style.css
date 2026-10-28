@@ -301,6 +301,15 @@ body {
   color: #fff;
 }
 
+.hud-map-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.hud-map-button:disabled:hover {
+  background: #fff;
+}
+
 .hud-map-button.close {
   min-width: 30px;
   border: 0;
@@ -323,6 +332,11 @@ body {
 
 .hud-map-check input {
   accent-color: #b30f8e;
+}
+
+.hud-map-check:has(input:disabled) {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .hud-map-help {
@@ -696,9 +710,4 @@ body {
 .tutorial-count {
   font-size: 13px;
   color: #6b6458;
-}
-
-.tutorial-tools .hud-map-button:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
