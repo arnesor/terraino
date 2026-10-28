@@ -17,7 +17,7 @@ _Avoid_: wall time
 never less than 1.0 and shown as `2.0×`.
 _Avoid_: speed-up, time warp, simulation speed
 
-**Run time**: The game time from leaving the start triangle to punching the finish.
+**Run time**: The game time from passing under the start banner to punching the finish.
 _Avoid_: elapsed time, race time
 
 ### Results
