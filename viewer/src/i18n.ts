@@ -47,8 +47,8 @@ const STRINGS = {
   keyTime: { en: 'time factor up / down (game time runs faster)', nb: 'tidsfaktor opp / ned (spilltida går fortere)' },
   keyFly: { en: 'fly on/off (look up or down to climb or dive)', nb: 'fly av/på (se opp eller ned for å stige eller dykke)' },
   keyMap: {
-    en: 'map: drag, wheel zoom, click to put the thumb (competition mode), double click to go there',
-    nb: 'kart: dra, rulle for zoom, klikk for å sette tommelen (konkurransemodus), dobbeltklikk for å gå dit',
+    en: 'map: drag, wheel zoom, double click to go there; in competition mode the wheel turns the map, a right click puts the thumb, and Tab / Space zoom out / in',
+    nb: 'kart: dra, rulle for zoom, dobbeltklikk for å gå dit; i konkurransemodus vrir rulla kartet, et høyreklikk setter tommelen, og Tab / mellomrom zoomer ut / inn',
   },
   keyNameMouseMap: { en: 'Mouse, map open', nb: 'Mus, kart oppe' },
   keyMapSteering: {
@@ -127,8 +127,8 @@ const STRINGS = {
   northUp: { en: 'North up', nb: 'Nord opp' },
   auto: { en: 'Auto', nb: 'Auto' },
   autoTitle: { en: 'Turn the map with the direction you are running', nb: 'Snu kartet etter retningen du løper' },
-  zoomOut: { en: 'Zoom out (wheel)', nb: 'Zoom ut (rulle)' },
-  zoomIn: { en: 'Zoom in (wheel)', nb: 'Zoom inn (rulle)' },
+  zoomOut: { en: 'Zoom out (wheel; Tab in competition mode)', nb: 'Zoom ut (rulle; Tab i konkurransemodus)' },
+  zoomIn: { en: 'Zoom in (wheel; Space in competition mode)', nb: 'Zoom inn (rulle; mellomrom i konkurransemodus)' },
   whole: { en: 'Whole', nb: 'Hele' },
   wholeTitle: { en: 'Show the whole map', nb: 'Vis hele kartet' },
   me: { en: 'Me', nb: 'Meg' },
@@ -152,16 +152,16 @@ const STRINGS = {
   },
   // In competition mode, with the thumb.
   helpMapThumb: {
-    en: 'Drag: move · Wheel: zoom · Click: thumb · Double click: go there',
-    nb: 'Dra: flytt · Rulle: zoom · Klikk: tommel · Dobbeltklikk: gå dit',
+    en: 'Drag: move · Wheel: turn the map · Right click: move the thumb · Tab / Space: zoom out / in',
+    nb: 'Dra: flytt · Rulle: vri kartet · Høyreklikk: flytt tommelen · Tab / mellomrom: zoom ut / inn',
   },
   helpMapSteering: {
     en: 'Hold left button: move the map · Wheel: turn the map',
     nb: 'Hold venstre knapp: flytt kartet · Rulle: vri kartet',
   },
   helpMapSteeringThumb: {
-    en: 'Hold left button: move the map · Hold right button: move the thumb · Wheel: turn the map',
-    nb: 'Hold venstre knapp: flytt kartet · Hold høyre knapp: flytt tommelen · Rulle: vri kartet',
+    en: 'Hold left button: move the map · Hold right button: move the thumb · Wheel: turn the map · Tab / Space: zoom out / in',
+    nb: 'Hold venstre knapp: flytt kartet · Hold høyre knapp: flytt tommelen · Rulle: vri kartet · Tab / mellomrom: zoom ut / inn',
   },
   linkCopied: { en: 'Link to this course copied', nb: 'Lenke til løypa kopiert' },
   competition: { en: 'Competition', nb: 'Konkurranse' },
@@ -211,7 +211,7 @@ const STRINGS = {
       '- Press **Competition** under the map. It cannot be switched during a run; **R** starts the run again.',
       '- **T** takes you to the start, behind the start banner.',
       '- **K** shows the control descriptions, with the next control highlighted.',
-      'The clock starts when you leave the start triangle, so plan the first leg while you stand in it.',
+      'The clock starts as you pass under the start banner, so plan the first leg before you run.',
       'Run time is game time: the time factor (**E** / **Q**) makes the game go faster, not your time better.',
     ].join('\n'),
     nb: [
@@ -219,7 +219,7 @@ const STRINGS = {
       '- Trykk **Konkurranse** under kartet. Det kan ikke endres under løpet; **R** starter løpet på nytt.',
       '- **T** tar deg til start, bak startbanneret.',
       '- **K** viser postbeskrivelsen, med neste post markert.',
-      'Klokka starter når du går ut av starttrekanten, så planlegg første strekk mens du står i den.',
+      'Klokka starter når du passerer under startbanneret, så planlegg første strekk før du løper.',
       'Løpstida er spilltid: tidsfaktoren (**E** / **Q**) får spillet til å gå fortere, ikke tida di til å bli bedre.',
     ].join('\n'),
   },
@@ -266,7 +266,7 @@ const STRINGS = {
       '- It is put on the start when you start, and on each control as you punch it.',
       '- Move it along as you pass features: a path crossing, a stream, a hill. Hold the right button and move the mouse.',
       '- The map turns around the thumb, so the part you are reading stays in place.',
-      '- With the mouse free on the map, a click puts the thumb where you click.',
+      '- With the mouse free on the map, a right click puts the thumb where you click.',
       'Keep the thumb up to date, and you always know where to read on the map.',
     ].join('\n'),
     nb: [
@@ -274,7 +274,7 @@ const STRINGS = {
       '- Den settes på start når du starter, og på hver post når du stempler.',
       '- Flytt den med deg når du passerer noe: et stikryss, en bekk, en haug. Hold høyre knapp og flytt musa.',
       '- Kartet vris rundt tommelen, så det du leser, blir liggende der det er.',
-      '- Når musa er fri på kartet, setter et klikk tommelen der du klikker.',
+      '- Når musa er fri på kartet, setter et høyreklikk tommelen der du klikker.',
       'Hold tommelen oppdatert, så vet du alltid hvor du skal lese på kartet.',
     ].join('\n'),
   },

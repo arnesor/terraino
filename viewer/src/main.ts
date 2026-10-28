@@ -458,6 +458,7 @@ async function main() {
   // map open again if it was open when H showed the start screen, else steering.
   let started = false
   startButton.addEventListener('click', () => {
+    hud.readyToRun()
     if ((started && !mapWasOpen) || hud.mapOpen) {
       player.controls.lock()
       return

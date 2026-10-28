@@ -81,16 +81,20 @@ describe('run time', () => {
   /**
    * Run a course east along z = 128 at 4 m/s of game time, at time factor `steps` up the
    * ladder, with real frames of `dt` and a pause of `pause` real seconds after 10 game
-   * seconds. Returns the splits and the real time it took.
+   * seconds. Returns the splits, the real time it took, and each call of the punch listener
+   * (the index and the run's state then).
    */
   async function race(steps: number, dt = DT, pause = 0) {
     const { world, heights } = await syntheticWorld(1, 1)
     // Start, control 1 and finish at scene x = 30, 130 and 230 (northing = 256 - z).
     const course = { controls: [30, 130, 230].map((x): [number, number] => [x, 128]) }
     const run = new CourseRun(world, heights, course)
+    const punches: [number, string][] = []
+    run.punchListener = index => punches.push([index, run.state])
     const clock = new GameClock()
     for (let i = 0; i < steps; i++) clock.faster()
-    const pos = new THREE.Vector3(30, 100, 128)
+    // From 8 m behind the start, where T puts the runner.
+    const pos = new THREE.Vector3(22, 100, 128)
     let real = 0
     let paused = 0
     while (run.state !== 'finished' && real < 1000) {
@@ -102,11 +106,11 @@ describe('run time', () => {
       if (pausing) paused += dt
       real += dt
     }
-    return { splits: run.splits, elapsed: run.elapsed(clock.time), real, route: run.route }
+    return { splits: run.splits, elapsed: run.elapsed(clock.time), real, route: run.route, punches }
   }
 
-  // The runner leaves the start at x = 33 and punches 2.5 m before each control.
-  const SPLITS = [(127.5 - 33) / 4, (227.5 - 33) / 4]
+  // The clock starts as the runner passes the start at x = 30; it punches 2.5 m before each control.
+  const SPLITS = [(127.5 - 30) / 4, (227.5 - 30) / 4]
   // The start and each punch are seen at the end of a step.
   const expectSplits = (splits: number[]) => {
     expect(splits).toHaveLength(2)
@@ -125,8 +129,8 @@ describe('run time', () => {
     const { splits, elapsed, real } = await race(steps, dt)
     expectSplits(splits)
     expect(elapsed).toBe(splits.at(-1))
-    // The 49.4 s from x = 30 to the finish take a tenth of that in real time at 10×.
-    expect(Math.abs(real - (SPLITS[1]! + 3 / 4) / factor)).toBeLessThanOrEqual(dt)
+    // The 51.4 s from x = 22 to the finish take a tenth of that in real time at 10×.
+    expect(Math.abs(real - (SPLITS[1]! + 8 / 4) / factor)).toBeLessThanOrEqual(dt)
   })
 
   it('records the route, a point per second of game time, at any factor', async () => {
@@ -137,11 +141,34 @@ describe('run time', () => {
       const { splits, route } = await race(steps, dt)
       // The start, one point a second, and the finish.
       expect(route.length).toBe(Math.ceil(splits[1]! - 1e-9) + 1)
-      // Projected positions along the line z = 128 (northing 128), at 4 m/s from x = 33.
-      expect(route[0]![0]).toBeCloseTo(33, 0)
-      expect(route[10]![0]).toBeCloseTo(33 + 40, 0)
+      // Projected positions along the line z = 128 (northing 128), at 4 m/s from x = 30.
+      expect(route[0]![0]).toBeCloseTo(30, 0)
+      expect(route[10]![0]).toBeCloseTo(30 + 40, 0)
       expect(route.at(-1)![0]).toBeCloseTo(227.5, 0)
       for (const [, n] of route) expect(n).toBeCloseTo(128, 6)
+    }
+  })
+
+  it('tells the punch listener (which beeps) at the start and at each punch', async () => {
+    const { punches } = await race(0)
+    expect(punches).toEqual([
+      [0, 'running'],
+      [1, 'running'],
+      [2, 'finished'],
+    ])
+  })
+
+  it('starts only under the start banner, not when running past beside it', async () => {
+    const { world, heights } = await syntheticWorld(1, 1)
+    const run = new CourseRun(world, heights, { controls: [30, 130, 230].map((x): [number, number] => [x, 128]) })
+    // Banner 3 m wide across x = 30: 6 m to the side of its middle is past it.
+    for (const [z, state] of [
+      [134, 'ready'],
+      [130, 'running'],
+    ] as const) {
+      run.reset()
+      for (let x = 22; x < 40; x += 0.1) run.update(new THREE.Vector3(x, 100, z), x)
+      expect(run.state).toBe(state)
     }
   })
 

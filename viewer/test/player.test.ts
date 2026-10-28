@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { GameClock } from '../src/clock'
+import { GameClock, MAX_STEP } from '../src/clock'
 import type { HeightField } from '../src/heightfield'
 import { Player } from '../src/player'
 import { CHUNK, syntheticWorld } from './synthetic'
@@ -27,6 +27,8 @@ async function setup(f: (col: number, row: number) => number) {
   const camera = new THREE.PerspectiveCamera()
   const player = new Player(camera, dom, heights, [CHUNK, CHUNK])
   player.keysWithoutLock = true
+  // Straight lines, unless a test is about veering.
+  player.veer = 0
   const key = (type: 'keydown' | 'keyup', code: string) => listeners.get(type)?.forEach(l => l({ code }))
   return { player, camera, heights, key }
 }
@@ -47,6 +49,16 @@ function frames(player: Player, heights: HeightField, seconds: number): { eye: n
     above.push(p.y - heights.heightAt(p.x, p.z))
   }
   return { eye, above }
+}
+
+/** Uniform random numbers in [0, 1) from a seed (mulberry32). */
+function seeded(seed: number): () => number {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
 }
 
 /** Largest change in vertical speed between frames, in m/s². */
@@ -270,5 +282,93 @@ describe('at a high time factor', () => {
     expect(time).toBeGreaterThan(1.95)
     expect(time).toBeLessThan(2.2)
     expect(Math.abs(time - (await fall(0, DT)))).toBeLessThan(0.05)
+  })
+})
+
+describe('veering off a straight line', () => {
+  const RUNS = 200
+  const LEG = 200 // m, east from x = 20 on the one-chunk world, by default
+
+  /**
+   * Run `runs` legs of `leg` m east in steps of `dt` s (by default the longest the game
+   * takes, which is quicker to test), on ground at runnability `speed`.
+   * Returns, per leg, the heading off east at the end (radians, positive to the north) and how
+   * far to the side the runner ends (m, positive to the north).
+   */
+  async function legs(
+    f: (col: number, row: number) => number,
+    { speed = 1, dt = MAX_STEP, random = seeded(1), runs = RUNS, leg = LEG } = {},
+  ) {
+    const { player, camera, key } = await setup(f)
+    player.veer = 1
+    player.random = random
+    player.surroundings = { speedAt: () => speed, collide: (x, z) => [x, z] }
+    key('keydown', 'KeyW')
+    const heading: number[] = []
+    const side: number[] = []
+    for (let run = 0; run < runs; run++) {
+      player.placeAt(20, 128)
+      faceEast(camera)
+      const p = camera.position
+      for (let i = 0; Math.hypot(p.x - 20, p.z - 128) < leg && i < 1e5; i++) player.update(dt)
+      heading.push(THREE.MathUtils.degToRad(90 - player.heading))
+      side.push(128 - p.z)
+    }
+    return { heading, side, camera, player }
+  }
+
+  const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
+  const rms = (xs: number[]) => Math.sqrt(mean(xs.map(x => x * x)))
+  const deg = THREE.MathUtils.radToDeg
+
+  it('ends a 200 m leg in easy forest about 14° and 25 m off, either way', async () => {
+    const { heading, side } = await legs(() => 100)
+    // A turn rate of spread 0.0027 rad/m changing over 25 m, from 0 at the start:
+    // 0.0027 × √(2 × 25 × (200 - 25) - 25²) = 13.9°.
+    expect(deg(rms(heading))).toBeGreaterThan(12)
+    expect(deg(rms(heading))).toBeLessThan(16)
+    expect(rms(side)).toBeGreaterThan(20)
+    expect(rms(side)).toBeLessThan(32)
+    // No side preferred.
+    expect(Math.abs(deg(mean(heading)))).toBeLessThan(3.5)
+  })
+
+  // The comparisons need only shorter legs, which keep the tests quick.
+  it('veers more in thick forest', async () => {
+    const easy = rms((await legs(() => 100, { leg: 100 })).heading)
+    const thick = rms((await legs(() => 100, { speed: 0.5, leg: 100 })).heading)
+    expect(thick / easy).toBeGreaterThan(1.7)
+    expect(thick / easy).toBeLessThan(2.3)
+  })
+
+  it('turns downhill across a slope', async () => {
+    // Rising 1 in 5 to the south, on the right of a runner going east: downhill is to the north.
+    // Without the random veering, whose normal draws are all 0 (cos(2π × 0.25) = 0).
+    const { heading, side } = await legs((_, row) => 100 + 0.2 * row, { random: () => 0.25, runs: 1 })
+    // 0.0044 rad/m × 0.2 over 200 m: 10° at the end, and 200² / 2 × 0.00088 = 18 m to the side.
+    expect(deg(heading[0]!)).toBeGreaterThan(9.5)
+    expect(deg(heading[0]!)).toBeLessThan(10.5)
+    expect(side[0]).toBeGreaterThan(16.5)
+    expect(side[0]).toBeLessThan(18.5)
+  })
+
+  it('veers as much at any step length (time factor)', async () => {
+    const short = rms((await legs(() => 100, { dt: DT, leg: 100 })).heading)
+    const long = rms((await legs(() => 100, { random: seeded(2), leg: 100 })).heading)
+    expect(long / short).toBeGreaterThan(0.85)
+    expect(long / short).toBeLessThan(1.15)
+  })
+
+  it('does not turn while standing still or flying', async () => {
+    const { player, camera, heights, key } = await setup(() => 100)
+    player.veer = 1
+    player.placeAt(128, 128)
+    faceEast(camera)
+    frames(player, heights, 5)
+    expect(player.heading).toBeCloseTo(90, 9)
+    key('keydown', 'KeyF')
+    key('keydown', 'KeyW')
+    frames(player, heights, 2)
+    expect(player.heading).toBeCloseTo(90, 9)
   })
 })
