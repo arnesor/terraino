@@ -18,9 +18,10 @@
 #   clear   width in metres of a tree-free strip along a line symbol
 #   order   drawing order; higher values are painted on top
 #   feature 3D object placed for the symbol: boulder, boulder_cluster, boulder_field,
-#           stones, waterhole, cliff, rock_face, stone_wall, ruined_wall, fence, ruined_fence,
-#           power_line, pylon_line, tower, cairn, fodder_rack, ruin, footbridge
-#   size    size of the feature in metres (boulder height, tower height, wall height)
+#           stones, waterhole, pit, cliff, rock_face, stone_wall, ruined_wall, fence,
+#           ruined_fence, power_line, pylon_line, tower, cairn, fodder_rack, ruin, footbridge
+#   size    size of the feature in metres (boulder height, tower height, wall height;
+#           waterhole and pit diameter)
 #   track   roads and paths drawn as their own strip on the terrain, with sharp edges:
 #           paved, gravel, vehicle_track, path, small_path, faint_path, or for water
 #           lines stream, small_stream and water_channel
@@ -39,6 +40,10 @@
 name = "ISOM 2000"
 
 [symbols]
+# Landforms
+# Pit: dug 1 m deep into the terrain with steep sides; size is its width.
+"116" = { feature = "pit", size = 2 }
+
 # Rock and stones
 "201" = { feature = "cliff", speed = 0 }
 "202" = { ground = "rock", trees = "none", speed = 0, order = 32, feature = "boulder_cluster", size = 3 }

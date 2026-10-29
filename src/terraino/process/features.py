@@ -44,6 +44,8 @@ CLIFF_TAPER_M = 2.0
 IMPASSABLE_BAND_M = 1.2
 WATERHOLE_DEPTH_M = 0.6
 WATERHOLE_SPEED = 0.3
+# Pits have steep sides: the bottom is this far below the rim, out to the pit's edge.
+PIT_DEPTH_M = 1.0
 # Masts this close to a power line are its poles; a line running on this far beyond its
 # first or last mast gets an end pole; gaps longer than MAX_GAP_SPACINGS times the usual
 # spacing get poles in between.
@@ -110,7 +112,7 @@ class Features:
     """All 3D features of a world.
 
     Boulders' sizes are their least height above the ground around them; a
-    waterhole's size is its diameter.
+    waterhole's and a pit's size is its diameter.
     """
 
     points: list[PointFeature] = field(default_factory=list)
@@ -119,11 +121,12 @@ class Features:
 
 
 # Boulders: their least height above the ground (ISOM: a boulder is at least 1 m high,
-# a large boulder 2 m). Waterholes: their diameter.
+# a large boulder 2 m). Waterholes and pits: their diameter.
 _DEFAULT_SIZE = {
     "boulder": 1.0,
     "boulder_cluster": 1.0,
     "waterhole": 4.0,
+    "pit": 2.0,
     "boulder_field": 0.7,
     "stones": 0.3,
     "stone_wall": 0.9,
@@ -370,6 +373,29 @@ class _Sampler:
         return float(self.dtm[row, col])
 
 
+def _disc(
+    p: PointFeature, extent: Extent, shape: tuple[int, ...], reach: int
+) -> tuple[slice, slice, npt.NDArray[np.float64]] | None:
+    """The rows and columns within ``reach`` cells of ``p``, and each one's distance."""
+    col = int(p.x - extent.x0)
+    row = int(extent.y1 - p.y)
+    r0, r1 = max(row - reach, 0), min(row + reach + 1, shape[0])
+    c0, c1 = max(col - reach, 0), min(col + reach + 1, shape[1])
+    if r0 >= r1 or c0 >= c1:
+        return None
+    rows, cols = np.mgrid[r0:r1, c0:c1]
+    d = np.hypot(extent.x0 + cols + 0.5 - p.x, extent.y1 - rows - 0.5 - p.y)
+    return slice(r0, r1), slice(c0, c1), d
+
+
+def _rim(
+    ground: npt.NDArray[np.float32], d: npt.NDArray[np.float64], radius: float
+) -> npt.NDArray[np.float32]:
+    """Ground heights on the ring just outside ``radius``."""
+    ring = (d >= radius) & (d <= radius + 1)
+    return ground[ring] if ring.any() else ground.ravel()
+
+
 def carve_waterholes(
     dtm: npt.NDArray[np.float32],
     layers: GroundLayers,
@@ -397,29 +423,61 @@ def carve_waterholes(
         if p.kind != "waterhole":
             continue
         radius = p.size / 2
-        reach = math.ceil(radius + 1)
-        col = int(p.x - extent.x0)
-        row = int(extent.y1 - p.y)
-        r0, r1 = max(row - reach, 0), min(row + reach + 1, dtm.shape[0])
-        c0, c1 = max(col - reach, 0), min(col + reach + 1, dtm.shape[1])
-        if r0 >= r1 or c0 >= c1:
+        disc = _disc(p, extent, dtm.shape, math.ceil(radius + 1))
+        if disc is None:
             continue
-        rows, cols = np.mgrid[r0:r1, c0:c1]
-        d = np.hypot(extent.x0 + cols + 0.5 - p.x, extent.y1 - rows - 0.5 - p.y)
-        ground = dtm[r0:r1, c0:c1]
-        rim_cells = (d >= radius) & (d <= radius + 1)
-        rim = (
-            float(np.median(ground[rim_cells]))
-            if rim_cells.any()
-            else float(ground.min())
-        )
+        rows, cols, d = disc
+        ground = dtm[rows, cols]
+        rim = float(np.median(_rim(ground, d, radius)))
         inside = d < radius
         bowl = rim - WATERHOLE_DEPTH_M * (1 - (d / max(radius, 0.1)) ** 2)
         ground[inside] = np.minimum(ground[inside], bowl[inside])
         # Water under the pond's surface; no trees on its banks either.
-        layers.ground[r0:r1, c0:c1][d < radius * 0.75] = Ground.WATER
-        layers.speed[r0:r1, c0:c1][inside] = WATERHOLE_SPEED
-        layers.clear[r0:r1, c0:c1][d < radius + 0.5] = True
+        layers.ground[rows, cols][d < radius * 0.75] = Ground.WATER
+        layers.speed[rows, cols][inside] = WATERHOLE_SPEED
+        layers.clear[rows, cols][d < radius + 0.5] = True
+
+
+def carve_pits(
+    dtm: npt.NDArray[np.float32],
+    layers: GroundLayers,
+    points: Iterable[PointFeature],
+    extent: Extent,
+) -> None:
+    """Dig each pit into the terrain model, with steep sides, and keep trees out of it.
+
+    The ground within the pit's radius drops to PIT_DEPTH_M below the lowest point of
+    its rim, or stays where the terrain model is already deeper: on a slope too, the
+    pit is at least that deep all round. On the 1 m grid the sides are as steep as the
+    grid allows.
+
+    Examples:
+        >>> from terraino.process.layers import GroundLayers
+        >>> dtm = np.full((20, 20), 100.0, dtype=np.float32)
+        >>> z = np.zeros((20, 20), dtype=np.float32)
+        >>> layers = GroundLayers(ground=np.ones((20, 20), np.uint8), speed=z + 1,
+        ...     young=z, shrubs=z, tree_rule=np.zeros((20, 20), np.uint8),
+        ...     clear=z > 0, in_map=z == 0)
+        >>> carve_pits(dtm, layers, [PointFeature("pit", 10, 10, 2.0)],
+        ...            Extent(0, 0, 20, 20))
+        >>> [float(h) for h in dtm[8:12, 9]]  # north to south, just west of the centre
+        [100.0, 99.0, 99.0, 100.0]
+        >>> bool(layers.clear[9, 9]), bool(layers.clear[9, 13])
+        (True, False)
+    """
+    for p in points:
+        if p.kind != "pit":
+            continue
+        radius = p.size / 2
+        disc = _disc(p, extent, dtm.shape, math.ceil(radius + 1))
+        if disc is None:
+            continue
+        rows, cols, d = disc
+        ground = dtm[rows, cols]
+        bottom = float(_rim(ground, d, radius).min()) - PIT_DEPTH_M
+        inside = d < radius
+        ground[inside] = np.minimum(ground[inside], bottom)
+        layers.clear[rows, cols][d < radius + 0.5] = True
 
 
 def place_poles(
