@@ -3,6 +3,7 @@ from pathlib import Path
 import laspy
 import numpy as np
 import pytest
+from pyproj import CRS, Transformer
 
 from terraino.fetch import nibio
 from terraino.ingest.georef import Extent
@@ -79,11 +80,18 @@ def test_summarize_points() -> None:
 
 
 def write_laz(
-    path: Path, x: np.ndarray, y: np.ndarray, z: np.ndarray, cls: np.ndarray
+    path: Path,
+    x: np.ndarray,
+    y: np.ndarray,
+    z: np.ndarray,
+    cls: np.ndarray,
+    epsg: int | None = None,
 ) -> None:
     header = laspy.LasHeader(point_format=1, version="1.2")
     header.scales = np.array([0.01, 0.01, 0.01])
-    header.offsets = np.array([EXTENT.x0, EXTENT.y0, 0.0])
+    header.offsets = np.array([np.floor(x.min()), np.floor(y.min()), 0.0])
+    if epsg is not None:
+        header.add_crs(CRS.from_epsg(epsg))
     las = laspy.LasData(header)
     las.x, las.y, las.z = x, y, z
     las.classification = cls
@@ -128,6 +136,24 @@ def test_load_lidar_prefers_the_first_dataset(tmp_path: Path) -> None:
     np.testing.assert_allclose(
         np.nan_to_num(again.canopy), np.nan_to_num(lidar.canopy), atol=0.02
     )
+
+
+def test_load_lidar_reprojects_tiles_from_another_zone(tmp_path: Path) -> None:
+    # A zone 33 world near Magnor, where the laser data is in zone 32.
+    dx, dy = 341000 - EXTENT.x0, 6648000 - EXTENT.y0
+    world = Extent(EXTENT.x0 + dx, EXTENT.y0 + dy, EXTENT.x1 + dx, EXTENT.y1 + dy)
+    x, y, z, cls = scene(np.random.default_rng(3), density=20)
+    to_zone32 = Transformer.from_crs(25833, 25832, always_xy=True)
+    x32, y32 = to_zone32.transform(x + dx, y + dy)
+    write_laz(tmp_path / "zone32" / "a.laz", x32, y32, z, cls, epsg=25832)
+
+    lidar = load_lidar(
+        [tmp_path / "zone32"], 25833, world, flat_dtm(), tmp_path / "cache"
+    )
+    assert lidar is not None
+    assert lidar.coverage.all()
+    canopy = coarse_canopy(lidar.canopy)
+    assert canopy[cell(1010.5, 2030.5)] == pytest.approx(12.0, abs=0.01)
 
 
 def test_filled_canopy_has_no_gaps() -> None:

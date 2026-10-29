@@ -84,8 +84,8 @@ class LidarRasters:
 @dataclass(frozen=True)
 class _Tile:
     path: Path
-    bounds: tuple[float, float, float, float]
-    epsg: int | None
+    bounds: tuple[float, float, float, float]  # in the world's coordinate system
+    epsg: int | None  # the tile's own coordinate system
 
 
 def find_tiles(folder: Path) -> list[Path]:
@@ -93,7 +93,7 @@ def find_tiles(folder: Path) -> list[Path]:
     return sorted(p for p in folder.rglob("*") if p.suffix.lower() in (".laz", ".las"))
 
 
-def _read_tile_info(path: Path) -> _Tile:
+def _read_tile_info(path: Path, world_epsg: int) -> _Tile:
     with laspy.open(path) as reader:
         header = reader.header
         try:
@@ -101,16 +101,17 @@ def _read_tile_info(path: Path) -> _Tile:
         except Exception:
             crs = None
         epsg = crs.to_epsg() if crs is not None else None
-        return _Tile(
-            path=path,
-            bounds=(
-                float(header.mins[0]),
-                float(header.mins[1]),
-                float(header.maxs[0]),
-                float(header.maxs[1]),
-            ),
-            epsg=epsg,
+        bounds = (
+            float(header.mins[0]),
+            float(header.mins[1]),
+            float(header.maxs[0]),
+            float(header.maxs[1]),
         )
+    if epsg is not None and epsg != world_epsg:
+        # A tile in another UTM zone, e.g. zone 32 data for a zone 33 map.
+        transformer = Transformer.from_crs(epsg, world_epsg, always_xy=True)
+        bounds = transformer.transform_bounds(*bounds, densify_pts=21)
+    return _Tile(path=path, bounds=bounds, epsg=epsg)
 
 
 @dataclass
@@ -328,7 +329,7 @@ def load_lidar(
     shape = dtm.shape
     datasets: list[list[_Tile]] = []
     for folder in folders:
-        tiles = [_read_tile_info(p) for p in find_tiles(folder)]
+        tiles = [_read_tile_info(p, epsg) for p in find_tiles(folder)]
         touching = [t for t in tiles if _window(t.bounds, extent, shape) is not None]
         log.info(
             "Laser data in %s: %d of %d tiles touch the world",
