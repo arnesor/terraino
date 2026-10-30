@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 from rasterio.features import rasterize
+from scipy import ndimage
 from shapely import (
     LineString,
     MultiLineString,
@@ -46,6 +47,19 @@ WATERHOLE_DEPTH_M = 0.6
 WATERHOLE_SPEED = 0.3
 # Pits have steep sides: the bottom is this far below the rim, out to the pit's edge.
 PIT_DEPTH_M = 1.0
+# Knolls stand at least this high above the ground around them (ISOM: at least 1 m). A
+# 1 m terrain model smooths small knolls into faint humps, so they are raised to it.
+KNOLL_HEIGHT_M = 1.0
+# An elongated knoll is this many times longer than it is wide.
+KNOLL_ELONGATION = 2.0
+# The ground around a knoll, which it rises from, is measured on a ring this wide.
+KNOLL_RIM_M = 2.0
+# Closed contour rings up to this size are knolls drawn with contours (or depressions).
+CONTOUR_KNOLL_MAX_M2 = 1500.0
+# A contour line whose ends are this close is a closed ring.
+RING_CLOSED_M = 1.0
+# Ground this close to a knoll's shape is high enough already.
+KNOLL_TOLERANCE_M = 0.01
 # Masts this close to a power line are its poles; a line running on this far beyond its
 # first or last mast gets an end pole; gaps longer than MAX_GAP_SPACINGS times the usual
 # spacing get poles in between.
@@ -112,7 +126,8 @@ class Features:
     """All 3D features of a world.
 
     Boulders' sizes are their least height above the ground around them; a
-    waterhole's and a pit's size is its diameter.
+    waterhole's, a pit's and a knoll's size is its diameter (an elongated knoll's,
+    its width).
     """
 
     points: list[PointFeature] = field(default_factory=list)
@@ -127,6 +142,8 @@ _DEFAULT_SIZE = {
     "boulder_cluster": 1.0,
     "waterhole": 4.0,
     "pit": 2.0,
+    "knoll": 10.0,
+    "elongated_knoll": 8.0,
     "boulder_field": 0.7,
     "stones": 0.3,
     "stone_wall": 0.9,
@@ -375,8 +392,8 @@ class _Sampler:
 
 def _disc(
     p: PointFeature, extent: Extent, shape: tuple[int, ...], reach: int
-) -> tuple[slice, slice, npt.NDArray[np.float64]] | None:
-    """The rows and columns within ``reach`` cells of ``p``, and each one's distance."""
+) -> tuple[slice, slice, npt.NDArray[np.float64], npt.NDArray[np.float64]] | None:
+    """The cells within ``reach`` of ``p``, and how far east and north of it each is."""
     col = int(p.x - extent.x0)
     row = int(extent.y1 - p.y)
     r0, r1 = max(row - reach, 0), min(row + reach + 1, shape[0])
@@ -384,8 +401,9 @@ def _disc(
     if r0 >= r1 or c0 >= c1:
         return None
     rows, cols = np.mgrid[r0:r1, c0:c1]
-    d = np.hypot(extent.x0 + cols + 0.5 - p.x, extent.y1 - rows - 0.5 - p.y)
-    return slice(r0, r1), slice(c0, c1), d
+    east = extent.x0 + cols + 0.5 - p.x
+    north = extent.y1 - rows - 0.5 - p.y
+    return slice(r0, r1), slice(c0, c1), east, north
 
 
 def _rim(
@@ -426,7 +444,8 @@ def carve_waterholes(
         disc = _disc(p, extent, dtm.shape, math.ceil(radius + 1))
         if disc is None:
             continue
-        rows, cols, d = disc
+        rows, cols, east, north = disc
+        d = np.hypot(east, north)
         ground = dtm[rows, cols]
         rim = float(np.median(_rim(ground, d, radius)))
         inside = d < radius
@@ -472,12 +491,158 @@ def carve_pits(
         disc = _disc(p, extent, dtm.shape, math.ceil(radius + 1))
         if disc is None:
             continue
-        rows, cols, d = disc
+        rows, cols, east, north = disc
+        d = np.hypot(east, north)
         ground = dtm[rows, cols]
         bottom = float(_rim(ground, d, radius).min()) - PIT_DEPTH_M
         inside = d < radius
         ground[inside] = np.minimum(ground[inside], bottom)
         layers.clear[rows, cols][d < radius + 0.5] = True
+
+
+_KNOLL_KINDS = frozenset({"knoll", "elongated_knoll"})
+
+
+def contour_rings(
+    omap_features: Iterable[Mapping[str, Any]], symbols: SymbolSet
+) -> list[Polygon]:
+    """Small closed rings of the map's contours and form lines: knolls or depressions.
+
+    Examples:
+        >>> isom = SymbolSet.load("isom2000")
+        >>> ring = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0.5]]
+        >>> line = {"type": "LineString", "coordinates": ring}
+        >>> big = {"type": "LineString", "coordinates": [[0, 0], [99, 0], [99, 99], [0, 99], [0, 0]]}
+        >>> rings = contour_rings([{"geometry": line, "properties": {"sym": "103.0"}},
+        ...                        {"geometry": big, "properties": {"sym": "101.0"}}], isom)
+        >>> [ring.area for ring in rings]
+        [100.0]
+    """
+    rings = []
+    for f in omap_features:
+        rule = symbols.rule(f["properties"]["sym"])
+        if rule is None or rule.feature != "contour":
+            continue
+        geometry = to_geometry(f.get("geometry"))
+        if geometry is None:
+            continue
+        for line in _lines(geometry):
+            coords = list(line.coords)
+            if (
+                len(coords) < 4
+                or Point(coords[0]).distance(Point(coords[-1])) > RING_CLOSED_M
+            ):
+                continue
+            ring = Polygon(coords)
+            if ring.is_valid and 0 < ring.area <= CONTOUR_KNOLL_MAX_M2:
+                rings.append(ring)
+    return rings
+
+
+def _raise_point_knoll(
+    dtm: npt.NDArray[np.float32], p: PointFeature, extent: Extent
+) -> bool:
+    half_width = p.size / 2
+    half_length = half_width * (KNOLL_ELONGATION if p.kind == "elongated_knoll" else 1)
+    disc = _disc(p, extent, dtm.shape, math.ceil(half_length + KNOLL_RIM_M))
+    if disc is None:
+        return False
+    rows, cols, east, north = disc
+    # The symbol's angle is across an elongated knoll: in the terrain models of the
+    # test maps, its long axis is at right angles to it.
+    ux, uy = -math.sin(p.angle), math.cos(p.angle)
+    along = east * ux + north * uy
+    across = north * ux - east * uy
+    rho = np.hypot(along / half_length, across / half_width)
+    rim = (rho >= 1) & (rho <= 1 + KNOLL_RIM_M / half_width)
+    if rim.sum() < 3:
+        return False
+    ground = dtm[rows, cols]
+    # The ground around it, as a plane: on a slope the knoll rises from the slope.
+    a = np.column_stack([np.ones(int(rim.sum())), east[rim], north[rim]])
+    coef = np.linalg.lstsq(a, ground[rim].astype(np.float64), rcond=None)[0]
+    plane = coef[0] + coef[1] * east + coef[2] * north
+    inside = rho < 1
+    bump = plane + KNOLL_HEIGHT_M * 0.5 * (1 + np.cos(np.pi * rho))
+    higher = inside & (bump > ground + KNOLL_TOLERANCE_M)
+    ground[higher] = bump[higher]
+    return bool(higher.any())
+
+
+def _raise_ring_knoll(
+    dtm: npt.NDArray[np.float32], ring: Polygon, extent: Extent
+) -> bool:
+    x0, y0, x1, y1 = ring.bounds
+    c0 = max(math.floor(x0 - extent.x0) - 1, 0)
+    c1 = min(math.ceil(x1 - extent.x0) + 1, dtm.shape[1])
+    r0 = max(math.floor(extent.y1 - y1) - 1, 0)
+    r1 = min(math.ceil(extent.y1 - y0) + 1, dtm.shape[0])
+    if r0 >= r1 or c0 >= c1:
+        return False
+    window = Extent(extent.x0 + c0, extent.y1 - r1, extent.x0 + c1, extent.y1 - r0)
+    inside = rasterize(
+        [(ring, 1)],
+        out_shape=(r1 - r0, c1 - c0),
+        transform=window.raster_transform(1),
+        fill=0,
+        dtype=np.uint8,
+    ).astype(bool)
+    if not inside.any():
+        return False
+    sample = _Sampler(dtm, extent)
+    boundary = ring.exterior
+    steps = max(int(boundary.length), 4)
+    points = (boundary.interpolate(i / steps, normalized=True) for i in range(steps))
+    line = float(np.median([sample(q.x, q.y) for q in points]))
+    ground = dtm[r0:r1, c0:c1]
+    if float(ground[inside].mean()) <= line:
+        return False  # lower inside: a depression
+    # Up from the contour line to KNOLL_HEIGHT_M above it in the middle.
+    depth = ndimage.distance_transform_edt(inside)
+    t = depth / depth.max()
+    bump = line + KNOLL_HEIGHT_M * (1 - (1 - t) ** 2)
+    higher = inside & (bump > ground + KNOLL_TOLERANCE_M)
+    ground[higher] = bump[higher]
+    return bool(higher.any())
+
+
+def raise_knolls(
+    dtm: npt.NDArray[np.float32],
+    points: Iterable[PointFeature],
+    rings: Iterable[Polygon],
+    extent: Extent,
+) -> tuple[int, int]:
+    """Make the map's knolls at least KNOLL_HEIGHT_M high in the terrain model.
+
+    A small knoll is a round bump of its size across, an elongated knoll an oval
+    KNOLL_ELONGATION times as long as wide; each stands KNOLL_HEIGHT_M above the ground
+    around it. A knoll drawn with a contour ring rises KNOLL_HEIGHT_M above the ring's
+    line in its middle; a ring around lower ground (a depression) is left alone. The
+    ground is only raised, never lowered: where the terrain model shows a knoll high
+    enough, it stays as it is.
+
+    Returns:
+        The numbers of knoll symbols and of contour rings that raised the ground.
+
+    Examples:
+        >>> dtm = np.full((40, 40), 100.0, dtype=np.float32)
+        >>> dtm[26:34, 26:34] = 100.2  # a faint knoll inside a contour ring
+        >>> extent = Extent(0, 0, 40, 40)
+        >>> knoll = PointFeature("knoll", 10, 30, 10.0)
+        >>> raise_knolls(dtm, [knoll], [box(25, 5, 35, 15)], extent)
+        (1, 1)
+        >>> round(float(dtm[:20, :20].max()), 2), float(dtm[10, 16])  # 1 m high, 10 m across
+        (100.95, 100.0)
+        >>> round(float(dtm[30, 30]), 2), float(dtm[30, 24])  # the ring's knoll
+        (101.0, 100.0)
+        >>> raise_knolls(dtm, [knoll], [], extent)  # high enough already
+        (0, 0)
+    """
+    knolls = sum(
+        _raise_point_knoll(dtm, p, extent) for p in points if p.kind in _KNOLL_KINDS
+    )
+    raised_rings = sum(_raise_ring_knoll(dtm, ring, extent) for ring in rings)
+    return knolls, raised_rings
 
 
 def place_poles(

@@ -4,6 +4,12 @@ name = "ISOM 2017-2"
 
 [symbols]
 # Landforms
+# Knolls are raised to at least 1 m (see isom2000.toml).
+"101" = { feature = "contour" }
+"102" = { feature = "contour" }
+"103" = { feature = "contour" }
+"109" = { feature = "knoll", size = 10 }
+"110" = { feature = "elongated_knoll", size = 8 }
 # Pit or hole: dug 1 m deep into the terrain with steep sides; size is its width.
 "112" = { feature = "pit", size = 2 }
 
