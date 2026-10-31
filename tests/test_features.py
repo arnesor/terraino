@@ -11,6 +11,7 @@ from terraino.process.features import (
     CLIFF_TAPER_M,
     LineFeature,
     carve_cliffs,
+    carve_pits,
     collect_features,
     drop_rocks_in_buildings,
     drop_ruins_in_buildings,
@@ -188,6 +189,51 @@ def test_boulders_are_high_enough_and_waterholes_hold_water(
     assert min(boulders) >= 1.0
     assert max(boulders) >= 2.0  # the large boulder
     assert by_kind["waterhole"] == [4.0]
+
+
+@pytest.mark.parametrize(
+    ("key", "pit", "not_a_pit"),
+    [("isom2000", "116", "112"), ("isom2017", "112", "109")],  # 2000: 112 small knoll
+)
+def test_pits_are_dug_with_steep_sides_and_no_trees(
+    key: str, pit: str, not_a_pit: str
+) -> None:
+    found, _ = collect_features(
+        [
+            feature(0, f"{pit}.0", point(50.3, 50.6)),
+            feature(1, f"{not_a_pit}.0", point(20, 20)),
+        ],
+        SymbolSet.load(key),
+    )
+    assert [(p.kind, p.size) for p in found.points] == [("pit", 2.0)]
+    shape = EXTENT.raster_shape(1)
+    # A slope down to the east, 0.2 m per metre.
+    dtm = np.tile(100.0 - 0.2 * (np.arange(shape[1]) + 0.5), (shape[0], 1))
+    dtm = dtm.astype(np.float32)
+    before = dtm.copy()
+    zeros = np.zeros(shape, dtype=np.float32)
+    layers = GroundLayers(
+        ground=np.ones(shape, dtype=np.uint8),
+        speed=zeros + 1,
+        young=zeros,
+        shrubs=zeros,
+        tree_rule=np.ones(shape, dtype=np.uint8),
+        clear=zeros > 0,
+        in_map=zeros == 0,
+    )
+    carve_pits(dtm, layers, found.points, EXTENT)
+
+    rows, cols = np.mgrid[0 : shape[0], 0 : shape[1]]
+    d = np.hypot(cols + 0.5 - 50.3, EXTENT.y1 - rows - 0.5 - 50.6)
+    inside = d < 1.0
+    assert inside.any()
+    rim = (d >= 1.0) & (d <= 2.0)
+    # At least 1 m below every point of the rim, downhill too; 2 m wide.
+    assert dtm[inside].max() <= dtm[rim].min() - 1.0 + 1e-4
+    np.testing.assert_array_equal(dtm[~inside], before[~inside])
+    # No trees in it or on its edge, and the rest of the forest untouched.
+    assert layers.clear[d < 1.5].all()
+    assert not layers.clear[d > 2.0].any()
 
 
 def test_a_building_drawn_as_a_rock_pillar_leaves_no_rocks() -> None:

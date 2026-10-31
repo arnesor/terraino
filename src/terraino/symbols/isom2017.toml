@@ -3,6 +3,10 @@
 name = "ISOM 2017-2"
 
 [symbols]
+# Landforms
+# Pit or hole: dug 1 m deep into the terrain with steep sides; size is its width.
+"112" = { feature = "pit", size = 2 }
+
 # Rock and stones
 "201" = { feature = "cliff", speed = 0 }
 "202" = { feature = "rock_face" }

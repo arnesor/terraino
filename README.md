@@ -119,7 +119,28 @@ Useful build options (see `uv run terraino build --help`):
 
 Without them, trees and roofs come from Kartverket's 1 m height models.
 Point clouds from [hoydedata.no](https://hoydedata.no/) give much more detail.
-Download the projects covering the map (LAZ, "Punktsky") and unpack each into its own folder.
+Most laser projects are open data (CC BY 4.0), and you need no user account to download them.
+To download the projects covering the map:
+
+1. Open [LaserInnsyn](https://hoydedata.no/LaserInnsyn2/).
+   In the panel on the right, under **Lidar**,
+   you can turn on each project to see where it covers and how dense it is.
+   "5pkt" means about 5 points per m², and "2pkt" about 2.
+2. Open **Meny** and choose **Eksport**.
+3. Choose the **Lokal eksport** tab and then **Prosjekt** (not "Nasjonal Høydemodell").
+4. Under **Område**, choose **Hjørnekoordinater** and enter the corners of the map,
+   with about 100 m to spare.
+   The corners are in UTM zone 33 (EPSG:25833), even when the map is in another zone.
+   For example, `xmin` 331428, `ymin` 6646404, `xmax` 333500 and `ymax` 6647686.
+   The area is drawn as a rectangle on the map.
+5. Under **Valgte prosjekt**, open **Gjeldende prosjekter** with ⊕ and tick the projects you want,
+   for example "NDH Eidskog 5pkt 2016".
+   **Andre prosjekter** holds older projects of the same area.
+6. Under **Produkt**, choose **Punktsky**.
+7. Enter your e-mail address and start the export.
+   Kartverket sends a link to the files when the export is ready.
+
+Unpack each project into its own folder.
 Give the folders with `--lidar`, the densest first; each place uses the first one that covers it:
 
 ```console

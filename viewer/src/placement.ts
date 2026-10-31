@@ -34,6 +34,7 @@ const FALLBACK_RADIUS = 1
 
 /** Features of column D, as kinds in features.json. */
 const POINT_KINDS: Record<string, string[]> = {
+  '1.14': ['pit'],
   '2.2': ['boulder'],
   '2.4': ['boulder'],
   '2.6': ['boulder'],
