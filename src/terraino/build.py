@@ -36,11 +36,13 @@ from terraino.process.features import (
     carve_pits,
     carve_waterholes,
     collect_features,
+    contour_rings,
     drop_rocks_in_buildings,
     drop_ruins_in_buildings,
     measure_cliffs,
     paint_cliffs,
     place_poles,
+    raise_knolls,
 )
 from terraino.process.fuse import (
     add_lidar_undergrowth,
@@ -446,6 +448,14 @@ def _add_nature_and_buildings(
 
     if source.features is not None:
         objects = source.features
+        rings = contour_rings(source.omap, source.symbols)
+        knolls, ring_knolls = raise_knolls(dtm, objects.points, rings, extent)
+        log.info(
+            "Raised %d knolls, and %d knolls drawn with contours (of %d small rings)",
+            knolls,
+            ring_knolls,
+            len(rings),
+        )
         objects.cliffs = measure_cliffs(source.cliff_lines, dtm, extent)
         if any(line.kind in POLE_SPACING_M for line in objects.lines):
             masts = fetch_masts(source.epsg, extent, cache)
@@ -516,7 +526,13 @@ def _add_nature_and_buildings(
     canopy = effective_canopy(chm, layers)
     fill_unknown_ground(layers, canopy)
     counts = np.bincount(trees.species, minlength=4)[1:]
-    log.info("Planted %d trees (%d spruce, %d pine, %d deciduous)", len(trees), *counts)
+    thickets = 0 if trees.thicket is None else int(trees.thicket.sum())
+    log.info(
+        "Planted %d trees (%d spruce, %d pine, %d deciduous), %d of them thickets",
+        len(trees),
+        *counts,
+        thickets,
+    )
     world.layers = layers
     world.canopy = canopy
     world.trees = trees

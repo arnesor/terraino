@@ -55,6 +55,7 @@ def world(tmp_path: Path) -> World:
         ground=np.full(dtm.shape, 1, dtype=np.uint8),
         speed=zeros + 1,
         young=zeros,
+        thicket=zeros,
         shrubs=zeros,
         tree_rule=np.zeros(dtm.shape, dtype=np.uint8),
         clear=zeros > 0,
@@ -223,7 +224,7 @@ def test_coarse_chunks_hold_every_fourth_sample(tmp_path: Path) -> None:
     out = tmp_path / "world"
     manifest = json.loads(write_world(out, data).read_text())
     h = manifest["height"]
-    assert manifest["format"] == 6
+    assert manifest["format"] == 7
     assert manifest["spawn"] == [50.0, 100.0]
     assert manifest["spawnHeading"] == 135.0
     assert h["coarse"] == {"step": COARSE_STEP, "chunks": [1]}

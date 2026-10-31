@@ -56,7 +56,7 @@ from terraino.process.symbols import Ground
 from terraino.process.tracks import Track
 from terraino.process.trees import Trees
 
-FORMAT_VERSION = 6
+FORMAT_VERSION = 7
 CHUNK = 256
 HEIGHT_STEP_M = 1.0
 # Height chunks this far from the map keep full detail; the others every COARSE_STEP-th sample.
@@ -78,6 +78,8 @@ TREE_DTYPE = np.dtype(
 SPECIES_NAMES = {1: "spruce", 2: "pine", 3: "deciduous"}
 # Added to the species byte of trees that grew up in a stand (seed trees left standing).
 STAND_GROWN_FLAG = 16
+# Added to the species byte of thickets: dense clumps of young trees or brush.
+THICKET_FLAG = 128
 # Crown base class in bits 5-6 of the species byte: 0 unknown, 1 branches to the
 # ground, 2 lowest third bare, 3 lower half or more bare (limits as shares of height).
 CROWN_BASE_SHIFT = 5
@@ -232,6 +234,7 @@ def encode_layers(
         >>> one = np.ones((1, 1), dtype=np.float32)
         >>> layers = GroundLayers(
         ...     ground=np.full((1, 1), 4, np.uint8), speed=one * 1.15, young=one * 0,
+        ...     thicket=one * 0,
         ...     shrubs=one * 0.5, tree_rule=np.zeros((1, 1), np.uint8),
         ...     clear=one < 0, in_map=one > 0)
         >>> encode_layers(layers, one * 12.3).tolist()
@@ -289,6 +292,8 @@ def _write_trees(out_dir: Path, trees: Trees, chunks: tuple[int, int]) -> list[i
         records["species"] |= np.where(trees.stand_grown, STAND_GROWN_FLAG, 0).astype(
             np.uint8
         )
+    if trees.thicket is not None:
+        records["species"] |= np.where(trees.thicket, THICKET_FLAG, 0).astype(np.uint8)
     if trees.crown_base is not None:
         base = trees.crown_base
         crown_class = np.where(
@@ -541,6 +546,7 @@ def write_world(out_dir: Path, world: WorldData) -> Path:
             "recordBytes": TREE_DTYPE.itemsize,
             "species": SPECIES_NAMES,
             "standGrownFlag": STAND_GROWN_FLAG,
+            "thicketFlag": THICKET_FLAG,
             "crownBaseShift": CROWN_BASE_SHIFT,
         }
 

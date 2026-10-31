@@ -4,6 +4,12 @@ name = "ISOM 2017-2"
 
 [symbols]
 # Landforms
+# Knolls are raised to at least 1 m (see isom2000.toml).
+"101" = { feature = "contour" }
+"102" = { feature = "contour" }
+"103" = { feature = "contour" }
+"109" = { feature = "knoll", size = 10 }
+"110" = { feature = "elongated_knoll", size = 8 }
 # Pit or hole: dug 1 m deep into the terrain with steep sides; size is its width.
 "112" = { feature = "pit", size = 2 }
 
@@ -47,12 +53,13 @@ name = "ISOM 2017-2"
 # Scattered trees: often a cut with seed trees left, newer than the laser data.
 "404" = { ground = "rough", trees = "scattered", speed = 0.95, order = 11 }
 "405" = { ground = "forest", speed = 1.0, order = 12 }
-"406" = { ground = "forest", young = 3, speed = 0.7, order = 20 }
+# Thickets block the view: see isom2000.toml.
+"406" = { ground = "forest", young = 3, thicket = 0.7, speed = 0.7, order = 20 }
 "407" = { overprint = true, speed_group = "undergrowth", shrubs = 0.45, speed = 0.7, order = 20 }
-"408" = { ground = "forest", young = 8, speed = 0.5, order = 21 }
+"408" = { ground = "forest", young = 8, thicket = 1.2, speed = 0.5, order = 21 }
 "409" = { overprint = true, speed_group = "undergrowth", shrubs = 0.8, speed = 0.5, order = 21 }
-"410" = { ground = "forest", young = 15, speed = 0.25, order = 22 }
-"411" = { ground = "forest", young = 20, speed = 0.05, order = 23 }
+"410" = { ground = "forest", young = 15, thicket = 2, speed = 0.25, order = 22 }
+"411" = { ground = "forest", young = 20, thicket = 2, speed = 0.05, order = 23 }
 # Cultivated land: mostly grain, about 90 cm tall by summer, and some ley.
 "412" = { ground = "grain", grass_share = 0.1, grass_speed = 0.7, trees = "lidar", speed = 0.5, order = 15 }
 "413" = { ground = "lawn", trees = "lidar", speed = 0.9, order = 15 }

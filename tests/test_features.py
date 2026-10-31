@@ -3,7 +3,7 @@ from typing import Any
 
 import numpy as np
 import pytest
-from shapely import Polygon, box
+from shapely import Point, Polygon, box
 
 from terraino.ingest.georef import Extent
 from terraino.process.features import (
@@ -13,11 +13,13 @@ from terraino.process.features import (
     carve_cliffs,
     carve_pits,
     collect_features,
+    contour_rings,
     drop_rocks_in_buildings,
     drop_ruins_in_buildings,
     measure_cliffs,
     paint_cliffs,
     place_poles,
+    raise_knolls,
 )
 from terraino.process.layers import GroundLayers
 from terraino.process.symbols import Ground, SymbolSet
@@ -138,6 +140,7 @@ def test_paint_cliffs() -> None:
         ground=np.ones(shape, dtype=np.uint8),
         speed=zeros + 1,
         young=zeros,
+        thicket=zeros,
         shrubs=zeros,
         tree_rule=np.zeros(shape, dtype=np.uint8),
         clear=zeros > 0,
@@ -192,30 +195,29 @@ def test_boulders_are_high_enough_and_waterholes_hold_water(
 
 
 @pytest.mark.parametrize(
-    ("key", "pit", "not_a_pit"),
+    ("key", "pit", "knoll"),
     [("isom2000", "116", "112"), ("isom2017", "112", "109")],  # 2000: 112 small knoll
 )
 def test_pits_are_dug_with_steep_sides_and_no_trees(
-    key: str, pit: str, not_a_pit: str
+    key: str, pit: str, knoll: str
 ) -> None:
     found, _ = collect_features(
         [
             feature(0, f"{pit}.0", point(50.3, 50.6)),
-            feature(1, f"{not_a_pit}.0", point(20, 20)),
+            feature(1, f"{knoll}.0", point(20, 20)),
         ],
         SymbolSet.load(key),
     )
-    assert [(p.kind, p.size) for p in found.points] == [("pit", 2.0)]
-    shape = EXTENT.raster_shape(1)
-    # A slope down to the east, 0.2 m per metre.
-    dtm = np.tile(100.0 - 0.2 * (np.arange(shape[1]) + 0.5), (shape[0], 1))
-    dtm = dtm.astype(np.float32)
+    assert [(p.kind, p.size) for p in found.points] == [("pit", 2.0), ("knoll", 10.0)]
+    dtm = slope()
     before = dtm.copy()
+    shape = dtm.shape
     zeros = np.zeros(shape, dtype=np.float32)
     layers = GroundLayers(
         ground=np.ones(shape, dtype=np.uint8),
         speed=zeros + 1,
         young=zeros,
+        thicket=zeros,
         shrubs=zeros,
         tree_rule=np.ones(shape, dtype=np.uint8),
         clear=zeros > 0,
@@ -234,6 +236,94 @@ def test_pits_are_dug_with_steep_sides_and_no_trees(
     # No trees in it or on its edge, and the rest of the forest untouched.
     assert layers.clear[d < 1.5].all()
     assert not layers.clear[d > 2.0].any()
+
+
+def slope() -> np.ndarray:
+    """Ground sloping down to the east, 0.2 m per metre."""
+    shape = EXTENT.raster_shape(1)
+    dtm = np.tile(100.0 - 0.2 * (np.arange(shape[1]) + 0.5), (shape[0], 1))
+    return dtm.astype(np.float32)
+
+
+def offsets(x: float, y: float) -> tuple[np.ndarray, np.ndarray]:
+    """How far east and north of (x, y) each cell's centre is."""
+    rows, cols = np.mgrid[0 : EXTENT.raster_shape(1)[0], 0 : EXTENT.raster_shape(1)[1]]
+    return cols + 0.5 - x, EXTENT.y1 - rows - 0.5 - y
+
+
+@pytest.mark.parametrize(
+    ("key", "knoll", "elongated"),
+    [("isom2000", "112", "113"), ("isom2017", "109", "110")],
+)
+def test_knolls_stand_1_m_above_the_slope(key: str, knoll: str, elongated: str) -> None:
+    found, _ = collect_features(
+        [
+            feature(0, f"{elongated}.0", point(50.5, 50.5), ang=0),
+            feature(1, f"{knoll}.0", point(20.5, 20.5)),
+            feature(2, f"{knoll}.0", point(80.5, 80.5)),
+        ],
+        SymbolSet.load(key),
+    )
+    assert [(p.kind, p.size) for p in found.points] == [
+        ("elongated_knoll", 8.0),
+        ("knoll", 10.0),
+        ("knoll", 10.0),
+    ]
+    dtm = slope()
+    # The terrain model already shows the last knoll, 2 m high.
+    east, north = offsets(80.5, 80.5)
+    d = np.hypot(east, north)
+    dtm += np.where(d < 5, 1 + np.cos(np.pi * d / 5), 0).astype(np.float32)
+    before = dtm.copy()
+
+    assert raise_knolls(dtm, found.points, [], EXTENT) == (2, 0)
+    rise = dtm - before
+    # On the slope, 1 m above the ground around it, not above its downhill side.
+    assert rise[int(EXTENT.y1 - 50.5), 50] == pytest.approx(1.0, abs=0.01)
+    assert rise[int(EXTENT.y1 - 20.5), 20] == pytest.approx(1.0, abs=0.01)
+    # The symbol's angle 0 is across the elongated knoll: it runs north-south, 16 x 8 m.
+    east, north = offsets(50.5, 50.5)
+    raised = rise > 0.01
+    assert raised[(abs(east) < 0.5) & (abs(north) < 7)].all()
+    assert not raised[(abs(north) < 0.5) & (abs(east) > 4)].any()
+    # A round knoll, 10 m across; the one the terrain model shows is left as it is.
+    east, north = offsets(20.5, 20.5)
+    assert not raised[(np.hypot(east, north) > 5) & (np.hypot(east, north) < 20)].any()
+    east, north = offsets(80.5, 80.5)
+    near = np.hypot(east, north) < 10
+    np.testing.assert_array_equal(dtm[near], before[near])
+
+
+def test_knolls_drawn_with_contour_rings() -> None:
+    def ring(x: float, y: float, r: float) -> dict[str, Any]:
+        return {
+            "type": "LineString",
+            "coordinates": list(Point(x, y).buffer(r).exterior.coords),
+        }
+
+    rings = contour_rings(
+        [
+            feature(0, "103.0", ring(30, 70, 6)),  # a knoll
+            feature(1, "101.0", ring(70, 30, 6)),  # a depression
+            feature(2, "101.0", ring(50, 50, 30)),  # too big: a hill
+            feature(3, "306.0", ring(30, 30, 6)),  # not a contour
+        ],
+        ISOM,
+    )
+    assert len(rings) == 2
+    dtm = np.full(EXTENT.raster_shape(1), 100.0, dtype=np.float32)
+    # The terrain model shows both, faintly.
+    for x, y, dz in ((30, 70, 0.3), (70, 30, -0.3)):
+        east, north = offsets(x, y)
+        dtm[np.hypot(east, north) < 4] += dz
+    before = dtm.copy()
+
+    assert raise_knolls(dtm, [], rings, EXTENT) == (0, 1)
+    # The knoll's top is 1 m above its contour line; outside the ring nothing changes.
+    east, north = offsets(30, 70)
+    d = np.hypot(east, north)
+    assert dtm[d < 1].max() == pytest.approx(101.0, abs=0.05)
+    np.testing.assert_array_equal(dtm[d > 6.5], before[d > 6.5])
 
 
 def test_a_building_drawn_as_a_rock_pillar_leaves_no_rocks() -> None:

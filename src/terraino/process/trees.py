@@ -5,8 +5,8 @@ terrain). Trees below the canopy cannot be seen from above, so smaller trees are
 under it until each 16 m cell has as many trees as SR16 reports (or a typical number).
 The orienteering map then decides where trees may stand: in forest the canopy is filled
 up as above, on open land, farmland and gardens only the trees the laser finds stand,
-on open land with scattered trees only a few of them, and young trees are added where the map shows dense forest. Species come from SR16, mixed a
-little, because SR16 only gives the dominant species per 16 m cell; trees far from
+on open land with scattered trees only a few of them, and young trees and thickets are
+added where the map shows dense forest. Species come from SR16, mixed a little, because SR16 only gives the dominant species per 16 m cell; trees far from
 SR16's forest, and outside it on open land, are birch.
 """
 
@@ -46,6 +46,10 @@ LOW_VEGETATION_M = (0.5, MIN_TREE_HEIGHT_M)
 LOW_VEGETATION_PROMINENCE_M = 0.4
 LOW_VEGETATION_WINDOW = 9
 YOUNG_HEIGHT_M = (1.2, 4.5)
+# Thickets: dense clumps of young trees or brush that block the view, height and crown
+# radius ranges in metres. They are spruce or deciduous; pine grows as spruce.
+THICKET_HEIGHT_M = (3.0, 5.0)
+THICKET_RADIUS_M = (1.25, 2.0)
 # Scattered trees stand at least this far apart (about 40 per hectare).
 SCATTERED_SPACING_M = 12.0
 # Laser tree tops on the 0.5 m canopy: smoothing, and the search window (in fine cells)
@@ -106,6 +110,8 @@ class Trees:
             None means none are.
         crown_base: Where the live crown begins, as a share of the height (from the
             laser point cloud); NaN where unknown, None if unknown for all.
+        thicket: True for thickets: dense clumps of young trees or brush, not single
+            trees. None means none are.
     """
 
     col: npt.NDArray[np.float32]
@@ -115,6 +121,7 @@ class Trees:
     species: npt.NDArray[np.uint8]
     stand_grown: npt.NDArray[np.bool_] | None = None
     crown_base: npt.NDArray[np.float32] | None = None
+    thicket: npt.NDArray[np.bool_] | None = None
 
     def __len__(self) -> int:
         """Number of trees."""
@@ -500,12 +507,8 @@ def place_trees(
     cols = np.concatenate([cols, uc])
     heights = np.concatenate([heights, uh]).astype(np.float32)
 
-    # Young trees where the map shows dense forest: Bernoulli draw per 1 m cell.
-    young_p = layers.young / 100.0
-    young_p[layers.clear] = 0
-    young_cells = np.flatnonzero(young_p > 0)
-    draw = rng.random(len(young_cells)) < young_p.ravel()[young_cells]
-    yr, yc = np.unravel_index(young_cells[draw], young_p.shape)
+    # Young trees where the map shows dense forest.
+    yr, yc = _draw_cells(layers.young, layers.clear, rng)
     yh = rng.uniform(*YOUNG_HEIGHT_M, size=len(yr)).astype(np.float32)
 
     all_rows = np.concatenate([rows, yr]).astype(np.float32)
@@ -531,7 +534,7 @@ def place_trees(
     crown[: len(laser)][measured] = laser.crown[measured]
     crown_base = np.full(n, np.nan, dtype=np.float32)
     crown_base[: len(laser)] = laser.crown_base
-    return Trees(
+    trees = Trees(
         col=col + jitter[0],
         row=row + jitter[1],
         height=all_heights,
@@ -540,6 +543,70 @@ def place_trees(
         stand_grown=stand_grown,
         crown_base=crown_base,
     )
+    return _add_thickets(trees, layers, species_map, seed)
+
+
+def _add_thickets(
+    trees: Trees,
+    layers: GroundLayers,
+    species_map: npt.NDArray[np.uint8],
+    seed: int,
+) -> Trees:
+    """Add thickets where the map shows dense forest, after the trees.
+
+    Thickets draw from their own random numbers, so the trees stay the same whether
+    the map has thickets or not.
+    """
+    rng = np.random.default_rng([seed, 1])
+    rows, cols = _draw_cells(layers.thicket, layers.clear, rng)
+    n = len(rows)
+    height = rng.uniform(*THICKET_HEIGHT_M, size=n).astype(np.float32)
+    species = _pick_species(species_map[rows, cols], layers.ground[rows, cols], rng)
+    no_seed_trees = np.zeros(n, dtype=bool)
+    birch = _birch(species_map, layers.ground, rows, cols, no_seed_trees)
+    species[birch] = Species.DECIDUOUS
+    species[species == Species.PINE] = Species.SPRUCE
+    jitter = rng.uniform(-0.45, 0.45, size=(2, n)).astype(np.float32)
+    crown = rng.uniform(*THICKET_RADIUS_M, size=n).astype(np.float32)
+    k = len(trees)
+
+    def both(
+        a: npt.NDArray[Any] | None, b: npt.NDArray[Any], fill: float | bool
+    ) -> npt.NDArray[Any]:
+        first = np.full(k, fill, dtype=b.dtype) if a is None else a
+        return np.concatenate([first, b]).astype(b.dtype)
+
+    return Trees(
+        col=both(trees.col, cols + 0.5 + jitter[0], 0),
+        row=both(trees.row, rows + 0.5 + jitter[1], 0),
+        height=both(trees.height, height, 0),
+        crown=both(trees.crown, crown, 0),
+        species=both(trees.species, species, 0),
+        stand_grown=both(trees.stand_grown, no_seed_trees, False),
+        crown_base=both(trees.crown_base, np.full(n, np.nan, np.float32), np.nan),
+        thicket=both(None, np.ones(n, dtype=bool), False),
+    )
+
+
+def _draw_cells(
+    per_100_m2: npt.NDArray[np.float32],
+    clear: npt.NDArray[np.bool_],
+    rng: np.random.Generator,
+) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
+    """Rows and columns of cells drawn with a chance of ``per_100_m2`` / 100 each.
+
+    Examples:
+        >>> density = np.full((100, 100), 10, dtype=np.float32)
+        >>> rows, cols = _draw_cells(density, density < 0, np.random.default_rng(1))
+        >>> 900 < len(rows) < 1100
+        True
+    """
+    p = per_100_m2 / 100.0
+    p[clear] = 0
+    cells = np.flatnonzero(p > 0)
+    draw = rng.random(len(cells)) < p.ravel()[cells]
+    rows, cols = np.unravel_index(cells[draw], p.shape)
+    return rows, cols
 
 
 def _laser_tops(

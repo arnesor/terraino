@@ -346,6 +346,7 @@ def classify_map(
     ground = np.full(shape_, Ground.UNKNOWN, dtype=np.uint8)
     speed = np.ones(shape_, dtype=np.float32)
     young = np.zeros(shape_, dtype=np.float32)
+    thicket = np.zeros(shape_, dtype=np.float32)
     shrubs = np.zeros(shape_, dtype=np.float32)
     tree_rule = np.zeros(shape_, dtype=np.uint8)
 
@@ -364,6 +365,7 @@ def classify_map(
             speed[mask] = rule.speed
         if vegetation:
             young[mask] = rule.young
+            thicket[mask] = rule.thicket
             shrubs[mask] = rule.shrubs
             tree_rule[mask] = TREE_RULES[rule.trees]
 
@@ -386,6 +388,7 @@ def classify_map(
     ground[~in_map] = Ground.UNKNOWN
     speed[~in_map] = 1.0
     young[~in_map] = 0
+    thicket[~in_map] = 0
     shrubs[~in_map] = 0
     tree_rule[~in_map] = 0
     clear &= in_map
@@ -394,6 +397,7 @@ def classify_map(
         ground=ground,
         speed=speed,
         young=young,
+        thicket=thicket,
         shrubs=shrubs,
         tree_rule=tree_rule,
         clear=clear,

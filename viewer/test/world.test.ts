@@ -9,7 +9,7 @@ import * as THREE from 'three'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { MapFeatures } from '../src/features'
 import { TreeChunk } from '../src/forest'
-import { type Gfx, QUALITY } from '../src/gfx'
+import { type Gfx, QUALITY, THICKETS } from '../src/gfx'
 import { HeightField } from '../src/heightfield'
 import { loadBuildings } from '../src/buildings'
 import { readCourseFile } from '../src/ocad/courses'
@@ -94,6 +94,7 @@ describe('fixture world', () => {
     const info = world.manifest.trees!
     const n = heights.chunk
     let total = 0
+    let thickets = 0
     for (let cy = 0; cy < heights.chunksY; cy++) {
       for (let cx = 0; cx < heights.chunksX; cx++) {
         const response = await fetch(world.url(info.path, cx, cy))
@@ -106,10 +107,18 @@ describe('fixture world', () => {
           expect(trees.y[i]).toBeCloseTo(heights.heightAt(x, z) - 0.2, 3)
           expect(trees.height[i]).toBeGreaterThan(0.3)
           expect(trees.height[i]).toBeLessThan(45)
+          const thicket = (THICKETS as readonly number[]).includes(trees.variant[i]!)
+          expect(thicket).toBe(trees.thicket[i] === 1)
+          if (!thicket) continue
+          thickets++
+          expect(trees.height[i]).toBeGreaterThanOrEqual(3)
+          expect(trees.height[i]).toBeLessThanOrEqual(5)
         }
       }
     }
     expect(total).toBe(info.total)
+    // The fixture map's green areas have thickets.
+    expect(thickets).toBeGreaterThan(0)
   })
 
   it('raises the buildings from the ground', async () => {

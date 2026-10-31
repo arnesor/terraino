@@ -56,3 +56,20 @@ as an orienteer keeps a thumb on the map.
 It moves to each control as it is punched; the game never moves it to the runner's position.
 There is a thumb only in competition mode; otherwise the map can show the runner's position.
 _Avoid_: cursor, marker, pin, position
+
+### Vegetation
+
+**Young tree**: A single small tree, up to about 4.5 m tall, added where the map shows dense forest.
+_Avoid_: sapling, small tree
+
+**Thicket**: A dense clump of young trees or brush, about 4 m tall,
+that the runner cannot see through.
+Thickets are what make the map's green areas hard to see through.
+_Avoid_: dense bush, scrub, brush
+
+**Bush**: A single low plant, about 1–2 m tall, that the runner can see over.
+_Avoid_: shrub
+
+**Undergrowth**: Low vegetation on the forest floor that slows the runner
+but leaves good visibility.
+_Avoid_: understorey, ground vegetation

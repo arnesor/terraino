@@ -58,6 +58,9 @@ FEATURES = frozenset(
         "boulder_cluster",
         "waterhole",
         "pit",
+        "knoll",
+        "elongated_knoll",
+        "contour",
         "boulder_field",
         "stones",
         "cliff",
@@ -110,6 +113,8 @@ class SymbolRule:
             terraino.process.layers.is_narrow), or None: mappers often draw a row of
             trees along a road or field as a strip of the open land around it.
         young: Young trees added per 100 m².
+        thicket: Thickets (dense clumps of young trees or brush, about 4 m tall)
+            added per 100 m².
         shrubs: Undergrowth density, 0..1.
         speed: Running speed factor, or None to leave it unchanged.
         speed_group: Group (see SPEED_GROUPS) of a symbol drawn on top of the vegetation,
@@ -139,6 +144,7 @@ class SymbolRule:
     trees: TreeRule = "keep"
     narrow_trees: TreeRule | None = None
     young: float = 0.0
+    thicket: float = 0.0
     shrubs: float = 0.0
     speed: float | None = None
     speed_group: str | None = None
