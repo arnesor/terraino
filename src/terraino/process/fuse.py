@@ -83,7 +83,7 @@ def fill_unknown_ground(layers: GroundLayers, canopy: npt.NDArray[np.float32]) -
         >>> from terraino.process.layers import GroundLayers
         >>> z = np.zeros((1, 2), dtype=np.float32)
         >>> layers = GroundLayers(
-        ...     ground=np.zeros((1, 2), np.uint8), speed=z + 1, young=z, shrubs=z,
+        ...     ground=np.zeros((1, 2), np.uint8), speed=z + 1, young=z, thicket=z, shrubs=z,
         ...     tree_rule=np.zeros((1, 2), np.uint8), clear=z > 0, in_map=z > 0)
         >>> fill_unknown_ground(layers, np.array([[10.0, 0.5]], dtype=np.float32))
         >>> layers.ground.tolist()
@@ -102,7 +102,7 @@ def add_low_vegetation(layers: GroundLayers, found: npt.NDArray[np.bool_]) -> No
         >>> from terraino.process.layers import GroundLayers
         >>> z = np.zeros((1, 3), dtype=np.float32)
         >>> layers = GroundLayers(
-        ...     ground=np.array([[2, 2, 10]], np.uint8), speed=z + 1, young=z, shrubs=z,
+        ...     ground=np.array([[2, 2, 10]], np.uint8), speed=z + 1, young=z, thicket=z, shrubs=z,
         ...     tree_rule=np.zeros((1, 3), np.uint8), clear=z > 0, in_map=z == 0)
         >>> add_low_vegetation(layers, np.array([[True, False, True]]))
         >>> layers.shrubs.tolist()
@@ -124,7 +124,7 @@ def add_lidar_undergrowth(layers: GroundLayers, low: npt.NDArray[np.float32]) ->
         >>> from terraino.process.layers import GroundLayers
         >>> z = np.zeros((1, 3), dtype=np.float32)
         >>> layers = GroundLayers(
-        ...     ground=np.array([[1, 1, 2]], np.uint8), speed=z + 1, young=z, shrubs=z,
+        ...     ground=np.array([[1, 1, 2]], np.uint8), speed=z + 1, young=z, thicket=z, shrubs=z,
         ...     tree_rule=np.zeros((1, 3), np.uint8), clear=z > 0, in_map=z == 0)
         >>> add_lidar_undergrowth(layers, np.array([[0.05, 0.6, 0.6]], np.float32))
         >>> [round(v, 2) for v in layers.shrubs[0].tolist()]  # smoothed; not on open land

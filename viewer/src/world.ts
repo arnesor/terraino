@@ -48,6 +48,8 @@ export interface TreeInfo {
   species: Record<string, string>
   /** Added to the species byte of trees that grew up in a stand (seed trees). */
   standGrownFlag?: number
+  /** Added to the species byte of thickets: dense clumps of young trees or brush. */
+  thicketFlag?: number
   /** Crown base class (0 unknown, 1-3 low to high) in the species byte, from this bit. */
   crownBaseShift?: number
 }
@@ -75,7 +77,7 @@ export interface Manifest {
 
 // Format 5 added the grain ground class; format 4 worlds have none and still work.
 // Format 6 added the spawn heading; older worlds open looking north.
-export const SUPPORTED_FORMATS = [4, 5, 6]
+export const SUPPORTED_FORMATS = [4, 5, 6, 7]
 
 export class World {
   readonly base: string

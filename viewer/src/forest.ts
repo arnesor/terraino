@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { type Gfx, IMPOSTOR_HALF_W, MODEL_CROWN, type QualitySettings, VARIANTS } from './gfx'
+import { type Gfx, IMPOSTOR_HALF_W, MODEL_CROWN, type QualitySettings, THICKETS, VARIANTS } from './gfx'
 import type { HeightField } from './heightfield'
 import type { Tracks } from './tracks'
 import type { TreeInfo, World } from './world'
@@ -37,6 +37,8 @@ export class TreeChunk {
   /** Crown width scale (the model is scaled by (width, height, width)). */
   readonly width: Float32Array
   readonly variant: Uint8Array
+  /** 1 for thickets, which the runner passes through. */
+  readonly thicket: Uint8Array
   readonly rotation: Float32Array
   readonly tint: Float32Array
   readonly box: THREE.Box3
@@ -62,6 +64,7 @@ export class TreeChunk {
     this.height = new Float32Array(n)
     this.width = new Float32Array(n)
     this.variant = new Uint8Array(n)
+    this.thicket = new Uint8Array(n)
     this.rotation = new Float32Array(n)
     this.tint = new Float32Array(n)
     const crown = new Float32Array(n)
@@ -82,6 +85,7 @@ export class TreeChunk {
       crown[i] = view.getUint8(o + 6) / info.crownScale
       const kind = view.getUint8(o + 7)
       standGrown[i] = info.standGrownFlag && kind & info.standGrownFlag ? 1 : 0
+      this.thicket[i] = info.thicketFlag && kind & info.thicketFlag ? 1 : 0
       crownBase[i] = info.crownBaseShift ? (kind >> info.crownBaseShift) & 3 : 0
       species[i] = kind & 15
       this.rotation[i] = posRandom(x, z, 1) * Math.PI * 2
@@ -93,6 +97,13 @@ export class TreeChunk {
       const h = this.height[i]!
       const r = posRandom(x, z, 3)
       let v: number
+      if (this.thicket[i]) {
+        // Pine thickets grow as spruce.
+        v = species[i] === SPRUCE || species[i] === PINE ? THICKETS[0] : THICKETS[1]
+        this.variant[i] = v
+        this.width[i] = h * Math.min(Math.max(crown[i]! / Math.max(h, 0.5) / MODEL_CROWN[v]!, 0.8), 3.2)
+        continue
+      }
       if (species[i] === SPRUCE && crownBase[i]) {
         // Measured in the laser point cloud: 1 branches to the ground ... 3 half bare.
         v = crownBase[i]! - 1
@@ -429,6 +440,7 @@ export class Forest {
     const candidates: number[] = []
     chunk.near(x, z, 2, candidates)
     for (const i of candidates) {
+      if (chunk.thicket[i]) continue
       const trunk = Math.min(Math.max(0.016 * chunk.width[i]! + 0.03, 0.06), 0.35)
       const dx = x - chunk.x[i]!
       const dz = z - chunk.z[i]!

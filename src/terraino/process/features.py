@@ -430,7 +430,8 @@ def carve_waterholes(
         >>> dtm = np.full((20, 20), 100.0, dtype=np.float32)
         >>> z = np.zeros((20, 20), dtype=np.float32)
         >>> layers = GroundLayers(ground=np.ones((20, 20), np.uint8), speed=z + 1,
-        ...     young=z, shrubs=z, tree_rule=np.zeros((20, 20), np.uint8),
+        ...     young=z, thicket=z, shrubs=z,
+        ...     tree_rule=np.zeros((20, 20), np.uint8),
         ...     clear=z > 0, in_map=z == 0)
         >>> carve_waterholes(dtm, layers, [PointFeature("waterhole", 10, 10, 4.0)],
         ...                  Extent(0, 0, 20, 20))
@@ -475,7 +476,8 @@ def carve_pits(
         >>> dtm = np.full((20, 20), 100.0, dtype=np.float32)
         >>> z = np.zeros((20, 20), dtype=np.float32)
         >>> layers = GroundLayers(ground=np.ones((20, 20), np.uint8), speed=z + 1,
-        ...     young=z, shrubs=z, tree_rule=np.zeros((20, 20), np.uint8),
+        ...     young=z, thicket=z, shrubs=z,
+        ...     tree_rule=np.zeros((20, 20), np.uint8),
         ...     clear=z > 0, in_map=z == 0)
         >>> carve_pits(dtm, layers, [PointFeature("pit", 10, 10, 2.0)],
         ...            Extent(0, 0, 20, 20))

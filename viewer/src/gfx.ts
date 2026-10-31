@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { grainCardMaterial, grainSurfaceMaterial, paintGrainCard } from './grainMaterial'
+import { deciduousThicket, spruceThicket, THICKET_CROWN } from './thickets'
 import { type Models, OModels, type TreeModel } from './vendor/models.js'
 import { type GroundKind, OTex, type Textures } from './vendor/textures.js'
 
@@ -43,11 +44,15 @@ export const VARIANTS = [
   { species: 'pine', model: 1 },
   { species: 'birch', model: 0 },
   { species: 'birch', model: 1 },
+  { species: 'spruce', model: 3 }, // thicket of young spruce
+  { species: 'birch', model: 2 }, // thicket of deciduous brush
 ] as const
 export type TreeSpecies = (typeof VARIANTS)[number]['species']
 
 /** Crown radius of each variant's model at height 1. */
-export const MODEL_CROWN = [0.2, 0.15, 0.115, 0.19, 0.19, 0.2, 0.2]
+export const MODEL_CROWN = [0.2, 0.15, 0.115, 0.19, 0.19, 0.2, 0.2, THICKET_CROWN, THICKET_CROWN]
+/** The thicket variants: spruce, deciduous. */
+export const THICKETS = [7, 8] as const
 
 // Ground texture layers, in the order of the texture array.
 export const GROUND_LAYERS: GroundKind[] = ['forest', 'grass', 'soil', 'gravel', 'rock', 'marsh', 'field', 'asphalt']
@@ -179,6 +184,8 @@ export class Gfx {
   constructor(renderer: THREE.WebGLRenderer) {
     this.textures = OTex.build(THREE, renderer)
     this.models = OModels.build(THREE)
+    this.models.spruce.push(spruceThicket(this.models))
+    this.models.birch.push(deciduousThicket(this.models))
     this.groundArray = buildGroundArray(this.textures)
     this.multisampled = renderer.getContext().getContextAttributes()?.antialias === true
     const a2c = this.multisampled

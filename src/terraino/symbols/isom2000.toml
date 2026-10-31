@@ -8,6 +8,9 @@
 #           of the laser's trees, the tallest, far apart) or "none"
 #   narrow_trees  tree rule instead for long, narrow areas (verges, field edges)
 #   young   young trees added per 100 m², making the forest denser
+#   thicket thickets added per 100 m²: dense clumps of young trees or brush, 3-5 m
+#           tall, that block the view. Green areas have half their sightlines at
+#           eye height blocked within 20 m (406), 10 m (408) and 5 m (410, 411).
 #   shrubs  undergrowth density, 0..1
 #   speed   running speed factor, 1 = easy forest floor, 0 = impassable, at most 2.55
 #   speed_group  "undergrowth", "wet" or "stony" for a symbol drawn on top of the
@@ -94,12 +97,12 @@ name = "ISOM 2000"
 # Scattered trees: often a cut with seed trees left, newer than the laser data.
 "404" = { ground = "rough", trees = "scattered", speed = 0.95, order = 11 }
 "405" = { ground = "forest", speed = 1.0, order = 12 }
-"406" = { ground = "forest", young = 3, speed = 0.7, order = 20 }
+"406" = { ground = "forest", young = 3, thicket = 0.7, speed = 0.7, order = 20 }
 "407" = { overprint = true, speed_group = "undergrowth", shrubs = 0.45, speed = 0.7, order = 20 }
-"408" = { ground = "forest", young = 8, speed = 0.5, order = 21 }
+"408" = { ground = "forest", young = 8, thicket = 1.2, speed = 0.5, order = 21 }
 "409" = { overprint = true, speed_group = "undergrowth", shrubs = 0.8, speed = 0.5, order = 21 }
-"410" = { ground = "forest", young = 15, speed = 0.25, order = 22 }
-"411" = { ground = "forest", young = 20, speed = 0.05, order = 23 }
+"410" = { ground = "forest", young = 15, thicket = 2, speed = 0.25, order = 22 }
+"411" = { ground = "forest", young = 20, thicket = 2, speed = 0.05, order = 23 }
 "412" = { ground = "lawn", trees = "lidar", speed = 0.9, order = 15 }
 "413" = { ground = "field", trees = "lidar", speed = 0.7, order = 15 }
 # Cultivated land: mostly grain, about 90 cm tall by summer, and some ley.

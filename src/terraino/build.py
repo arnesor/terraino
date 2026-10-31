@@ -526,7 +526,13 @@ def _add_nature_and_buildings(
     canopy = effective_canopy(chm, layers)
     fill_unknown_ground(layers, canopy)
     counts = np.bincount(trees.species, minlength=4)[1:]
-    log.info("Planted %d trees (%d spruce, %d pine, %d deciduous)", len(trees), *counts)
+    thickets = 0 if trees.thicket is None else int(trees.thicket.sum())
+    log.info(
+        "Planted %d trees (%d spruce, %d pine, %d deciduous), %d of them thickets",
+        len(trees),
+        *counts,
+        thickets,
+    )
     world.layers = layers
     world.canopy = canopy
     world.trees = trees

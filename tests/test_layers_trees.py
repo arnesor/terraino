@@ -22,6 +22,7 @@ from terraino.process.trees import (
     FOREST_DISTANCE_STEP,
     MIN_TREE_HEIGHT_M,
     SCATTERED_SPACING_M,
+    Trees,
     canopy_height,
     effective_canopy,
     find_tree_tops,
@@ -464,3 +465,90 @@ def test_narrow_rough_open_land_keeps_laser_trees() -> None:
     assert layers.tree_rule[cell(50, 22)] == TREES_LIDAR
     assert layers.tree_rule[cell(40, 60)] == TREES_NONE
     assert layers.ground[cell(50, 22)] == Ground.ROUGH
+
+
+EYE_M = 1.7
+
+
+def half_blocked_distance(
+    trees: Trees, centre: float, rng: np.random.Generator
+) -> float:
+    """Median distance at which a sightline at eye height hits a thicket or young tree.
+
+    A thicket blocks the view across its crown. A young tree is a cone with branches to
+    the ground, whose foliage blocks about half of the view across it at eye height.
+    """
+    assert trees.thicket is not None
+    radius = np.where(
+        trees.thicket,
+        trees.crown,
+        0.5 * trees.crown * np.clip(1 - EYE_M / trees.height, 0, None),
+    )
+    keep = radius > 0
+    x, y, r = trees.col[keep], trees.row[keep], radius[keep]
+    n = 2000
+    ox, oy = rng.uniform(centre - 50, centre + 50, (2, n))
+    angle = rng.uniform(0, 2 * np.pi, n)
+    dx, dy = np.cos(angle), np.sin(angle)
+    # Distance along each ray to the nearest disc it passes through.
+    px, py = x[None, :] - ox[:, None], y[None, :] - oy[:, None]
+    along = px * dx[:, None] + py * dy[:, None]
+    across2 = px**2 + py**2 - along**2
+    hit = (along > 0) & (across2 < r**2)
+    dist = np.where(hit, along - np.sqrt(np.clip(r**2 - across2, 0, None)), np.inf)
+    return float(np.median(np.clip(dist.min(axis=1), 0, None)))
+
+
+@pytest.mark.parametrize("symbols", ["isom2000", "isom2017"])
+@pytest.mark.parametrize(
+    ("symbol", "visibility"), [("406", 20), ("408", 10), ("410", 5), ("411", 5)]
+)
+def test_thickets_block_the_view_in_green_areas(
+    symbols: str, symbol: str, visibility: float
+) -> None:
+    size = 260
+    extent = Extent(0, 0, size, size)
+    whole = box(0, 0, size, size)
+    green = rasterize_map(
+        [area(0, f"{symbol}.0", whole)], SymbolSet.load(symbols), extent, whole
+    )
+    chm = np.zeros(extent.raster_shape(1), dtype=np.float32)
+    species = np.full(chm.shape, 1, dtype=np.uint8)
+    trees = place_trees(chm, green, species, seed=5)
+    assert trees.thicket is not None
+    thickets = trees.thicket
+    assert thickets.any()
+    assert (trees.height[thickets] >= 3).all()
+    assert (trees.height[thickets] <= 5).all()
+    assert (2 * trees.crown[thickets] >= 2.5).all()
+    assert (2 * trees.crown[thickets] <= 4).all()
+    seen = half_blocked_distance(trees, size / 2, np.random.default_rng(1))
+    assert seen == pytest.approx(visibility, rel=0.25)
+
+
+def test_open_forest_has_no_thickets(layers: GroundLayers) -> None:
+    chm = np.zeros(layers.ground.shape, dtype=np.float32)
+    species = np.full(chm.shape, 3, dtype=np.uint8)
+    trees = place_trees(chm, layers, species, seed=2)
+    assert trees.thicket is not None
+    rows, cols = trees.row.astype(int), trees.col.astype(int)
+    # Only the difficult forest (408) has thickets; pine thickets grow as spruce.
+    assert (layers.thicket[rows, cols][trees.thicket] > 0).all()
+    assert trees.thicket.any()
+    assert set(trees.species[trees.thicket].tolist()) <= {1, 3}
+
+
+def test_thickets_leave_the_trees_as_they_were(layers: GroundLayers) -> None:
+    chm = cone_forest(
+        [(r, c, 18.0) for r in range(5, 100, 7) for c in range(5, 100, 7)]
+    )
+    species = np.full(chm.shape, 1, dtype=np.uint8)
+    trees = place_trees(chm, layers, species, seed=4)
+    layers.thicket[:] = 0
+    plain = place_trees(chm, layers, species, seed=4)
+    assert trees.thicket is not None
+    assert trees.thicket.any()
+    assert plain.thicket is not None
+    assert not plain.thicket.any()
+    np.testing.assert_array_equal(trees.col[~trees.thicket], plain.col)
+    np.testing.assert_array_equal(trees.species[~trees.thicket], plain.species)

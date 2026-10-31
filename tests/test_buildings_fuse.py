@@ -37,6 +37,7 @@ def empty_layers(in_map: npt.NDArray[np.bool_] | None = None) -> GroundLayers:
         ground=np.zeros(shape, dtype=np.uint8),
         speed=zeros + 1,
         young=zeros.copy(),
+        thicket=zeros.copy(),
         shrubs=zeros.copy(),
         tree_rule=np.zeros(shape, dtype=np.uint8),
         clear=np.zeros(shape, dtype=bool),

@@ -72,6 +72,7 @@ class GroundLayers:
         ground: Ground class (Ground values); UNKNOWN outside the map.
         speed: Running speed factor, 1 = easy forest.
         young: Young trees to add per 100 m².
+        thicket: Thickets to add per 100 m².
         shrubs: Undergrowth density, 0..1.
         tree_rule: TREES_KEEP, TREES_NONE, TREES_LIDAR or TREES_SCATTERED.
         clear: True where no trees may stand (roads, paths, streams, power lines).
@@ -81,6 +82,7 @@ class GroundLayers:
     ground: npt.NDArray[np.uint8]
     speed: npt.NDArray[np.float32]
     young: npt.NDArray[np.float32]
+    thicket: npt.NDArray[np.float32]
     shrubs: npt.NDArray[np.float32]
     tree_rule: npt.NDArray[np.uint8]
     clear: npt.NDArray[np.bool_]
@@ -371,7 +373,7 @@ def rasterize_map(
         np.uint8,
     )
     speed = _speed(shapes, extent)
-    # Vegetation areas set young trees, shrubs and the tree rule; overprinting areas
+    # Vegetation areas set young trees, thickets, shrubs and the tree rule; overprinting areas
     # (marsh, stony ground, undergrowth patterns) leave what is below them.
     vegetation = [
         s
@@ -380,6 +382,9 @@ def rasterize_map(
     ]
     young = _paint(
         [(s.geometry, s.rule.young) for s in vegetation], extent, 0.0, np.float32
+    )
+    thicket = _paint(
+        [(s.geometry, s.rule.thicket) for s in vegetation], extent, 0.0, np.float32
     )
     undergrowth = [
         s
@@ -404,6 +409,7 @@ def rasterize_map(
         ground=ground,
         speed=speed,
         young=young,
+        thicket=thicket,
         shrubs=shrubs,
         tree_rule=tree_rule,
         clear=clear,
