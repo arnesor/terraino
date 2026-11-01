@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { type Gfx, type QualitySettings, rockMaterial } from './gfx'
 import type { HeightField } from './heightfield'
+import { ANT_HILL_RADIUS } from './placement'
 import { type TrackFinder, WALL_KINDS, Walls } from './walls'
 import type { World } from './world'
 
@@ -21,6 +22,9 @@ const POLE = new THREE.Color(0x5a4a38)
 // Boulders sink this far below the lowest ground around them.
 const BOULDER_SINK_M = 0.25
 const STEEL = new THREE.Color(0x8c9196)
+// Ant hills: reddish-brown conifer needles, the foot sunk this far into the ground.
+const NEEDLES = new THREE.Color(0x7a5435)
+const ANT_HILL_SINK_M = 0.1
 const COLLISION_CELL = 16
 // Rocks are drawn near the player only (see QualitySettings.boulders), picked from a grid
 // of this cell size whenever the player has moved this far.
@@ -125,6 +129,8 @@ export class MapFeatures {
   readonly group = new THREE.Group()
   /** Stumps of felled trees, as x, z, diameter; drawn near the player by Undergrowth. */
   readonly stumps: number[] = []
+  /** Circles kept free of undergrowth, as x, z, radius: the ant hills. */
+  readonly clearings: number[] = []
   /** The features as read from features.json, for placing control flags. */
   data: FeatureFile = { kinds: [], points: [], lines: [], cliffs: [] }
   private readonly obstacles = new Map<number, [number, number, number][]>()
@@ -307,6 +313,7 @@ export class MapFeatures {
       else if (kind === 'lamp_post') parts.push(...this.lampPost(x, y, z, size, angle))
       else if (kind === 'fodder_rack') parts.push(...this.fodderRack(x, y, z, size, angle))
       else if (kind === 'footbridge') parts.push(this.footbridge(x, z, size, angle, ground))
+      else if (kind === 'ant_hill') parts.push(this.antHill(x, z, size, angle, ground))
       else if (kind === 'stump') this.stumps.push(x, z, size)
     }
 
@@ -479,6 +486,65 @@ export class MapFeatures {
       out.push(withColor(g, ROCK.clone().multiplyScalar(0.9 + 0.2 * rand(x, z, i))))
     }
     this.addObstacle(x, z, size * 0.5)
+    return out
+  }
+
+  /**
+   * An ant hill `height` high: a cone of needles with a rounded top, 2.5 times as wide as
+   * it is high, its foot uneven and sunk into the ground, leaning a little toward `angle`.
+   * The shape and the shading come from its position, the same in every build.
+   */
+  private antHill(x: number, z: number, height: number, angle: number, ground: (x: number, z: number) => number) {
+    const radius = height * ANT_HILL_RADIUS
+    const lean = height * (0.05 + 0.1 * rand(x, z, 1))
+    const phase = [rand(x, z, 2), rand(x, z, 3), rand(x, z, 4)].map(r => r * Math.PI * 2)
+    const sides = 72
+    const rings = 24
+    const positions: number[] = []
+    const colors: number[] = []
+    for (let i = 0; i <= rings; i++) {
+      // t: 0 at the top, 1 at the foot. The profile is rounded at the top, steep on the sides.
+      const t = i / rings
+      const rise = height * (1 - t ** 1.5) - ANT_HILL_SINK_M * t
+      for (let j = 0; j < sides; j++) {
+        const a = (j / sides) * Math.PI * 2
+        const wobble =
+          1 + 0.07 * Math.sin(2 * a + phase[0]!) + 0.05 * Math.sin(3 * a + phase[1]!) + 0.03 * Math.sin(5 * a + phase[2]!)
+        // Lumps of needles and twigs, a few centimetres either way.
+        const lump = 1 + 0.06 * (rand(x + i, z + j, 7) - 0.5)
+        const r = radius * t * wobble * lump
+        const top = (1 - t) * lean
+        const px = x + Math.cos(a) * r + Math.cos(angle) * top
+        const pz = z - Math.sin(a) * r - Math.sin(angle) * top
+        positions.push(px, ground(px, pz) + rise + 0.03 * height * (rand(px, pz, 8) - 0.5) * (1 - t), pz)
+        // Darker and damper at the foot, drier at the top.
+        const shade = 1.12 - 0.3 * t
+        colors.push(NEEDLES.r * shade, NEEDLES.g * shade, NEEDLES.b * shade)
+      }
+    }
+    const index: number[] = []
+    for (let i = 0; i < rings; i++) {
+      for (let j = 0; j < sides; j++) {
+        const a = i * sides + j
+        const b = i * sides + ((j + 1) % sides)
+        index.push(a, a + sides, b, b, a + sides, b + sides)
+      }
+    }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
+    g.setIndex(index)
+    g.computeVertexNormals()
+    // Speckled: each small triangle a lighter or darker clump of needles.
+    const out = g.toNonIndexed()
+    const color = out.getAttribute('color')
+    for (let f = 0; f < color.count; f += 3) {
+      const speck = 0.65 + 0.6 * rand(x + f, z, 5) ** 1.5
+      for (let v = f; v < f + 3; v++) color.setXYZ(v, color.getX(v) * speck, color.getY(v) * speck, color.getZ(v) * speck)
+    }
+    // Runners brush past the foot, where it is low.
+    this.addObstacle(x, z, radius * 0.8)
+    this.clearings.push(x, z, radius * 1.05)
     return out
   }
 

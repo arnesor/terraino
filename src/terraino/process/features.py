@@ -177,6 +177,7 @@ _DEFAULT_SIZE = {
     "lamp_post": 6.0,
     "cairn": 1.2,
     "fodder_rack": 2.0,
+    "ant_hill": 1.0,
     "ruin": 0.6,
     "power_line": 10.0,
     "pylon_line": 25.0,
@@ -231,6 +232,10 @@ def _expand_point(
         return _scatter("boulder", x, y, size, 9, 6.0)
     if kind == "stones":
         return _scatter("stone", x, y, size, 5, 2.0)
+    if kind == "ant_hill":
+        # Its height: the symbol's, give or take a fifth.
+        s = size * (0.8 + 0.4 * _rand(x + y, 5))
+        return [PointFeature("ant_hill", x, y, s, _rand(x, 6) * 2 * math.pi)]
     return [PointFeature(kind, x, y, size, angle)]
 
 

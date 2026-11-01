@@ -80,6 +80,7 @@ FEATURES = frozenset(
         "fodder_rack",
         "ruin",
         "footbridge",
+        "ant_hill",
     }
 )
 

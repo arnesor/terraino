@@ -1,5 +1,5 @@
 /*
- * Vendored from "Orienteering 3D" (https://claude.ai/artifact/A8dqe89rvxzyN29Az3W29D),
+ * Vendored from "O-kart 3D" (https://claude.ai/artifact/A8dqe89rvxzyN29Az3W29D),
  * MIT licensed, see LICENSE in this folder. Changes for Terrain-O: an ES module instead of a
  * window global, and the colour space API of current three.js.
  */

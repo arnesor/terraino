@@ -4,7 +4,7 @@ import { deciduousThicket, spruceThicket, THICKET_CROWN } from './thickets'
 import { type Models, OModels, type TreeModel } from './vendor/models.js'
 import { type GroundKind, OTex, type Textures } from './vendor/textures.js'
 
-// Shared graphics: procedural textures and models (from the vendored Orienteering 3D
+// Shared graphics: procedural textures and models (from the vendored O-kart 3D
 // code), vegetation materials with wind and distance dissolve, and tree impostors.
 
 export type Quality = 'high' | 'medium' | 'low'

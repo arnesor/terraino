@@ -32,9 +32,21 @@ const STAND_RADIUS = 0.3
 const DEFAULT_RADIUS: Record<string, number> = { '1.9': 12, '1.10': 2.5, '1.12': 6, '1.13': 1.5, '1.14': 1.5 }
 const FALLBACK_RADIUS = 1
 
+/** An ant hill's base radius per metre of height: it is 2.5 times as wide as it is high. */
+export const ANT_HILL_RADIUS = 1.25
+
+/** The radius of a solid point feature that a flag stand must keep out of, or null. */
+function solidRadius(kind: string | undefined, size: number): number | null {
+  // Boulders are drawn about 1.3–1.7 times as wide as they are high.
+  if (kind === 'boulder') return size * 0.8
+  if (kind === 'ant_hill') return size * ANT_HILL_RADIUS
+  return null
+}
+
 /** Features of column D, as kinds in features.json. */
 const POINT_KINDS: Record<string, string[]> = {
   '1.13': ['small_depression'],
+  '1.16': ['ant_hill'],
   '1.14': ['pit'],
   '2.2': ['boulder'],
   '2.4': ['boulder'],
@@ -150,10 +162,9 @@ function findFeature(ref: string | undefined, centre: XZ, data: PlacementData): 
       const d = Math.hypot(x - centre[0], z - centre[1])
       if (d < bestD) {
         bestD = d
-        // Boulders are drawn about 1.3–1.7 times as wide as they are high.
         const kind = data.kinds[k] ?? ''
         // A lamp post's size is its height; the pole is thin.
-        const radius = kind === 'boulder' ? size * 0.8 : kind === 'lamp_post' ? 0.15 : Math.max(size / 2, 0.5)
+        const radius = solidRadius(kind, size) ?? (kind === 'lamp_post' ? 0.15 : Math.max(size / 2, 0.5))
         best = { type: 'circle', centre: [x, z], radius, hollow: HOLLOWS.has(kind) }
       }
     }
@@ -252,19 +263,20 @@ function cornerToward(points: XZ[], dir: XZ): XZ {
   return points.reduce((best, p) => (dot(p, dir) > dot(best, dir) ? p : best), points[0]!)
 }
 
-/** True if something solid (a building or a boulder) stands within `margin` of `p`. */
+/** True if something solid (a building, a boulder or an ant hill) stands within `margin` of `p`. */
 export function blocked(data: PlacementData, p: XZ, margin = 0.4): boolean {
   for (const outline of data.buildings) {
     if (outline.length < 3) continue
     if (inside(p, outline) || distanceToLine(p, outline, true) < margin) return true
   }
   for (const [k, x, z, size] of data.points) {
-    if (data.kinds[k] === 'boulder' && Math.hypot(p[0] - x, p[1] - z) < size * 0.8 + margin) return true
+    const radius = solidRadius(data.kinds[k], size)
+    if (radius !== null && Math.hypot(p[0] - x, p[1] - z) < radius + margin) return true
   }
   return false
 }
 
-/** Move `p` out of rocks and buildings, so the stand does not end up inside one. */
+/** Move `p` out of rocks, ant hills and buildings, so the stand does not end up inside one. */
 function clearOf(p: XZ, data: PlacementData): XZ {
   let q = p
   for (const outline of data.buildings) {
@@ -275,9 +287,10 @@ function clearOf(p: XZ, data: PlacementData): XZ {
     }
   }
   for (const [k, x, z, size] of data.points) {
-    if (data.kinds[k] !== 'boulder') continue
+    const radius = solidRadius(data.kinds[k], size)
+    if (radius === null) continue
     const away = sub(q, [x, z])
-    const min = size * 0.8 + STAND_RADIUS
+    const min = radius + STAND_RADIUS
     const d = length(away)
     if (d < min) q = d > 1e-6 ? add([x, z], away, min / d) : [x + min, z]
   }

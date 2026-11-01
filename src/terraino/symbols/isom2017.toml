@@ -20,6 +20,8 @@ name = "ISOM 2017-2"
 "111" = { feature = "small_depression", size = 8 }
 # Pit or hole: dug 1 m deep into the terrain with steep sides; size is its width.
 "112" = { feature = "pit", size = 2 }
+# Prominent landform feature: an ant hill (see isom2000.toml, 118).
+"115" = { feature = "ant_hill", size = 1.0 }
 
 # Rock and stones
 "201" = { feature = "cliff", speed = 0 }

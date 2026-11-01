@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+import numpy.typing as npt
 from pyproj import Transformer
 from shapely import (
     LineString,
@@ -17,10 +19,10 @@ from shapely import (
     Polygon,
     make_valid,
     polygonize,
+    transform,
     unary_union,
 )
 from shapely.geometry.base import BaseGeometry
-from shapely.ops import transform
 
 from terraino.fetch.cache import DownloadError, cached_download
 from terraino.ingest.georef import Extent
@@ -124,9 +126,14 @@ def parse_overpass(data: dict[str, Any]) -> list[OsmFeature]:
 
 def _project(features: Iterable[OsmFeature], epsg: int) -> list[OsmFeature]:
     to_map = Transformer.from_crs(4326, epsg, always_xy=True)
+
+    def project(lon_lat: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        x, y = to_map.transform(lon_lat[:, 0], lon_lat[:, 1])
+        return np.column_stack([x, y])
+
     projected = []
     for f in features:
-        geometry = transform(to_map.transform, f.geometry)
+        geometry = transform(f.geometry, project)
         if isinstance(geometry, Polygon | MultiPolygon) and not geometry.is_valid:
             geometry = make_valid(geometry)
         projected.append(OsmFeature(geometry=geometry, tags=f.tags, osm_id=f.osm_id))

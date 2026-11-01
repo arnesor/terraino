@@ -495,3 +495,20 @@ def test_a_ruin_under_a_building_is_left_out() -> None:
     shed = box(28, 12, 32, 16)  # shares only the ruin's east edge
     assert drop_ruins_in_buildings(found, [barn, shed]) == 1
     assert sorted(line.coords[0][0] for line in found.lines) == [20, 40]
+
+
+@pytest.mark.parametrize(
+    ("key", "number"),
+    [("isom2000", "118.0"), ("isom2000", "117.1"), ("isom2017", "115.0")],
+)
+def test_special_landform_features_are_ant_hills_about_1_m_high(
+    key: str, number: str
+) -> None:
+    symbols = SymbolSet.load(key)
+    features, _ = collect_features(
+        [feature(i, number, point(10 + 7 * i, 20 + 3 * i)) for i in range(20)], symbols
+    )
+    assert {p.kind for p in features.points} == {"ant_hill"}
+    heights = [p.size for p in features.points]
+    assert all(0.8 <= h <= 1.2 for h in heights)
+    assert max(heights) - min(heights) > 0.1  # not all alike
