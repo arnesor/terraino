@@ -1,7 +1,7 @@
 [project]
 name = "terraino"
 version = "0.0.0"
-description = "Terrain-O: orienteering in real terrain, in 3D on your computer"
+description = "Terrain-O: Real terrain. Real trees. Just you, the map and the compass."
 authors = [{ name = "Arne Sørli", email = "arne.sorli@kongsberg.frisurf.no" }]
 license = "MIT"
 license-files = ["LICENSE"]

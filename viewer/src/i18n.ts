@@ -28,8 +28,8 @@ const FLAGS: Record<Lang, string> = {
 const STRINGS = {
   // Start screen.
   tagline: {
-    en: 'Orienteering in real terrain, in 3D on your computer',
-    nb: 'Orientering i ekte terreng, i 3D på datamaskinen',
+    en: 'Real terrain. Real trees. Just you, the map and the compass.',
+    nb: 'Ekte terreng. Ekte trær. Bare deg, kartet og kompasset.',
   },
   worldLabel: { en: 'Map', nb: 'Kart' },
   languageLabel: { en: 'Language', nb: 'Språk' },

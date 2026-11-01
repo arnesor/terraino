@@ -1,1 +1,1 @@
-"""Terrain-O: orienteering in real terrain, in 3D on your computer."""
+"""Terrain-O: Real terrain. Real trees. Just you, the map and the compass."""

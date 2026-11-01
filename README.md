@@ -1,6 +1,8 @@
 # Terrain-O
 
-_Orienteering in real terrain, in 3D on your computer._
+_Real terrain.
+Real trees.
+Just you, the map and the compass._
 
 [![Tests](https://github.com/arnesor/terraino/actions/workflows/tests.yml/badge.svg)][tests]
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=arnesor_terraino&metric=coverage)][sonarcov]
