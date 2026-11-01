@@ -55,6 +55,13 @@ def _check_name(
     ),
 )
 @click.option(
+    "--owner",
+    help=(
+        'Who owns the orienteering map, e.g. "Eidskog OL": the viewer credits'
+        " the map to them."
+    ),
+)
+@click.option(
     "--margin", default=300.0, show_default=True, help="Metres around the map."
 )
 @click.option(
@@ -128,6 +135,7 @@ def build(
     map_path: Path,
     out_dir: Path | None,
     name: str | None,
+    owner: str | None,
     margin: float,
     offset: tuple[float, float],
     cache_dir: Path,
@@ -148,6 +156,7 @@ def build(
     out = out_dir or Path("worlds") / name
     options = BuildOptions(
         name=name,
+        owner=owner.strip() if owner and owner.strip() else None,
         margin=margin,
         offset=offset,
         cache_dir=cache_dir,

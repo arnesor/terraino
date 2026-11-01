@@ -115,6 +115,8 @@ Useful build options (see `uv run terraino build --help`):
   To find them, walk to the spot in the viewer and read E and N in the top-left corner
   and the heading on the compass bar.
   By default you stand inside the map, looking north.
+- `--owner NAME` credits the orienteering map to its owner at the bottom of the screen,
+  for example `--owner "Eidskog OL"`.
 - `--no-forest` builds the terrain only.
 - `--lidar FOLDER` uses a laser point cloud (see below).
 

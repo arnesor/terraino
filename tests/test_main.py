@@ -28,6 +28,7 @@ def test_build_help_lists_options(runner: CliRunner) -> None:
     options = (
         "--out",
         "--name",
+        "--owner",
         "--margin",
         "--offset",
         "--cache-dir",
@@ -122,3 +123,22 @@ def test_name_must_be_a_folder_name(
     assert result.exit_code == 2
     assert "--name" in result.output
     assert not built
+
+
+@pytest.mark.parametrize(
+    ("args", "owner"),
+    [([], None), (["--owner", " Eidskog OL "], "Eidskog OL"), (["--owner", " "], None)],
+)
+def test_owner_is_passed_to_the_build(
+    runner: CliRunner,
+    tmp_path: Path,
+    built: list[tuple[Path, BuildOptions]],
+    args: list[str],
+    owner: str | None,
+) -> None:
+    ocad = tmp_path / "map.ocd"
+    ocad.write_bytes(b"")
+    result = runner.invoke(__main__.main, ["build", str(ocad), *args])
+    assert result.exit_code == 0, result.output
+    [(_, options)] = built
+    assert options.owner == owner
