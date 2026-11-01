@@ -11,14 +11,13 @@ from __future__ import annotations
 
 import logging
 import math
-import warnings
+import threading
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
-from rasterio.errors import NotGeoreferencedWarning
 from rasterio.features import shapes
 from rasterio.transform import from_origin
 from scipy import ndimage
@@ -31,10 +30,10 @@ from terraino.fetch.topo import read_layer
 from terraino.ingest.georef import Extent
 
 log = logging.getLogger(__name__)
-# rasterio's shapes() warns about a missing geotransform although it is given and used.
-warnings.filterwarnings(
-    "ignore", category=NotGeoreferencedWarning, module="rasterio.features"
-)
+# The map tiles are read in several threads, but rasterio's shapes() is traced in one at
+# a time: it hides a warning about the dataset it makes with warnings.catch_warnings(),
+# which is not thread-safe, so the warning slips out of a thread that overlaps another.
+_SHAPES_LOCK = threading.Lock()
 
 LAYER = "fkb_bygning"
 PIXEL_M = 0.1
@@ -305,7 +304,8 @@ def _trace_crop(
     inner = ndimage.binary_erosion(core, iterations=EDGE_PIXELS)
     rows, cols = np.nonzero(line & inner)
     line_label = labels[rows, cols]
-    traced = shapes(labels.astype(np.int32), mask=core, transform=transform)
+    with _SHAPES_LOCK:
+        traced = list(shapes(labels.astype(np.int32), mask=core, transform=transform))
     for geometry, value in traced:
         label = int(value)
         if label in touching:
