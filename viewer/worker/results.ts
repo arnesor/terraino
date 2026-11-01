@@ -16,11 +16,17 @@ export interface Result {
   name: string
   /** When the run was finished (real time), as an ISO date. */
   date: string
-  /** Split times in seconds of game time, one per control after the start; the last is the run time. */
+  /**
+   * Split times in whole seconds of game time, one per control after the start; the last is
+   * the run time. Two punches in the same second have the same split time.
+   */
   splits: number[]
   /** Where the runner went: projected positions, one per second of game time from the start. */
   route: Point[]
 }
+
+/** The run time of a result: its last split time. */
+export const runTime = (result: Result): number => result.splits[result.splits.length - 1]!
 
 /** What a results list is for: the course as it was when its first result was saved. */
 export interface ResultsCourse {
@@ -78,7 +84,8 @@ export function validResult(v: unknown, course: ResultsCourse): v is Result {
     !Number.isNaN(Date.parse(r.date)) &&
     Array.isArray(r.splits) &&
     r.splits.length === course.controls.length - 1 &&
-    r.splits.every((t, i) => isNumber(t) && t > (r.splits[i - 1] ?? 0)) &&
+    r.splits.every((t, i) => isNumber(t) && t >= (r.splits[i - 1] ?? 0)) &&
+    runTime(r) > 0 &&
     Array.isArray(r.route) &&
     r.route.length <= MAX_ROUTE &&
     r.route.every(isPoint)
@@ -89,10 +96,11 @@ export function validResult(v: unknown, course: ResultsCourse): v is Result {
 export const validWorld = (name: string): boolean => /^[\w .-]{1,64}$/.test(name) && !/^\.+$/.test(name)
 
 /**
- * The result with only what is saved: its fields, and the route in decimetres, which keeps
- * the longest route under the database's row size.
+ * The result with only what is saved: its fields, the split times in whole seconds (from
+ * viewers that recorded fractions), and the route in decimetres, which keeps the longest
+ * route under the database's row size.
  */
 export function storedResult({ id, name, date, splits, route }: Result): Result {
   const dm = (v: number) => Math.round(v * 10) / 10
-  return { id, name, date, splits, route: route.map(([e, n]) => [dm(e), dm(n)]) }
+  return { id, name, date, splits: splits.map(Math.floor), route: route.map(([e, n]) => [dm(e), dm(n)]) }
 }

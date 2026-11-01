@@ -6,6 +6,7 @@ import {
   courseKey,
   deleteResult,
   fetchResults,
+  legLengths,
   MAX_NAME_LENGTH,
   type Result,
   type ResultsFile,
@@ -17,7 +18,8 @@ import {
 } from './results'
 
 // The Finished panel (a name for the result, in competition mode) and the results list
-// window: a WinSplits-like table of the course's results, with each route on the map.
+// window: a table of the course's results that looks like WinSplits Online, with each
+// route on the map and the legs with mistakes in red.
 
 const NAME_KEY = 'terraino.name'
 // The run that is not on the list (not saved) is shown with this id.
@@ -236,7 +238,12 @@ export class ResultsView {
   private render() {
     if (this.status.textContent === t('noResults')) this.status.textContent = ''
     const results = this.file?.results ?? []
-    const rows = resultsTable(results, { allRuns: this.allRunsBox.checked, extra: this.unsaved, sort: this.sort })
+    const rows = resultsTable(results, {
+      allRuns: this.allRunsBox.checked,
+      extra: this.unsaved,
+      sort: this.sort,
+      legLengths: legLengths(this.file?.course.controls ?? this.run.course.controls),
+    })
     this.table.replaceChildren()
     if (!rows.length) {
       this.status.textContent ||= t('noResults')
@@ -244,35 +251,56 @@ export class ResultsView {
     }
     const n = this.run.course.controls.length
     const codes = this.file?.course.codes ?? resultsCourse(this.run.course).codes
-    const head = el('tr', '', el('thead', '', this.table))
-    el('th', '', head)
-    el('th', 'place', head, '#')
-    el('th', 'name', head, t('nameHeader'))
-    for (let i = 0; i < n - 1; i++) {
-      const to = i === n - 2 ? t('finishShort') : String(i + 1)
-      const code = i < n - 2 ? codes?.[i + 1] : undefined
-      const th = el('th', 'leg sortable', head, `${i === 0 ? 'S' : i}-${to}${code ? ` (${code})` : ''}`)
-      th.title = t('sortHint')
-      if (this.sort.by !== 'time' && this.sort.index === i) th.classList.add(`sorted-${this.sort.by}`)
-      th.addEventListener('click', () => {
-        // Leg time, then split time, then back to the run time.
-        const same = this.sort.by !== 'time' && this.sort.index === i
-        this.sort = !same ? { by: 'leg', index: i } : this.sort.by === 'leg' ? { by: 'split', index: i } : { by: 'time' }
+
+    // Two header rows, as in WinSplits: sort links, then the legs with their control codes.
+    const thead = el('thead', '', this.table)
+    const top = el('tr', '', thead)
+    const bottom = el('tr', '', thead)
+    el('th', 'route', top).rowSpan = 2
+    const sortLink = (parent: HTMLElement, text: string, title: string, sort: Sort) => {
+      const a = el('button', 'sort', parent, text)
+      a.type = 'button'
+      a.title = title
+      const active = this.sort.by === sort.by && ('index' in sort ? 'index' in this.sort && this.sort.index === sort.index : true)
+      if (active) a.classList.add('sorted')
+      a.addEventListener('click', () => {
+        this.sort = sort
         this.render()
       })
+      return a
     }
-    el('th', '', head)
+    const place = el('th', 'place', top)
+    place.rowSpan = 2
+    sortLink(place, t('placeHeader'), t('sortByTime'), { by: 'time' })
+    sortLink(el('th', 'name', top), t('nameHeader'), t('sortByName'), { by: 'name' })
+    el('th', 'name', bottom, t('behindHeader'))
+    for (let i = 0; i < n - 1; i++) {
+      const last = i === n - 2
+      const control = last ? t('toFinish') : t('toControl', { number: i + 1 })
+      const links = el('th', `leg${i === 0 ? ' first' : ''}`, top)
+      sortLink(links, t('legLink'), t('sortByLeg', { control }), { by: 'leg', index: i })
+      links.append(' ')
+      sortLink(links, t('splitLink'), t('sortBySplit', { control }), { by: 'split', index: i })
+      const code = last ? undefined : codes?.[i + 1]
+      const to = last ? t('finishShort') : String(i + 1)
+      el('th', `leg${i === 0 ? ' first' : ''}`, bottom, `${i === 0 ? 'S' : i}-${to}${code ? ` (${code})` : ''}`)
+    }
+    sortLink(el('th', 'name last', top), t('nameHeader'), t('sortByName'), { by: 'name' })
+    el('th', 'name last', bottom, t('behindHeader'))
+    el('th', 'delete', top).rowSpan = 2
 
-    const body = el('tbody', '', this.table)
     const colorOf = (id: string) => {
       const i = this.routes.indexOf(id)
       return i < 0 ? null : ROUTE_COLORS[i % ROUTE_COLORS.length]!
     }
+    // Red for the best time, blue for the second and third.
+    const medal = (place: number | null) => (place === 1 ? ' first-place' : place === 2 || place === 3 ? ' podium' : '')
     for (const row of rows) {
       const id = row.result.id
-      const mine = id === this.mine ? ' mine' : ''
-      const legs = el('tr', `legs${mine}`, body)
-      const splits = el('tr', `splits${mine}`, body)
+      // A runner's two rows in their own tbody, so that hovering lights up both.
+      const runner = el('tbody', id === this.mine ? 'runner mine' : 'runner', this.table)
+      const legs = el('tr', 'legs', runner)
+      const splits = el('tr', 'splits', runner)
 
       const routeCell = el('td', 'route', legs)
       routeCell.rowSpan = 2
@@ -288,16 +316,28 @@ export class ResultsView {
         this.render()
       })
 
-      el('td', 'place', legs, row.place === null ? '' : String(row.place))
+      el('td', 'place', legs, row.place === null ? '' : String(row.place)).rowSpan = 2
+      const behind = row.place === null ? '' : `+${formatTime(row.behind)}`
       el('td', 'name', legs, row.label)
-      el('td', 'place', splits)
-      el('td', 'name behind', splits, row.place === null ? '' : `+${formatTime(row.behind)}`)
+      el('td', 'name behind', splits, behind)
       row.legs.forEach((time, i) => {
-        const cell = el('td', `time${row.bestLegs[i] ? ' best' : ''}`, legs, formatTime(time))
+        const first = i === 0 ? ' first' : ''
+        const mistake = row.mistakes[i]
+        const cell = el(
+          'td',
+          `time${first}${mistake ? ' mistake' : medal(row.legPlaces[i]!)}`,
+          legs,
+          formatTime(time),
+        )
         if (row.legPlaces[i] !== null) el('span', 'rank', cell, ` (${row.legPlaces[i]})`)
-        const split = el('td', `time${row.bestSplits[i] ? ' best' : ''}`, splits, formatTime(row.result.splits[i]!))
+        if (mistake) {
+          cell.title = t('mistake', { loss: formatTime(Math.round(mistake.loss)), percent: Math.round(mistake.share * 100) })
+        }
+        const split = el('td', `time${first}${medal(row.splitPlaces[i]!)}`, splits, formatTime(row.result.splits[i]!))
         if (row.splitPlaces[i] !== null) el('span', 'rank', split, ` (${row.splitPlaces[i]})`)
       })
+      el('td', 'name last', legs, row.label)
+      el('td', 'name behind last', splits, behind)
 
       const deleteCell = el('td', 'delete', legs)
       deleteCell.rowSpan = 2

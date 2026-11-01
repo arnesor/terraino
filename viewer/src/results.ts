@@ -1,12 +1,12 @@
 import type { Course } from './course'
-import type { Result, ResultsCourse, ResultsFile, SavedResults } from '../worker/results'
+import { type Point, type Result, type ResultsCourse, type ResultsFile, runTime, type SavedResults } from '../worker/results'
 
 // Results lists, one per course. The results Worker keeps them in D1
 // (docs/adr/0003-results-stored-in-d1-by-a-worker.md); this module is what the viewer
 // needs to read, write and rank them.
 
 export type { Result, ResultsCourse, ResultsFile } from '../worker/results'
-export { MAX_NAME_LENGTH } from '../worker/results'
+export { MAX_NAME_LENGTH, runTime } from '../worker/results'
 
 /**
  * The results list's key for a course: a hash of its control positions in order, rounded
@@ -29,6 +29,18 @@ export function resultsCourse(course: Course): ResultsCourse {
   return { name: course.imported?.name ?? null, controls: course.controls, codes }
 }
 
+/** A leg on which the runner made a mistake (docs/adr/0005-mistakes-found-with-winsplits-time-loss-algorithm.md). */
+export interface Mistake {
+  /** Time loss: seconds more than the runner's normal leg time. */
+  loss: number
+  /** The time loss as a share of the normal leg time. */
+  share: number
+}
+
+/** A leg is a mistake when its time loss is above both parts of the mistake threshold. */
+export const MISTAKE_SECONDS = 30
+export const MISTAKE_SHARE = 0.2
+
 /** One row of the results table: a result with its places, ready to show. */
 export interface Row {
   result: Result
@@ -42,29 +54,86 @@ export interface Row {
   /** Places per leg and per split, among the placed rows; null for an unplaced row. */
   legPlaces: (number | null)[]
   splitPlaces: (number | null)[]
-  /** True where this row has the best leg or split time of the placed rows. */
-  bestLegs: boolean[]
-  bestSplits: boolean[]
+  /** Per leg, the mistake made on it, or null. */
+  mistakes: (Mistake | null)[]
 }
 
-/** How the table is sorted: by run time, or by one leg's leg time or split time. */
-export type Sort = { by: 'time' } | { by: 'leg' | 'split'; index: number }
-
-export const runTime = (result: Result): number => result.splits[result.splits.length - 1]!
+/** How the table is sorted: by run time, by name, or by one leg's leg time or split time. */
+export type Sort = { by: 'time' | 'name' } | { by: 'leg' | 'split'; index: number }
 
 const legTimes = (result: Result): number[] => result.splits.map((t, i) => t - (result.splits[i - 1] ?? 0))
 
 const sameName = (name: string) => name.trim().toLocaleLowerCase()
 
 /**
+ * A result with its split times in whole seconds, as a punch records them. Every time in
+ * the table is then whole seconds, so times that look the same are the same.
+ */
+const punched = (result: Result): Result => ({ ...result, splits: result.splits.map(Math.floor) })
+
+/** The length of each leg of a course: the straight line between its controls, in metres. */
+export function legLengths(controls: Point[]): number[] {
+  return controls.slice(1).map(([e, n], i) => Math.hypot(e - controls[i]![0], n - controls[i]![1]))
+}
+
+/**
+ * The median of `values` weighted by `weights`: the value at which half the weight lies on
+ * either side, or the mean of the two values that split it exactly in half. With no weight
+ * at all, every value weighs the same.
+ */
+export function weightedMedian(values: number[], weights: number[]): number {
+  const total = weights.reduce((a, b) => a + b, 0)
+  const w = total > 0 ? weights : values.map(() => 1)
+  const half = (total > 0 ? total : values.length) / 2
+  const order = values.map((_, i) => i).sort((a, b) => values[a]! - values[b]!)
+  let sum = 0
+  for (let k = 0; k < order.length; k++) {
+    sum += w[order[k]!]!
+    // Rounding must not turn an exact half into a little more or less.
+    if (Math.abs(sum - half) < 1e-9 * half && k + 1 < order.length) return (values[order[k]!]! + values[order[k + 1]!]!) / 2
+    if (sum > half) return values[order[k]!]!
+  }
+  return values[order[order.length - 1]!]!
+}
+
+/** The reference time of a leg: the mean of the fastest quarter of its leg times, at least one. */
+function referenceTime(times: number[]): number {
+  const fastest = [...times].sort((a, b) => a - b).slice(0, Math.max(1, Math.round(times.length / 4)))
+  return fastest.reduce((a, b) => a + b, 0) / fastest.length
+}
+
+/** The mistakes on each leg of a run, measured against the reference times of the legs. */
+function mistakes(legs: number[], references: number[], weights: number[]): (Mistake | null)[] {
+  if (references.length !== legs.length) return legs.map(() => null)
+  const normal = weightedMedian(
+    legs.map((t, i) => references[i]! / t),
+    weights,
+  )
+  return legs.map((t, i) => {
+    const normalLeg = references[i]! / normal
+    const loss = t - normalLeg
+    return loss > MISTAKE_SECONDS && loss > MISTAKE_SHARE * normalLeg ? { loss, share: loss / normalLeg } : null
+  })
+}
+
+/**
  * The results table: each name's best result (or every result with `allRuns`), plus an
  * unplaced `extra` run that is not on the list, sorted by `sort`. Places count only
- * the placed rows; equal times share a place.
+ * the placed rows; equal times share a place. Mistakes are measured against the placed
+ * rows, with each run's normal performance weighted by `legLengths` (all legs alike if left out).
+ * Each row's result has its split times in whole seconds.
  */
 export function resultsTable(
   results: Result[],
-  { allRuns = false, extra = null, sort = { by: 'time' } }: { allRuns?: boolean; extra?: Result | null; sort?: Sort } = {},
+  {
+    allRuns = false,
+    extra = null,
+    sort = { by: 'time' },
+    legLengths = [],
+  }: { allRuns?: boolean; extra?: Result | null; sort?: Sort; legLengths?: number[] } = {},
 ): Row[] {
+  results = results.map(punched)
+  extra = extra && punched(extra)
   // Each name's runs by date, to number them.
   const byName = new Map<string, Result[]>()
   for (const r of [...results].sort((a, b) => a.date.localeCompare(b.date))) {
@@ -84,6 +153,8 @@ export function resultsTable(
   const column = (index: number, of: (r: Result) => number[]) => shown.map(r => of(r)[index]!).filter(Number.isFinite)
   const legColumns = Array.from({ length: count }, (_, i) => column(i, legTimes))
   const splitColumns = Array.from({ length: count }, (_, i) => column(i, r => r.splits))
+  const references = legColumns.map(referenceTime)
+  const weights = Array.from({ length: count }, (_, i) => legLengths[i] ?? 1)
   const times = shown.map(runTime)
   const best = Math.min(...times)
 
@@ -97,15 +168,17 @@ export function resultsTable(
       legs,
       legPlaces: legs.map((t, i) => (placed ? placeOf(legColumns[i] ?? [], t) : null)),
       splitPlaces: result.splits.map((t, i) => (placed ? placeOf(splitColumns[i] ?? [], t) : null)),
-      bestLegs: legs.map((t, i) => placed && t === Math.min(...(legColumns[i] ?? []))),
-      bestSplits: result.splits.map((t, i) => placed && t === Math.min(...(splitColumns[i] ?? []))),
+      mistakes: mistakes(legs, references, weights),
     }
   }
   const rows = shown.map(r => row(r, true))
   if (extra) rows.push(row(extra, false))
   const key = (r: Row): number =>
-    sort.by === 'time' ? runTime(r.result) : ((sort.by === 'leg' ? r.legs : r.result.splits)[sort.index] ?? Infinity)
-  return rows.sort((a, b) => key(a) - key(b) || (a.place === null ? 1 : 0) - (b.place === null ? 1 : 0))
+    sort.by === 'leg' || sort.by === 'split'
+      ? ((sort.by === 'leg' ? r.legs : r.result.splits)[sort.index] ?? Infinity)
+      : runTime(r.result)
+  const byLabel = (a: Row, b: Row) => (sort.by === 'name' ? a.label.localeCompare(b.label) : 0)
+  return rows.sort((a, b) => byLabel(a, b) || key(a) - key(b) || (a.place === null ? 1 : 0) - (b.place === null ? 1 : 0))
 }
 
 // ------------------------------------------------------------------ the server

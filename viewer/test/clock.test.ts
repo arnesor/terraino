@@ -111,10 +111,14 @@ describe('run time', () => {
 
   // The clock starts as the runner passes the start at x = 30; it punches 2.5 m before each control.
   const SPLITS = [(127.5 - 30) / 4, (227.5 - 30) / 4]
-  // The start and each punch are seen at the end of a step.
+  // The start and each punch are seen at the end of a step; a punch records whole seconds.
   const expectSplits = (splits: number[]) => {
     expect(splits).toHaveLength(2)
-    for (const [i, split] of splits.entries()) expect(Math.abs(split - SPLITS[i]!)).toBeLessThanOrEqual(MAX_STEP)
+    for (const [i, split] of splits.entries()) {
+      expect(Number.isInteger(split)).toBe(true)
+      expect(split).toBeGreaterThan(SPLITS[i]! - MAX_STEP - 1)
+      expect(split).toBeLessThanOrEqual(SPLITS[i]! + MAX_STEP)
+    }
   }
 
   it.each([
@@ -138,9 +142,9 @@ describe('run time', () => {
       [0, DT],
       [7, 0.1],
     ] as const) {
-      const { splits, route } = await race(steps, dt)
+      const { route } = await race(steps, dt)
       // The start, one point a second, and the finish.
-      expect(route.length).toBe(Math.ceil(splits[1]! - 1e-9) + 1)
+      expect(route.length).toBe(Math.ceil(SPLITS[1]!) + 1)
       // Projected positions along the line z = 128 (northing 128), at 4 m/s from x = 30.
       expect(route[0]![0]).toBeCloseTo(30, 0)
       expect(route[10]![0]).toBeCloseTo(30 + 40, 0)

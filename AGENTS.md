@@ -126,7 +126,9 @@ independent of `tools/ocad-export`.
 `scripts/add-race.ts` (`npm run add-race`) adds one
 (see `docs/adr/0002-races-kept-as-files-next-to-the-worlds.md`).
 `descriptions/` holds the IOF control description table.
-`results.ts` ranks results and talks to the results endpoint;
+`results.ts` ranks results, finds the mistakes on each leg
+(see `docs/adr/0005-mistakes-found-with-winsplits-time-loss-algorithm.md`)
+and talks to the results endpoint;
 `resultsView.ts` is the Finished panel and the results list window.
 Competition mode (`Hud.restricted`) turns off every help during a run;
 only competition runs can be saved.

@@ -36,11 +36,33 @@ _Avoid_: track (roads and paths are tracks)
 Runners choose a race on the start screen instead of opening a course file.
 _Avoid_: event (OCAD's word for it), competition (see competition mode)
 
-**Split time**: The run time when a control is punched, counted from the start.
+**Split time**: The run time when a control is punched, counted from the start,
+in whole seconds as orienteering timing records it.
+Leg times are the differences between split times, so they are whole seconds too.
 _Avoid_: intermediate time
 
 **Leg time**: The time from one control to the next.
 _Avoid_: split (on its own)
+
+**Performance index**: How fast a runner ran a leg compared with the fastest on it:
+the mean of the fastest quarter of the leg times on the results list,
+divided by the runner's leg time.
+_Avoid_: speed index
+
+**Normal performance**: A runner's usual performance index on a course:
+the median of their performance indices, weighted by leg length.
+Divide the mean of the fastest quarter of a leg's times by it to get the runner's
+**normal leg time**.
+
+**Time loss**: How much longer a leg took than the runner's normal leg time (Norwegian _bomtid_).
+_Avoid_: lost time, delay
+
+**Mistake**: A leg whose time loss is above both parts of the mistake threshold (Norwegian _bom_).
+_Avoid_: error, miss
+
+**Mistake threshold**: 30 seconds and 20 % of the normal leg time.
+A leg is a mistake only when its time loss is above both.
+_Avoid_: error threshold, bomkriterier
 
 **Route**: Where the runner went during a run, recorded as the run goes.
 _Avoid_: track, GPS track, trail
