@@ -370,6 +370,7 @@ const STRINGS = {
   sortBySplit: { en: 'Sort by split time at {control}', nb: 'Sorter etter mellomtid på {control}' },
   toControl: { en: 'control {number}', nb: 'post {number}' },
   toFinish: { en: 'the finish', nb: 'mål' },
+  mistake: { en: 'Mistake: {loss} lost (+{percent} %)', nb: 'Bom: {loss} tapt (+{percent} %)' },
   notOnList: { en: 'Your run (not saved)', nb: 'Ditt løp (ikke lagret)' },
   showRoute: { en: 'Show the route on the map', nb: 'Vis veivalget på kartet' },
   deleteResult: { en: 'Delete this result', nb: 'Slett dette resultatet' },

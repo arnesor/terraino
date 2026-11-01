@@ -6,6 +6,7 @@ import {
   courseKey,
   deleteResult,
   fetchResults,
+  legLengths,
   MAX_NAME_LENGTH,
   type Result,
   type ResultsFile,
@@ -18,7 +19,7 @@ import {
 
 // The Finished panel (a name for the result, in competition mode) and the results list
 // window: a table of the course's results that looks like WinSplits Online, with each
-// route on the map.
+// route on the map and the legs with mistakes in red.
 
 const NAME_KEY = 'terraino.name'
 // The run that is not on the list (not saved) is shown with this id.
@@ -237,7 +238,12 @@ export class ResultsView {
   private render() {
     if (this.status.textContent === t('noResults')) this.status.textContent = ''
     const results = this.file?.results ?? []
-    const rows = resultsTable(results, { allRuns: this.allRunsBox.checked, extra: this.unsaved, sort: this.sort })
+    const rows = resultsTable(results, {
+      allRuns: this.allRunsBox.checked,
+      extra: this.unsaved,
+      sort: this.sort,
+      legLengths: legLengths(this.file?.course.controls ?? this.run.course.controls),
+    })
     this.table.replaceChildren()
     if (!rows.length) {
       this.status.textContent ||= t('noResults')
@@ -316,8 +322,17 @@ export class ResultsView {
       el('td', 'name behind', splits, behind)
       row.legs.forEach((time, i) => {
         const first = i === 0 ? ' first' : ''
-        const cell = el('td', `time${first}${medal(row.legPlaces[i]!)}`, legs, formatTime(time))
+        const mistake = row.mistakes[i]
+        const cell = el(
+          'td',
+          `time${first}${mistake ? ' mistake' : medal(row.legPlaces[i]!)}`,
+          legs,
+          formatTime(time),
+        )
         if (row.legPlaces[i] !== null) el('span', 'rank', cell, ` (${row.legPlaces[i]})`)
+        if (mistake) {
+          cell.title = t('mistake', { loss: formatTime(Math.round(mistake.loss)), percent: Math.round(mistake.share * 100) })
+        }
         const split = el('td', `time${first}${medal(row.splitPlaces[i]!)}`, splits, formatTime(row.result.splits[i]!))
         if (row.splitPlaces[i] !== null) el('span', 'rank', split, ` (${row.splitPlaces[i]})`)
       })

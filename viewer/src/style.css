@@ -597,8 +597,8 @@ body {
 }
 
 /* The results table looks like WinSplits Online: grey names and places, leg times on light
-   yellow, split times on darker yellow, the best time red and the next two blue.
-   A runner's two rows are one tbody. */
+   yellow, split times on darker yellow, the best time red and the next two blue, mistakes
+   on red. A runner's two rows are one tbody. */
 .results-table {
   border-collapse: collapse;
   border: 2px solid #000;
@@ -702,6 +702,10 @@ body {
 
 .results-table tr.splits td.time {
   background: #ffff80;
+}
+
+.results-table tr.legs td.time.mistake {
+  background: #ffc0c0;
 }
 
 .results-table td.first-place {

@@ -44,6 +44,26 @@ _Avoid_: intermediate time
 **Leg time**: The time from one control to the next.
 _Avoid_: split (on its own)
 
+**Performance index**: How fast a runner ran a leg compared with the fastest on it:
+the mean of the fastest quarter of the leg times on the results list,
+divided by the runner's leg time.
+_Avoid_: speed index
+
+**Normal performance**: A runner's usual performance index on a course:
+the median of their performance indices, weighted by leg length.
+Divide the mean of the fastest quarter of a leg's times by it to get the runner's
+**normal leg time**.
+
+**Time loss**: How much longer a leg took than the runner's normal leg time (Norwegian _bomtid_).
+_Avoid_: lost time, delay
+
+**Mistake**: A leg whose time loss is above both parts of the mistake threshold (Norwegian _bom_).
+_Avoid_: error, miss
+
+**Mistake threshold**: 30 seconds and 20 % of the normal leg time.
+A leg is a mistake only when its time loss is above both.
+_Avoid_: error threshold, bomkriterier
+
 **Route**: Where the runner went during a run, recorded as the run goes.
 _Avoid_: track, GPS track, trail
 
