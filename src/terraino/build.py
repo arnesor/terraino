@@ -79,7 +79,6 @@ from terraino.process.trees import (
 log = logging.getLogger(__name__)
 
 EXTENT_ALIGN_M = 16  # SR16's grid, so its cells line up with the world's
-OMAP_ATTRIBUTION = "Orienteering map: © the map's owner"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif", ".tif", ".tiff", ".kmz"}
 DRAPE_PX_PER_M = 2
 # Text anchors count as beside an area's hole within this distance on paper (mm).
@@ -90,11 +89,25 @@ UNDERSTOREY_BASE_WEIGHT = 0.15
 UNKNOWN_MID = 0.2
 
 
+def map_attribution(owner: str | None) -> str:
+    """The credit for the orienteering map, shown with the other data sources.
+
+    Example:
+        >>> map_attribution("Eidskog OL")
+        'Orienteering map: © Eidskog OL'
+        >>> map_attribution(None)
+        "Orienteering map: © the map's owner"
+    """
+    return f"Orienteering map: © {owner or "the map's owner"}"
+
+
 @dataclass(frozen=True)
 class BuildOptions:
     """Settings for a world build.
 
     Attributes:
+        name: Name of the world, shown in the viewer, or None for the map's file name.
+        owner: Who owns the orienteering map, credited in the viewer, or None.
         margin: Metres of terrain to include around the mapped area.
         offset: Shift ``(dx, dy)`` in metres applied to the map's georeference.
         cache_dir: Folder for downloaded data, shared between builds.
@@ -110,6 +123,8 @@ class BuildOptions:
             from grid north.
     """
 
+    name: str | None = None
+    owner: str | None = None
     margin: float = 300.0
     offset: tuple[float, float] = (0.0, 0.0)
     cache_dir: Path = Path("data-cache")
@@ -354,7 +369,7 @@ def build_world(map_path: Path, out_dir: Path, options: BuildOptions) -> Path:
     cache = options.cache_dir
     dtm = fill_missing(kartverket.fetch_height_model("dtm", source.epsg, extent, cache))
     world = WorldData(
-        name=map_path.stem,
+        name=options.name or map_path.stem,
         epsg=source.epsg,
         extent=extent,
         dtm=dtm,
@@ -366,7 +381,7 @@ def build_world(map_path: Path, out_dir: Path, options: BuildOptions) -> Path:
         omap_features=source.omap,
         spawn=spawn,
         spawn_heading=options.heading,
-        attribution=[kartverket.ATTRIBUTION, OMAP_ATTRIBUTION],
+        attribution=[kartverket.ATTRIBUTION, map_attribution(options.owner)],
         map_offset=options.offset,
     )
     if options.forest:

@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { type Gfx, type QualitySettings, rockMaterial } from './gfx'
 import type { HeightField } from './heightfield'
-import { ANT_HILL_RADIUS } from './placement'
+import { ANT_HILL_RADIUS, PICNIC_TABLE_RADIUS } from './placement'
 import { type TrackFinder, WALL_KINDS, Walls } from './walls'
 import type { World } from './world'
 
@@ -25,6 +25,9 @@ const STEEL = new THREE.Color(0x8c9196)
 // Ant hills: reddish-brown conifer needles, the foot sunk this far into the ground.
 const NEEDLES = new THREE.Color(0x7a5435)
 const ANT_HILL_SINK_M = 0.1
+// Picnic tables: pressure-treated pine, honey-coloured when new, grey when weathered.
+const NEW_PINE = new THREE.Color(0xb48a52)
+const GREY_PINE = new THREE.Color(0x8b8478)
 const COLLISION_CELL = 16
 // Rocks are drawn near the player only (see QualitySettings.boulders), picked from a grid
 // of this cell size whenever the player has moved this far.
@@ -314,6 +317,7 @@ export class MapFeatures {
       else if (kind === 'fodder_rack') parts.push(...this.fodderRack(x, y, z, size, angle))
       else if (kind === 'footbridge') parts.push(this.footbridge(x, z, size, angle, ground))
       else if (kind === 'ant_hill') parts.push(this.antHill(x, z, size, angle, ground))
+      else if (kind === 'picnic_table') parts.push(this.picnicTable(x, z, size, angle, ground))
       else if (kind === 'stump') this.stumps.push(x, z, size)
     }
 
@@ -546,6 +550,76 @@ export class MapFeatures {
     this.addObstacle(x, z, radius * 0.8)
     this.clearings.push(x, z, radius * 1.05)
     return out
+  }
+
+  /**
+   * A picnic table `length` long: a top of five planks, a two-plank bench along each side,
+   * and an A-shaped pair of legs at each end, carrying the top and a crossbar under the
+   * benches. It stands level, turned toward `angle`; each leg reaches down to the ground.
+   * New tables are honey-coloured, old ones grey.
+   */
+  private picnicTable(x: number, z: number, length: number, angle: number, ground: (x: number, z: number) => number) {
+    const s = length / 1.8
+    const plank = 0.135 * s
+    const gap = 0.012 * s
+    const thick = 0.036 * s
+    const topY = 0.76 * s
+    const seatY = 0.45 * s
+    const frameX = length / 2 - 0.3 * s
+    const legFootZ = 0.68 * s
+    const legTopZ = 0.2 * s
+    const benchZ = 0.62 * s
+    const cos = Math.cos(angle)
+    const sin = Math.sin(angle)
+    // Local x runs along the table, z across it; the world turns x toward `angle`.
+    const toWorld = (lx: number, lz: number): [number, number] => [x + lx * cos + lz * sin, z - lx * sin + lz * cos]
+    // Level at the mean ground under the feet.
+    const feet = [-1, 1].flatMap(i => [-1, 1].map(j => toWorld(i * frameX, j * legFootZ)))
+    const base = feet.reduce((sum, [fx, fz]) => sum + ground(fx, fz), 0) / feet.length
+    const age = rand(x, z, 9)
+    const wood = NEW_PINE.clone().lerp(GREY_PINE, age)
+    const shade = (i: number) => wood.clone().multiplyScalar(0.85 + 0.25 * rand(x + i, z, 10))
+    const parts: THREE.BufferGeometry[] = []
+    let i = 0
+    const board = (lx: number, ly: number, lz: number, sx: number, sy: number, sz: number) => {
+      const g = new THREE.BoxGeometry(sx, sy, sz)
+      g.translate(lx, ly, lz)
+      parts.push(withColor(g, shade(i++)))
+    }
+    // The top, and a bench on either side.
+    for (let k = -2; k <= 2; k++) board(0, topY - thick / 2, k * (plank + gap), length, thick, plank)
+    for (const side of [-1, 1]) {
+      for (const k of [-0.5, 0.5]) board(0, seatY - thick / 2, side * benchZ + k * (plank + gap), length, thick, plank)
+    }
+    for (const end of [-1, 1]) {
+      const fx = end * frameX
+      // Cleat under the top, and the crossbar that carries the benches, bolted to the
+      // outside of the legs.
+      const outside = fx + end * 0.045 * s
+      board(outside, topY - thick - 0.04 * s, 0, 0.045 * s, 0.08 * s, 0.72 * s)
+      board(outside, seatY - thick - 0.05 * s, 0, 0.045 * s, 0.1 * s, 2 * benchZ + plank * 1.2)
+      for (const side of [-1, 1]) {
+        const [wx, wz] = toWorld(fx, side * legFootZ)
+        const foot = new THREE.Vector3(fx, ground(wx, wz) - base - 0.08, side * legFootZ)
+        const top = new THREE.Vector3(fx, topY - thick, side * legTopZ)
+        parts.push(beam(foot, top, 0.045 * s, 0.11 * s, shade(i++)))
+      }
+      // A brace from the crossbar up to the middle of the top.
+      const brace = beam(
+        new THREE.Vector3(fx, seatY - thick - 0.1 * s, 0),
+        new THREE.Vector3(end * 0.15 * s, topY - thick, 0),
+        0.045 * s,
+        0.08 * s,
+        shade(i++),
+      )
+      parts.push(brace)
+    }
+    const g = mergeGeometries(parts)
+    g.rotateY(angle)
+    g.translate(x, base, z)
+    this.addObstacle(x, z, PICNIC_TABLE_RADIUS * s * 0.75)
+    this.clearings.push(x, z, PICNIC_TABLE_RADIUS * s * 1.1)
+    return g
   }
 
   private fodderRack(x: number, y: number, z: number, size: number, angle: number): THREE.BufferGeometry[] {

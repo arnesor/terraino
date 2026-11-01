@@ -512,3 +512,20 @@ def test_special_landform_features_are_ant_hills_about_1_m_high(
     heights = [p.size for p in features.points]
     assert all(0.8 <= h <= 1.2 for h in heights)
     assert max(heights) - min(heights) > 0.1  # not all alike
+
+
+@pytest.mark.parametrize(
+    ("key", "number"), [("isom2000", "540.0"), ("isom2017", "531.0")]
+)
+def test_special_man_made_features_are_picnic_tables_turned_every_way(
+    key: str, number: str
+) -> None:
+    symbols = SymbolSet.load(key)
+    features, _ = collect_features(
+        [feature(i, number, point(10 + 7 * i, 20 + 3 * i)) for i in range(20)], symbols
+    )
+    assert {p.kind for p in features.points} == {"picnic_table"}
+    assert {p.size for p in features.points} == {1.8}
+    angles = [p.angle for p in features.points]
+    assert all(0 <= a < 2 * math.pi for a in angles)
+    assert max(angles) - min(angles) > math.pi

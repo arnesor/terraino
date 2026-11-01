@@ -1,6 +1,8 @@
 # Terrain-O
 
-_Orienteering in real terrain, in 3D on your computer._
+_Real terrain.
+Real trees.
+Just you, the map and the compass._
 
 [![Tests](https://github.com/arnesor/terraino/actions/workflows/tests.yml/badge.svg)][tests]
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=arnesor_terraino&metric=coverage)][sonarcov]
@@ -83,7 +85,8 @@ npm run dev --prefix viewer
 ```
 
 Open <http://localhost:5173/> and click to start.
-The world is written to `worlds/<map name>/`; use `--out` to choose another folder.
+The world is named after the map file and written to `worlds/<name>/`.
+`--name` gives it another name, and `--out` another folder.
 A build of a 5 x 5 km map takes about a minute once the data is downloaded.
 
 Image maps need their georeferencing: a KMZ overlay or GeoTIFF has it,
@@ -112,6 +115,8 @@ Useful build options (see `uv run terraino build --help`):
   To find them, walk to the spot in the viewer and read E and N in the top-left corner
   and the heading on the compass bar.
   By default you stand inside the map, looking north.
+- `--owner NAME` credits the orienteering map to its owner at the bottom of the screen,
+  for example `--owner "Eidskog OL"`.
 - `--no-forest` builds the terrain only.
 - `--lidar FOLDER` uses a laser point cloud (see below).
 
@@ -366,11 +371,11 @@ The races in `races/<world>/` and the results online belong to that name,
 so build an updated map into the same folder:
 
 1. Build the world.
-   `--out` keeps the folder name even when the map file is named differently;
+   `--name` keeps the name even when the map file is named differently;
    `--spawn` and `--heading` set where runners stand and look when it opens (see [Usage](#usage)):
 
    ```console
-   uv run terraino build path/to/Langvatnet_261025.ocd --out worlds/Langvatnet
+   uv run terraino build path/to/Langvatnet_261025.ocd --name Langvatnet
    ```
 
 2. Try it locally (see [Locally](#locally)): `npm run dev --prefix viewer`,
