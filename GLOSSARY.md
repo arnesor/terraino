@@ -70,6 +70,33 @@ _Avoid_: dense bush, scrub, brush
 **Bush**: A single low plant, about 1–2 m tall, that the runner can see over.
 _Avoid_: shrub
 
+**Stand**: A patch of forest whose trees are of about the same age and species.
+_Avoid_: plot, compartment
+
+**Vegetation boundary**: A line where the forest changes sharply
+(in tree height, age or species) or where the forest ends.
+_Avoid_: stand boundary, forest edge (a forest edge is one kind of vegetation boundary)
+
 **Undergrowth**: Low vegetation on the forest floor that slows the runner
 but leaves good visibility.
 _Avoid_: understorey, ground vegetation
+
+### Landforms
+
+**Earth wall**: A distinct ridge of earth along a line, at least 1 m high.
+_Avoid_: embankment, dyke, bank
+
+**Earth bank**: A steep step in the ground, such as the edge of a road cutting.
+_Avoid_: earth wall
+
+**Pit**: A hole with steep sides, at least 1 m deep.
+_Avoid_: hole, small depression
+
+**Small depression**: A shallow hollow without steep sides, at least 1 m deep,
+too small to be shown with contours.
+_Avoid_: hollow, dip, pit
+
+### Man-made features
+
+**Lamp post**: A post with a lamp along a lit trail.
+_Avoid_: light pole, street light

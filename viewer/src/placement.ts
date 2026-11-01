@@ -34,6 +34,7 @@ const FALLBACK_RADIUS = 1
 
 /** Features of column D, as kinds in features.json. */
 const POINT_KINDS: Record<string, string[]> = {
+  '1.13': ['small_depression'],
   '1.14': ['pit'],
   '2.2': ['boulder'],
   '2.4': ['boulder'],
@@ -42,8 +43,18 @@ const POINT_KINDS: Record<string, string[]> = {
   '5.15': ['tower'],
   '5.17': ['cairn'],
   '5.18': ['fodder_rack'],
+  '6.2': ['lamp_post'],
 }
+// Half the base width of an earth wall (EARTH_WALL_WIDTH_M in process/features.py): the
+// flag stands on top of it, or at its foot on the side column G names.
+const EARTH_WALL_HALF_WIDTH = 2
+// Hollows: the flag stands at the bottom, or on the rim in the direction column G names.
+const HOLLOWS = new Set(['pit', 'small_depression'])
+// Column G locations that keep the flag at the bottom of a hollow, even with a direction.
+const BOTTOM = new Set(['part', 'top', 'beneath', 'lowerPart'])
 const LINE_KINDS: Record<string, string[]> = {
+  '1.6': ['earth_wall'],
+  '4.7': ['vegetation_boundary'],
   '5.8': ['stone_wall', 'ruined_wall'],
   '5.9': ['fence', 'ruined_fence'],
   '5.13': ['ruin'],
@@ -55,9 +66,9 @@ const PYLON = '5.6'
 const LANDFORMS = new Set(['1.2', '1.9', '1.10'])
 
 type Feature =
-  | { type: 'circle'; centre: XZ; radius: number }
+  | { type: 'circle'; centre: XZ; radius: number; hollow?: boolean }
   | { type: 'polygon'; points: XZ[] }
-  | { type: 'line'; points: XZ[] }
+  | { type: 'line'; points: XZ[]; earthWall?: boolean }
   | { type: 'cliff'; top: XZ[]; bottom: XZ[] }
 
 const sub = (a: XZ, b: XZ): XZ => [a[0] - b[0], a[1] - b[1]]
@@ -140,8 +151,10 @@ function findFeature(ref: string | undefined, centre: XZ, data: PlacementData): 
       if (d < bestD) {
         bestD = d
         // Boulders are drawn about 1.3–1.7 times as wide as they are high.
-        const radius = data.kinds[k] === 'boulder' ? size * 0.8 : Math.max(size / 2, 0.5)
-        best = { type: 'circle', centre: [x, z], radius }
+        const kind = data.kinds[k] ?? ''
+        // A lamp post's size is its height; the pole is thin.
+        const radius = kind === 'boulder' ? size * 0.8 : kind === 'lamp_post' ? 0.15 : Math.max(size / 2, 0.5)
+        best = { type: 'circle', centre: [x, z], radius, hollow: HOLLOWS.has(kind) }
       }
     }
     return best
@@ -167,7 +180,9 @@ function findFeature(ref: string | undefined, centre: XZ, data: PlacementData): 
       if (d < bestD) {
         bestD = d
         const closed = line.points.length > 3 && length(sub(line.points[0]!, line.points.at(-1)!)) < 0.5
-        best = closed ? { type: 'polygon', points: line.points } : { type: 'line', points: line.points }
+        if (line.kind === 'earth_wall') best = { type: 'line', points: line.points, earthWall: true }
+        else if (closed) best = { type: 'polygon', points: line.points }
+        else best = { type: 'line', points: line.points }
       }
     }
     return best
@@ -287,7 +302,9 @@ export function placeFlag(description: Description, centre: XZ, data: PlacementD
   const side = dir ?? toward
 
   let p: XZ = centre
-  if (feature?.type === 'circle') {
+  if (feature?.type === 'circle' && feature.hollow) {
+    p = dir && !BOTTOM.has(loc ?? '') ? add(feature.centre, dir, feature.radius) : feature.centre
+  } else if (feature?.type === 'circle') {
     p = loc === 'top' || loc === 'beneath' ? feature.centre : add(feature.centre, side, feature.radius + CLEARANCE)
   } else if (feature?.type === 'polygon') {
     const c = centroid(feature.points)
@@ -300,6 +317,17 @@ export function placeFlag(description: Description, centre: XZ, data: PlacementD
     } else {
       // Beside the feature, on the side the runner comes from.
       p = add(rayExit(c, toward, feature.points), toward, CLEARANCE)
+    }
+  } else if (feature?.type === 'line' && feature.earthWall) {
+    const ends = [feature.points[0]!, feature.points.at(-1)!]
+    if (loc === 'end' && dir) {
+      p = add(cornerToward(ends, dir), dir, EARTH_WALL_HALF_WIDTH)
+    } else if (loc === 'end') {
+      p = cornerToward(ends, sub(centre, centroid(ends)))
+    } else if (dir && loc !== 'top' && loc !== 'part') {
+      p = add(closestOnLine(centre, feature.points), dir, EARTH_WALL_HALF_WIDTH)
+    } else {
+      p = closestOnLine(centre, feature.points)
     }
   } else if (feature?.type === 'line') {
     if (loc === 'end' || loc === 'tip') {

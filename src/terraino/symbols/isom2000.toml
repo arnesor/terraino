@@ -21,12 +21,14 @@
 #   clear   width in metres of a tree-free strip along a line symbol
 #   order   drawing order; higher values are painted on top
 #   feature 3D object placed for the symbol: boulder, boulder_cluster, boulder_field,
-#           stones, waterhole, pit, knoll, elongated_knoll, cliff, rock_face, stone_wall,
-#           ruined_wall, fence, ruined_fence, power_line, pylon_line, tower, cairn,
-#           fodder_rack, ruin, footbridge; or "contour" for contours and form lines, whose
-#           small closed rings around higher ground are raised as knolls
-#   size    size of the feature in metres (boulder height, tower height, wall height;
-#           waterhole, pit and knoll diameter, elongated knoll width)
+#           stones, waterhole, pit, small_depression, knoll, elongated_knoll,
+#           earth_wall, vegetation_boundary, cliff, rock_face, stone_wall, ruined_wall,
+#           fence, ruined_fence, power_line, pylon_line, tower, lamp_post, cairn,
+#           fodder_rack, ruin, footbridge; or "contour" for contours and form lines,
+#           whose small closed rings around higher ground are raised as knolls
+#   size    size of the feature in metres (boulder, tower and lamp post height, wall
+#           and earth wall height; waterhole, pit, small depression and knoll diameter,
+#           elongated knoll width)
 #   track   roads and paths drawn as their own strip on the terrain, with sharp edges:
 #           paved, gravel, vehicle_track, path, small_path, faint_path, or for water
 #           lines stream, small_stream and water_channel
@@ -46,14 +48,20 @@ name = "ISOM 2000"
 
 [symbols]
 # Landforms
-# Knolls are raised to at least 1 m above the ground around them: a knoll drawn with a
-# contour ring above its line in the middle, a small knoll as a round bump of its size
-# across, an elongated knoll as an oval twice as long as its size.
 "101" = { feature = "contour" }
 "102" = { feature = "contour" }
 "103" = { feature = "contour" }
+# Earth walls: a rounded ridge 4 m wide, its size above the ground on both sides.
+"107" = { feature = "earth_wall", size = 1.0 }
+# Small earth wall.
+"108" = { feature = "earth_wall", size = 0.5 }
+# Knolls are raised to at least 1 m above the ground around them: a knoll drawn with a
+# contour ring above its line in the middle, a small knoll as a round bump of its size
+# across, an elongated knoll as an oval twice as long as its size.
 "112" = { feature = "knoll", size = 10 }
 "113" = { feature = "elongated_knoll", size = 8 }
+# Small depression: dug at least 1 m deep, a bowl without steep sides; size is its width.
+"115" = { feature = "small_depression", size = 8 }
 # Pit: dug 1 m deep into the terrain with steep sides; size is its width.
 "116" = { feature = "pit", size = 2 }
 
@@ -109,6 +117,10 @@ name = "ISOM 2000"
 "415" = { ground = "grain", grass_share = 0.1, grass_speed = 0.7, trees = "lidar", speed = 0.5, order = 15 }
 
 "414" = { field_edge = true }  # distinct cultivation boundary
+# Distinct vegetation boundary: a 2 m strip without trees along it, the species and
+# trees below the canopy kept apart on its two sides, and a stand invented where the
+# trees on both sides are alike (terraino.process.boundaries).
+"416" = { feature = "vegetation_boundary", clear = 2 }
 
 # Roads, paths and other man-made features
 "501" = { ground = "paved", trees = "none", width = 12, clear = 13, order = 82, speed = 1.25, track = "paved" }
@@ -141,7 +153,12 @@ name = "ISOM 2000"
 # Small and very small ruins, drawn as points: too small to draw to scale.
 "530.1" = { feature = "ruin", size = 0.6, width = 5 }
 "530.2" = { feature = "ruin", size = 0.5, width = 3 }
+# Some maps (Magnor) draw ruin outlines with a local variant of 531.
+"531.3" = { feature = "ruin", size = 0.6 }
 "535" = { feature = "tower", size = 10 }
 "536" = { feature = "tower", size = 4 }
 "537" = { feature = "cairn", size = 1.2 }
 "538" = { feature = "fodder_rack", size = 2 }
+# Some maps (Magnor) draw the lamp posts along lit trails with a local variant of 541;
+# they stand 1-2 m from the edge of the road or path they light.
+"541.1" = { feature = "lamp_post", size = 6 }

@@ -20,7 +20,10 @@ from shapely import (
     Polygon,
     STRtree,
     box,
+    line_interpolate_point,
+    line_locate_point,
 )
+from shapely import points as shapely_points
 from shapely.affinity import rotate
 from shapely.geometry.base import BaseGeometry
 
@@ -28,6 +31,7 @@ from terraino.ingest.georef import Extent
 from terraino.process.geometry import to_geometry
 from terraino.process.layers import GroundLayers
 from terraino.process.symbols import Ground, SymbolSet
+from terraino.process.tracks import Track
 
 LINE_STEP_M = 2.0
 CLIFF_STEP_M = 1.5
@@ -52,14 +56,23 @@ PIT_DEPTH_M = 1.0
 KNOLL_HEIGHT_M = 1.0
 # An elongated knoll is this many times longer than it is wide.
 KNOLL_ELONGATION = 2.0
-# The ground around a knoll, which it rises from, is measured on a ring this wide.
-KNOLL_RIM_M = 2.0
+# Small depressions are dug at least this deep below the ground around them (ISOM: at
+# least 1 m), as a bowl with gentle sides; the terrain model shows most of them faintly.
+SMALL_DEPRESSION_DEPTH_M = 1.0
+# Earth walls are a rounded ridge this wide at the base, as high as their size (ISOM: at
+# least 1 m) above the ground on both sides; the terrain model shows most of them faintly.
+# viewer/src/placement.ts puts flags at the foot, half this width from the line.
+EARTH_WALL_WIDTH_M = 4.0
+# The ground around a knoll or small depression, which it rises from or sinks into, is
+# measured on a ring this wide.
+LANDFORM_RIM_M = 2.0
 # Closed contour rings up to this size are knolls drawn with contours (or depressions).
 CONTOUR_KNOLL_MAX_M2 = 1500.0
 # A contour line whose ends are this close is a closed ring.
 RING_CLOSED_M = 1.0
-# Ground this close to a knoll's shape is high enough already.
-KNOLL_TOLERANCE_M = 0.01
+# Ground this close to the shape of a knoll, small depression or earth wall is near
+# enough already.
+LANDFORM_TOLERANCE_M = 0.01
 # Masts this close to a power line are its poles; a line running on this far beyond its
 # first or last mast gets an end pole; gaps longer than MAX_GAP_SPACINGS times the usual
 # spacing get poles in between.
@@ -67,6 +80,13 @@ POLE_SNAP_M = 3.0
 POLE_END_GAP_M = 20.0
 MAX_GAP_SPACINGS = 2.5
 POLE_SPACING_M = {"power_line": 60.0, "pylon_line": 250.0}
+# Lamp posts stand this far from the edge of the road or path they light, if one is
+# within LAMP_POST_REACH_M: the map draws them farther out, beside the track's symbol.
+LAMP_POST_EDGE_M = (1.0, 2.0)
+LAMP_POST_REACH_M = 15.0
+_LIT_TRACKS = frozenset(
+    {"paved", "gravel", "vehicle_track", "path", "small_path", "faint_path"}
+)
 BOULDER_FIELD_M2_PER_STONE = 18.0
 
 
@@ -126,8 +146,8 @@ class Features:
     """All 3D features of a world.
 
     Boulders' sizes are their least height above the ground around them; a
-    waterhole's, a pit's and a knoll's size is its diameter (an elongated knoll's,
-    its width).
+    waterhole's, a pit's, a small depression's and a knoll's size is its diameter (an
+    elongated knoll's, its width).
     """
 
     points: list[PointFeature] = field(default_factory=list)
@@ -136,14 +156,17 @@ class Features:
 
 
 # Boulders: their least height above the ground (ISOM: a boulder is at least 1 m high,
-# a large boulder 2 m). Waterholes and pits: their diameter.
+# a large boulder 2 m). Waterholes, pits, small depressions and knolls: their diameter.
 _DEFAULT_SIZE = {
     "boulder": 1.0,
     "boulder_cluster": 1.0,
     "waterhole": 4.0,
     "pit": 2.0,
+    "small_depression": 8.0,
     "knoll": 10.0,
     "elongated_knoll": 8.0,
+    "earth_wall": 1.0,
+    "vegetation_boundary": 0.0,
     "boulder_field": 0.7,
     "stones": 0.3,
     "stone_wall": 0.9,
@@ -151,6 +174,7 @@ _DEFAULT_SIZE = {
     "fence": 1.2,
     "ruined_fence": 1.0,
     "tower": 4.0,
+    "lamp_post": 6.0,
     "cairn": 1.2,
     "fodder_rack": 2.0,
     "ruin": 0.6,
@@ -158,6 +182,8 @@ _DEFAULT_SIZE = {
     "pylon_line": 25.0,
 }
 _LINE_KINDS = {
+    "earth_wall",
+    "vegetation_boundary",
     "stone_wall",
     "ruined_wall",
     "fence",
@@ -502,6 +528,54 @@ def carve_pits(
         layers.clear[rows, cols][d < radius + 0.5] = True
 
 
+def dig_small_depressions(
+    dtm: npt.NDArray[np.float32],
+    points: Iterable[PointFeature],
+    extent: Extent,
+) -> int:
+    """Make the map's small depressions at least SMALL_DEPRESSION_DEPTH_M deep.
+
+    A small depression is a round bowl of its size across, with gentle sides: its
+    middle is SMALL_DEPRESSION_DEPTH_M below the ground around it, fitted as a plane, so
+    on a slope it sinks into the slope. The ground is only lowered, never raised: where
+    the terrain model shows a depression deep enough, it stays as it is. Trees grow in
+    it as around it.
+
+    Returns:
+        The number of small depressions that lowered the ground.
+
+    Examples:
+        >>> dtm = np.full((20, 20), 100.0, dtype=np.float32)
+        >>> hollow = PointFeature("small_depression", 10, 10, 8.0)
+        >>> dig_small_depressions(dtm, [hollow], Extent(0, 0, 20, 20))
+        1
+        >>> round(float(dtm.min()), 2), float(dtm[10, 15])  # 1 m deep, 8 m across
+        (99.08, 100.0)
+        >>> dig_small_depressions(dtm, [hollow], Extent(0, 0, 20, 20))  # deep enough
+        0
+    """
+    dug = 0
+    for p in points:
+        if p.kind != "small_depression":
+            continue
+        radius = max(p.size / 2, 0.5)
+        disc = _disc(p, extent, dtm.shape, math.ceil(radius + LANDFORM_RIM_M))
+        if disc is None:
+            continue
+        rows, cols, east, north = disc
+        rho = np.hypot(east, north) / radius
+        rim = (rho >= 1) & (rho <= 1 + LANDFORM_RIM_M / radius)
+        ground = dtm[rows, cols]
+        plane = _ground_plane(ground, east, north, rim)
+        if plane is None:
+            continue
+        bowl = plane - SMALL_DEPRESSION_DEPTH_M * 0.5 * (1 + np.cos(np.pi * rho))
+        lower = (rho < 1) & (bowl < ground - LANDFORM_TOLERANCE_M)
+        ground[lower] = bowl[lower]
+        dug += bool(lower.any())
+    return dug
+
+
 _KNOLL_KINDS = frozenset({"knoll", "elongated_knoll"})
 
 
@@ -541,12 +615,27 @@ def contour_rings(
     return rings
 
 
+def _ground_plane(
+    ground: npt.NDArray[np.float32],
+    east: npt.NDArray[np.float64],
+    north: npt.NDArray[np.float64],
+    rim: npt.NDArray[np.bool_],
+) -> npt.NDArray[np.float64] | None:
+    """The ground on the ``rim`` cells as a plane, over the whole window."""
+    if rim.sum() < 3:
+        return None
+    a = np.column_stack([np.ones(int(rim.sum())), east[rim], north[rim]])
+    coef = np.linalg.lstsq(a, ground[rim].astype(np.float64), rcond=None)[0]
+    plane: npt.NDArray[np.float64] = coef[0] + coef[1] * east + coef[2] * north
+    return plane
+
+
 def _raise_point_knoll(
     dtm: npt.NDArray[np.float32], p: PointFeature, extent: Extent
 ) -> bool:
     half_width = p.size / 2
     half_length = half_width * (KNOLL_ELONGATION if p.kind == "elongated_knoll" else 1)
-    disc = _disc(p, extent, dtm.shape, math.ceil(half_length + KNOLL_RIM_M))
+    disc = _disc(p, extent, dtm.shape, math.ceil(half_length + LANDFORM_RIM_M))
     if disc is None:
         return False
     rows, cols, east, north = disc
@@ -556,17 +645,15 @@ def _raise_point_knoll(
     along = east * ux + north * uy
     across = north * ux - east * uy
     rho = np.hypot(along / half_length, across / half_width)
-    rim = (rho >= 1) & (rho <= 1 + KNOLL_RIM_M / half_width)
-    if rim.sum() < 3:
-        return False
+    rim = (rho >= 1) & (rho <= 1 + LANDFORM_RIM_M / half_width)
     ground = dtm[rows, cols]
-    # The ground around it, as a plane: on a slope the knoll rises from the slope.
-    a = np.column_stack([np.ones(int(rim.sum())), east[rim], north[rim]])
-    coef = np.linalg.lstsq(a, ground[rim].astype(np.float64), rcond=None)[0]
-    plane = coef[0] + coef[1] * east + coef[2] * north
+    # On a slope the knoll rises from the slope.
+    plane = _ground_plane(ground, east, north, rim)
+    if plane is None:
+        return False
     inside = rho < 1
     bump = plane + KNOLL_HEIGHT_M * 0.5 * (1 + np.cos(np.pi * rho))
-    higher = inside & (bump > ground + KNOLL_TOLERANCE_M)
+    higher = inside & (bump > ground + LANDFORM_TOLERANCE_M)
     ground[higher] = bump[higher]
     return bool(higher.any())
 
@@ -603,7 +690,7 @@ def _raise_ring_knoll(
     depth = ndimage.distance_transform_edt(inside)
     t = depth / depth.max()
     bump = line + KNOLL_HEIGHT_M * (1 - (1 - t) ** 2)
-    higher = inside & (bump > ground + KNOLL_TOLERANCE_M)
+    higher = inside & (bump > ground + LANDFORM_TOLERANCE_M)
     ground[higher] = bump[higher]
     return bool(higher.any())
 
@@ -645,6 +732,189 @@ def raise_knolls(
     )
     raised_rings = sum(_raise_ring_knoll(dtm, ring, extent) for ring in rings)
     return knolls, raised_rings
+
+
+def _raise_earth_wall(
+    dtm: npt.NDArray[np.float32],
+    reference: npt.NDArray[np.float32],
+    wall: LineFeature,
+    extent: Extent,
+) -> bool:
+    if len(wall.coords) < 2:
+        return False
+    line = LineString(wall.coords)
+    half = EARTH_WALL_WIDTH_M / 2
+    x0, y0, x1, y1 = line.buffer(half).bounds
+    c0 = max(math.floor(x0 - extent.x0), 0)
+    c1 = min(math.ceil(x1 - extent.x0), dtm.shape[1])
+    r0 = max(math.floor(extent.y1 - y1), 0)
+    r1 = min(math.ceil(extent.y1 - y0), dtm.shape[0])
+    if r0 >= r1 or c0 >= c1:
+        return False
+    rows, cols = np.mgrid[r0:r1, c0:c1]
+    x = extent.x0 + cols + 0.5
+    y = extent.y1 - rows - 0.5
+    cells = shapely_points(x, y)
+    t = line_locate_point(line, cells)
+    nearest = np.array([(q.x, q.y) for q in line_interpolate_point(line, t.ravel())])
+    nx, ny = nearest[:, 0].reshape(t.shape), nearest[:, 1].reshape(t.shape)
+    d = np.hypot(x - nx, y - ny)
+    inside = d < half
+    if not inside.any():
+        return False
+
+    # The ground on both sides, just beyond the foot, every metre along the wall.
+    stations = np.linspace(0, line.length, max(math.ceil(line.length), 1) + 1)
+    sx, sy, ux, uy = _stations(line, stations)
+    beyond = np.arange(half + 0.5, half + LANDFORM_RIM_M + 0.01, 0.5)
+
+    # Left of the wall is the normal (-uy, ux), right of it (uy, -ux).
+    def side(sign: float) -> npt.NDArray[np.float64]:
+        px = sx[:, None] - sign * uy[:, None] * beyond
+        py = sy[:, None] + sign * ux[:, None] * beyond
+        heights = ndimage.map_coordinates(
+            reference,
+            [extent.y1 - py - 0.5, px - extent.x0 - 0.5],
+            order=1,
+            mode="nearest",
+        )
+        return np.asarray(np.median(heights, axis=1), dtype=np.float64)
+
+    left, right = side(1.0), side(-1.0)
+    # Across the wall the ground is a straight line from one side to the other; the
+    # top is the wall's size above it.
+    mid = (np.interp(t, stations, left) + np.interp(t, stations, right)) / 2
+    tilt = (np.interp(t, stations, left) - np.interp(t, stations, right)) / 2
+    tx, ty = np.interp(t, stations, ux), np.interp(t, stations, uy)
+    across = (y - ny) * tx - (x - nx) * ty  # positive on the left
+    reach = half + LANDFORM_RIM_M / 2
+    base = mid + tilt * np.clip(across / reach, -1, 1)
+    ridge = base + wall.size * 0.5 * (1 + np.cos(np.pi * d / half))
+    ground = dtm[r0:r1, c0:c1]
+    higher = inside & (ridge > ground + LANDFORM_TOLERANCE_M)
+    ground[higher] = ridge[higher]
+    return bool(higher.any())
+
+
+def _stations(
+    line: LineString, along: npt.NDArray[np.float64]
+) -> tuple[
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+]:
+    """Points at the distances ``along`` the line, and the unit direction there."""
+    at = np.array([(q.x, q.y) for q in line_interpolate_point(line, along)])
+    ahead = np.array(
+        [
+            (q.x, q.y)
+            for q in line_interpolate_point(line, np.minimum(along + 0.5, line.length))
+        ]
+    )
+    behind = np.array(
+        [(q.x, q.y) for q in line_interpolate_point(line, np.maximum(along - 0.5, 0))]
+    )
+    step = ahead - behind
+    norm = np.maximum(np.hypot(step[:, 0], step[:, 1]), 1e-9)
+    return at[:, 0], at[:, 1], step[:, 0] / norm, step[:, 1] / norm
+
+
+def raise_earth_walls(
+    dtm: npt.NDArray[np.float32],
+    lines: Iterable[LineFeature],
+    extent: Extent,
+) -> int:
+    """Raise each earth wall to its size above the ground on both sides of it.
+
+    An earth wall is a rounded ridge EARTH_WALL_WIDTH_M wide at the base along its map
+    line, with rounded ends. Across it the ground is taken as a straight line between
+    the ground just beyond its foot on either side, so on a slope it rises from the
+    slope; its top is the wall's size above the middle of that line. The ground is only
+    raised, never lowered: where the terrain model shows the wall high enough, it stays
+    as it is.
+
+    Returns:
+        The number of earth walls that raised the ground.
+
+    Examples:
+        >>> dtm = np.full((20, 40), 100.0, dtype=np.float32)
+        >>> wall = LineFeature("earth_wall", [(5.0, 10.0), (35.0, 10.0)], 1.0)
+        >>> raise_earth_walls(dtm, [wall], Extent(0, 0, 40, 20))
+        1
+        >>> [round(float(h), 2) for h in dtm[7:14, 20]]  # north to south: 4 m wide
+        [100.0, 100.15, 100.85, 100.85, 100.15, 100.0, 100.0]
+        >>> raise_earth_walls(dtm, [wall], Extent(0, 0, 40, 20))  # high enough
+        0
+    """
+    reference = dtm.copy()
+    return sum(
+        _raise_earth_wall(dtm, reference, wall, extent)
+        for wall in lines
+        if wall.kind == "earth_wall"
+    )
+
+
+def stand_lamp_posts(features: Features, tracks: Sequence[Track]) -> int:
+    """Move each lamp post beside the road or path it lights.
+
+    The map draws lamp posts a few metres out from the track, so the symbols do not
+    cover it. Each one with a road or path within LAMP_POST_REACH_M moves straight
+    across to stand LAMP_POST_EDGE_M from its edge (a distance of its own, the same in
+    every build), on the side the map draws it, and faces the track: its angle points
+    from the post to the track.
+
+    Returns:
+        The number of lamp posts moved.
+
+    Examples:
+        >>> path = Track("path", 2.0, [(0.0, 0.0), (100.0, 0.0)])
+        >>> features = Features(points=[PointFeature("lamp_post", 40, 7, 6.0),
+        ...                             PointFeature("lamp_post", 60, 40, 6.0)])
+        >>> stand_lamp_posts(features, [path])
+        1
+        >>> near, far = features.points
+        >>> near.x, 2.0 <= near.y <= 3.0, round(math.degrees(near.angle))
+        (40.0, True, -90)
+        >>> far.y  # no path within 15 m
+        40
+    """
+    lit = [LineString(t.coords) for t in tracks if t.kind in _LIT_TRACKS]
+    widths = [t.width for t in tracks if t.kind in _LIT_TRACKS]
+    lit_tracks = [
+        (line, width)
+        for line, width in zip(lit, widths, strict=True)
+        if line.length > 0
+    ]
+    if not lit_tracks:
+        return 0
+    tree = STRtree([line for line, _ in lit_tracks])
+    moved = 0
+    for i, p in enumerate(features.points):
+        if p.kind != "lamp_post":
+            continue
+        here = Point(p.x, p.y)
+        found = tree.query_nearest(here, max_distance=LAMP_POST_REACH_M)
+        if not len(found):
+            continue
+        line, width = lit_tracks[int(found[0])]
+        along = line.project(here)
+        foot = line.interpolate(along)
+        ahead = line.interpolate(min(along + 0.5, line.length))
+        behind = line.interpolate(max(along - 0.5, 0))
+        tx, ty = ahead.x - behind.x, ahead.y - behind.y
+        norm = math.hypot(tx, ty) or 1.0
+        # The left of the track, looking along it; the side the map draws the post.
+        nx, ny = -ty / norm, tx / norm
+        side = 1.0 if (p.x - foot.x) * nx + (p.y - foot.y) * ny >= 0 else -1.0
+        lo, hi = LAMP_POST_EDGE_M
+        out = width / 2 + lo + (hi - lo) * _rand(p.x + p.y, 11)
+        x, y = foot.x + side * nx * out, foot.y + side * ny * out
+        features.points[i] = replace(
+            p, x=x, y=y, angle=math.atan2(-side * ny, -side * nx)
+        )
+        moved += 1
+    return moved
 
 
 def place_poles(

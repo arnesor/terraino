@@ -26,6 +26,7 @@ from terraino.ingest.image import ImageMap, read_image_map
 from terraino.ingest.lidar import ATTRIBUTION as LIDAR_ATTRIBUTION
 from terraino.ingest.lidar import coarse_canopy, filled_canopy, load_lidar
 from terraino.ingest.ocad import AREA_SYMBOL, TEXT_SYMBOL, export_ocad
+from terraino.process.boundaries import STRETCH_M, VegetationBoundaries
 from terraino.process.buildings import collect_footprints, measure_buildings
 from terraino.process.classify import classify_map
 from terraino.process.features import (
@@ -37,12 +38,15 @@ from terraino.process.features import (
     carve_waterholes,
     collect_features,
     contour_rings,
+    dig_small_depressions,
     drop_rocks_in_buildings,
     drop_ruins_in_buildings,
     measure_cliffs,
     paint_cliffs,
     place_poles,
+    raise_earth_walls,
     raise_knolls,
+    stand_lamp_posts,
 )
 from terraino.process.fuse import (
     add_lidar_undergrowth,
@@ -372,6 +376,20 @@ def build_world(map_path: Path, out_dir: Path, options: BuildOptions) -> Path:
     return write_world(out_dir, world)
 
 
+def _vegetation_boundaries(
+    features: Features | None, extent: Extent, shape: tuple[int, ...]
+) -> VegetationBoundaries | None:
+    """The map's distinct vegetation boundaries, or None if it has none."""
+    lines = [
+        LineString(line.coords)
+        for line in (features.lines if features is not None else [])
+        if line.kind == "vegetation_boundary" and len(line.coords) >= 2
+    ]
+    if not lines:
+        return None
+    return VegetationBoundaries.find(lines, extent, (shape[0], shape[1]))
+
+
 def _add_nature_and_buildings(
     world: WorldData,
     source: MapSource,
@@ -456,6 +474,12 @@ def _add_nature_and_buildings(
             ring_knolls,
             len(rings),
         )
+        walls = raise_earth_walls(dtm, objects.lines, extent)
+        log.info(
+            "Raised %d of %d earth walls",
+            walls,
+            sum(line.kind == "earth_wall" for line in objects.lines),
+        )
         objects.cliffs = measure_cliffs(source.cliff_lines, dtm, extent)
         if any(line.kind in POLE_SPACING_M for line in objects.lines):
             masts = fetch_masts(source.epsg, extent, cache)
@@ -477,6 +501,15 @@ def _add_nature_and_buildings(
         carve_cliffs(dtm, objects.cliffs, extent)
         carve_waterholes(dtm, layers, objects.points, extent)
         carve_pits(dtm, layers, objects.points, extent)
+        lamp_posts = stand_lamp_posts(objects, world.tracks)
+        if lamp_posts:
+            log.info("Moved %d lamp posts beside the trails they light", lamp_posts)
+        depressions = dig_small_depressions(dtm, objects.points, extent)
+        log.info(
+            "Dug %d of %d small depressions",
+            depressions,
+            sum(p.kind == "small_depression" for p in objects.points),
+        )
         paint_cliffs(layers, objects.cliffs, extent)
         world.features = objects
         log.info(
@@ -500,15 +533,34 @@ def _add_nature_and_buildings(
         tops = understorey = None
 
     forest = nibio.fetch_forest(source.epsg, extent, cache, options.sr16_dir)
+    seed = int(extent.x0 + extent.y0) % 2**32
+    boundaries = _vegetation_boundaries(source.features, extent, layers.ground.shape)
+    species = forest.species
+    if boundaries is not None:
+        species = boundaries.species(species)
     trees = place_trees(
         chm,
         layers,
-        forest.species,
+        species,
         forest.trees_per_ha,
-        seed=int(extent.x0 + extent.y0) % 2**32,
+        seed=seed,
         tops=tops,
         understorey_weight=understorey,
+        sides=None if boundaries is None else boundaries.sides(),
     )
+    if boundaries is not None:
+        trees, report = boundaries.invent_contrast(trees, layers, species, seed)
+        log.info(
+            "Vegetation boundaries: %d of %d stretches of %.0f m had alike trees on "
+            "both sides; made a young stand along %d boundaries and lowered the trees "
+            "along %d (%d trees)",
+            report.lacking,
+            report.stretches,
+            STRETCH_M,
+            report.young,
+            report.lowered,
+            report.trees,
+        )
     stump_rows, stump_cols, stump_heights = scattered_stumps(chm, layers, tops)
     if len(stump_rows):
         if world.features is None:
