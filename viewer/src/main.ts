@@ -272,7 +272,10 @@ async function main() {
   if (buildings) scene.add(buildings.group)
   await pause()
   const features = await MapFeatures.load(world, heights, gfx, QUALITY[environment.quality], tracks)
-  if (features && undergrowth) undergrowth.setStumps(features.stumps)
+  if (features && undergrowth) {
+    undergrowth.setStumps(features.stumps)
+    undergrowth.setClearings(features.clearings)
+  }
   if (features) scene.add(features.group)
 
   const player = new Player(camera, renderer.domElement, heights, world.sceneSize)

@@ -135,6 +135,7 @@ export class Undergrowth {
   private readonly twigs: THREE.InstancedMesh[]
   private readonly stumpMesh: THREE.InstancedMesh
   private readonly stumpGrid = new Map<number, number[]>()
+  private readonly clearingGrid = new Map<number, number[]>()
   private builtAt: THREE.Vector3 | null = null
   // Layer version at the last fill if some layers were missing then, else null.
   private waitingFor: number | null = null
@@ -185,6 +186,36 @@ export class Undergrowth {
       list.push(stumps[i]!, stumps[i + 1]!, stumps[i + 2]!)
     }
     this.builtAt = null
+  }
+
+  /** Circles where nothing grows (x, z, radius, ...): the ant hills. */
+  setClearings(clearings: number[]) {
+    this.clearingGrid.clear()
+    for (let i = 0; i < clearings.length; i += 3) {
+      const key = Math.floor(clearings[i]! / STUMP_CELL) * 100003 + Math.floor(clearings[i + 1]! / STUMP_CELL)
+      let list = this.clearingGrid.get(key)
+      if (!list) this.clearingGrid.set(key, (list = []))
+      list.push(clearings[i]!, clearings[i + 1]!, clearings[i + 2]!)
+    }
+    this.builtAt = null
+  }
+
+  /** True if (x, z) lies within `margin` of a clearing. Clearings are smaller than a grid cell. */
+  private inClearing(x: number, z: number, margin: number): boolean {
+    if (!this.clearingGrid.size) return false
+    const gx = Math.floor(x / STUMP_CELL)
+    const gz = Math.floor(z / STUMP_CELL)
+    for (let i = gx - 1; i <= gx + 1; i++) {
+      for (let j = gz - 1; j <= gz + 1; j++) {
+        const list = this.clearingGrid.get(i * 100003 + j)
+        if (!list) continue
+        for (let k = 0; k < list.length; k += 3) {
+          const r = list[k + 2]! + margin
+          if ((x - list[k]!) ** 2 + (z - list[k + 1]!) ** 2 < r * r) return true
+        }
+      }
+    }
+    return false
   }
 
   private onTrack(x: number, z: number, margin: number): boolean {
@@ -257,7 +288,7 @@ export class Undergrowth {
           const bx = x + cellRandom(x, z, 2)
           const bz = z + cellRandom(x, z, 3)
           const size = 0.6 + cellRandom(x, z, 4) * 1.1 + s.shrubs * 0.5
-          if (!this.onTrack(bx, bz, size * 0.55 + 0.3)) {
+          if (!this.onTrack(bx, bz, size * 0.55 + 0.3) && !this.inClearing(bx, bz, size * 0.4)) {
             pos.set(bx, this.heights.heightAt(bx, bz) - 0.1, bz)
             quat.setFromAxisAngle(up, cellRandom(x, z, 5) * Math.PI * 2)
             scale.set(size, size * (0.75 + cellRandom(x, z, 6) * 0.4), size)
@@ -271,7 +302,7 @@ export class Undergrowth {
           const lx = x + cellRandom(x, z, 61)
           const lz = z + cellRandom(x, z, 62)
           const length = 3 + 5 * cellRandom(x, z, 63)
-          if (!this.onTrack(lx, lz, length / 2 + 1.5)) {
+          if (!this.onTrack(lx, lz, length / 2 + 1.5) && !this.inClearing(lx, lz, length / 2)) {
             const a = cellRandom(x, z, 64) * Math.PI * 2
             const r = 0.12 + 0.12 * cellRandom(x, z, 65)
             const h0 = this.heights.heightAt(lx - (Math.cos(a) * length) / 2, lz - (Math.sin(a) * length) / 2)
@@ -312,6 +343,7 @@ export class Undergrowth {
           if (edge && edge.distance < 0.05 && !WATER_KINDS.has(edge.kind)) continue
           if (edge && edge.distance < 0.7 && !WATER_KINDS.has(edge.kind) && cellRandom(x, z, 70 + k) < 0.6) continue
           if (edge && WATER_KINDS.has(edge.kind) && edge.distance < 0.15) continue
+          if (this.inClearing(tx, tz, 0)) continue
           const water = !!edge && WATER_KINDS.has(edge.kind) && edge.distance < 1.4
           const kind = coverAt(s, cellRandom(x, z, 30 + k), dry, water)
           if (!kind) continue
@@ -329,7 +361,7 @@ export class Undergrowth {
         if (forest && cellRandom(x, z, 100) < TWIGS) {
           const tx = x + cellRandom(x, z, 101)
           const tz = z + cellRandom(x, z, 102)
-          if (!this.onTrack(tx, tz, 0.5)) {
+          if (!this.onTrack(tx, tz, 0.5) && !this.inClearing(tx, tz, 0)) {
             const sc = 0.7 + 0.7 * cellRandom(x, z, 103)
             quat.setFromEuler(euler.set((cellRandom(x, z, 104) - 0.5) * 0.12, cellRandom(x, z, 105) * Math.PI * 2, 0))
             scale.set(sc, sc, sc)

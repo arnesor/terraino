@@ -57,6 +57,19 @@ describe('control flag placement', () => {
     expect(wz).toBeCloseTo(0)
   })
 
+  it('puts the flag at the foot of an ant hill, on the named side', () => {
+    // An ant hill 1 m high, so 2.5 m across, at (0, 0).
+    const data = world({ kinds: ['ant_hill'], points: [[0, 0, 0, 1, 0]] })
+    const [x, z] = placeFlag({ d: '1.016', g: '12.101' }, [1, 1], data)
+    expect(x).toBeCloseTo(0)
+    expect(z).toBeLessThanOrEqual(-1.25)
+    expect(z).toBeGreaterThan(-2.5)
+    // Without column G it still stands outside the hill, toward the runner.
+    const [rx, rz] = placeFlag({ d: '1.016' }, [0, 0], data, [0, 30])
+    expect(Math.hypot(rx, rz)).toBeGreaterThanOrEqual(1.25)
+    expect(rz).toBeGreaterThan(0)
+  })
+
   it('puts the flag on top of an earth wall, or at its foot on the named side', () => {
     // An earth wall running east from (0, 0) to (20, 0).
     const data = world({

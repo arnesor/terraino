@@ -118,6 +118,9 @@ _Avoid_: hole, small depression
 too small to be shown with contours.
 _Avoid_: hollow, dip, pit
 
+**Ant hill**: A mound of conifer needles built by wood ants, about 1 m high (Norwegian _maurtue_).
+_Avoid_: anthill, ant heap, mound
+
 ### Man-made features
 
 **Lamp post**: A post with a lamp along a lit trail.

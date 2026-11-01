@@ -24,11 +24,12 @@
 #           stones, waterhole, pit, small_depression, knoll, elongated_knoll,
 #           earth_wall, vegetation_boundary, cliff, rock_face, stone_wall, ruined_wall,
 #           fence, ruined_fence, power_line, pylon_line, tower, lamp_post, cairn,
-#           fodder_rack, ruin, footbridge; or "contour" for contours and form lines,
-#           whose small closed rings around higher ground are raised as knolls
-#   size    size of the feature in metres (boulder, tower and lamp post height, wall
-#           and earth wall height; waterhole, pit, small depression and knoll diameter,
-#           elongated knoll width)
+#           fodder_rack, ruin, footbridge, ant_hill; or "contour" for contours and
+#           form lines, whose small closed rings around higher ground are raised as
+#           knolls
+#   size    size of the feature in metres (boulder, tower, lamp post and ant hill
+#           height, wall and earth wall height; waterhole, pit, small depression and
+#           knoll diameter, elongated knoll width)
 #   track   roads and paths drawn as their own strip on the terrain, with sharp edges:
 #           paved, gravel, vehicle_track, path, small_path, faint_path, or for water
 #           lines stream, small_stream and water_channel
@@ -64,6 +65,11 @@ name = "ISOM 2000"
 "115" = { feature = "small_depression", size = 8 }
 # Pit: dug 1 m deep into the terrain with steep sides; size is its width.
 "116" = { feature = "pit", size = 2 }
+# Special landform feature: on Norwegian maps the brown x is nearly always an ant hill,
+# a mound of conifer needles about 1 m high; size is its height.
+"118" = { feature = "ant_hill", size = 1.0 }
+# A mapper's own special landform feature, drawn as the same brown x: an ant hill too.
+"117.1" = { feature = "ant_hill", size = 1.0 }
 
 # Rock and stones
 "201" = { feature = "cliff", speed = 0 }

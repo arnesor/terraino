@@ -68,4 +68,27 @@ describe('undergrowth refill', () => {
       if (mesh.instanceColor) expect(mesh.instanceColor.updateRanges).toEqual([{ start: 0, count: mesh.count * 3 }])
     }
   })
+
+  it('grows nothing on an ant hill', () => {
+    const at = eye(384, 384)
+    const positions = (undergrowth: Undergrowth) => {
+      const m = new THREE.Matrix4()
+      const p = new THREE.Vector3()
+      return meshes(undergrowth).flatMap(mesh =>
+        Array.from({ length: mesh.count }, (_, i) => {
+          mesh.getMatrixAt(i, m)
+          return p.setFromMatrixPosition(m).clone()
+        }),
+      )
+    }
+    const inside = (ps: THREE.Vector3[]) => ps.filter(p => Math.hypot(p.x - 384, p.z - 384) < 1.3).length
+    const plain = setup().undergrowth
+    plain.update(at)
+    expect(inside(positions(plain))).toBeGreaterThan(0)
+
+    const { undergrowth } = setup()
+    undergrowth.setClearings([384, 384, 1.3])
+    undergrowth.update(at)
+    expect(inside(positions(undergrowth))).toBe(0)
+  })
 })
