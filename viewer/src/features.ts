@@ -24,6 +24,9 @@ const STEEL = new THREE.Color(0x8c9196)
 const COLLISION_CELL = 16
 // Rocks are drawn near the player only (see QualitySettings.boulders), picked from a grid
 // of this cell size whenever the player has moved this far.
+// Lamp posts: the pole's radius at the foot, and the length of the arm with the lamp.
+const LAMP_POST_RADIUS = 0.12
+const LAMP_ARM_M = 0.8
 const ROCK_CELL = 64
 const ROCK_REBUILD_DISTANCE = 10
 
@@ -301,6 +304,7 @@ export class MapFeatures {
       const y = ground(x, z)
       if (kind === 'tower') parts.push(...this.tower(x, y, z, size, angle))
       else if (kind === 'cairn') parts.push(...this.cairn(x, y, z, size))
+      else if (kind === 'lamp_post') parts.push(...this.lampPost(x, y, z, size, angle))
       else if (kind === 'fodder_rack') parts.push(...this.fodderRack(x, y, z, size, angle))
       else if (kind === 'footbridge') parts.push(this.footbridge(x, z, size, angle, ground))
       else if (kind === 'stump') this.stumps.push(x, z, size)
@@ -444,6 +448,26 @@ export class MapFeatures {
     out.push(withColor(roof, new THREE.Color(0x2c2c2e)))
     this.addObstacle(x, z, half * 1.4)
     return out
+  }
+
+  /**
+   * A wooden lamp post of a lit trail, `height` tall, its lamp on a short arm toward
+   * `angle` (counter-clockwise from east): the trail it lights.
+   */
+  private lampPost(x: number, y: number, z: number, height: number, angle: number): THREE.BufferGeometry[] {
+    const dx = Math.cos(angle)
+    const dz = -Math.sin(angle)
+    const top = y + height
+    const arm = new THREE.Vector3(x + dx * LAMP_ARM_M, top - 0.25, z + dz * LAMP_ARM_M)
+    const lamp = new THREE.BoxGeometry(0.4, 0.14, 0.25)
+    lamp.rotateY(Math.atan2(-dz, dx))
+    lamp.translate(arm.x, arm.y - 0.12, arm.z)
+    this.addObstacle(x, z, LAMP_POST_RADIUS)
+    return [
+      post(x, y - 0.3, z, LAMP_POST_RADIUS, height + 0.3, POLE),
+      beam(new THREE.Vector3(x, top - 0.3, z), arm, 0.08, 0.08, POLE),
+      withColor(lamp, STEEL),
+    ]
   }
 
   private cairn(x: number, y: number, z: number, size: number): THREE.BufferGeometry[] {

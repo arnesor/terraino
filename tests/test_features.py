@@ -22,9 +22,11 @@ from terraino.process.features import (
     place_poles,
     raise_earth_walls,
     raise_knolls,
+    stand_lamp_posts,
 )
 from terraino.process.layers import GroundLayers
 from terraino.process.symbols import Ground, SymbolSet
+from terraino.process.tracks import Track
 
 EXTENT = Extent(0, 0, 100, 100)
 ISOM = SymbolSet.load("isom2000")
@@ -379,6 +381,34 @@ def test_earth_walls_stand_their_height_above_the_slope(
     assert raised[np.hypot(east, north) < 1.5].all()
     assert not raised[(east > 2) & (abs(north) < 3)].any()
     assert rise.min() >= 0
+
+
+def test_lamp_posts_stand_beside_the_trail_they_light() -> None:
+    found, _ = collect_features(
+        [
+            feature(0, "541.1", point(30, 56)),  # 6 m north of the path
+            feature(1, "541.1", point(70, 44)),  # 6 m south of it
+            feature(2, "541.0", point(50, 80)),  # another ring symbol
+        ],
+        ISOM,
+    )
+    assert [(p.kind, p.size) for p in found.points] == [
+        ("lamp_post", 6.0),
+        ("lamp_post", 6.0),
+    ]
+    tracks = [
+        Track("stream", 1.0, [(0, 53), (100, 53)]),  # nearer, but not lit
+        Track("path", 1.5, [(0, 50), (100, 50)]),
+    ]
+    assert stand_lamp_posts(found, tracks) == 2
+    north, south = found.points
+    # 1-2 m from the path's edge, on the side the map draws them, facing the path.
+    assert north.x == pytest.approx(30)
+    assert 1.75 <= north.y - 50 <= 2.75
+    assert south.x == pytest.approx(70)
+    assert 1.75 <= 50 - south.y <= 2.75
+    assert math.degrees(north.angle) == pytest.approx(-90)
+    assert math.degrees(south.angle) == pytest.approx(90)
 
 
 def test_knolls_drawn_with_contour_rings() -> None:

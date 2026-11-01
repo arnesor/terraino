@@ -95,3 +95,8 @@ _Avoid_: hole, small depression
 **Small depression**: A shallow hollow without steep sides, at least 1 m deep,
 too small to be shown with contours.
 _Avoid_: hollow, dip, pit
+
+### Man-made features
+
+**Lamp post**: A post with a lamp along a lit trail.
+_Avoid_: light pole, street light

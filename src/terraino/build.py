@@ -46,6 +46,7 @@ from terraino.process.features import (
     place_poles,
     raise_earth_walls,
     raise_knolls,
+    stand_lamp_posts,
 )
 from terraino.process.fuse import (
     add_lidar_undergrowth,
@@ -500,6 +501,9 @@ def _add_nature_and_buildings(
         carve_cliffs(dtm, objects.cliffs, extent)
         carve_waterholes(dtm, layers, objects.points, extent)
         carve_pits(dtm, layers, objects.points, extent)
+        lamp_posts = stand_lamp_posts(objects, world.tracks)
+        if lamp_posts:
+            log.info("Moved %d lamp posts beside the trails they light", lamp_posts)
         depressions = dig_small_depressions(dtm, objects.points, extent)
         log.info(
             "Dug %d of %d small depressions",

@@ -58,7 +58,8 @@ def test_vegetation_boundaries_are_lines_with_a_tree_free_strip(key: str) -> Non
     symbols = SymbolSet.load(key)
     line = {"type": "LineString", "coordinates": [[0, 0], [30, 0]]}
     found, _ = collect_features(
-        [{"geometry": line, "properties": {"oid": 0, "sym": "416.0", "ang": 0}}], symbols
+        [{"geometry": line, "properties": {"oid": 0, "sym": "416.0", "ang": 0}}],
+        symbols,
     )
     assert [line.kind for line in found.lines] == ["vegetation_boundary"]
     rule = symbols.rule("416.0")
@@ -85,7 +86,9 @@ def test_each_side_fills_its_own_trees_below_the_canopy() -> None:
 def test_a_slower_side_becomes_a_young_stand() -> None:
     b = VegetationBoundaries.find([LINE], EXTENT, SHAPE)
     trees = forest(20, 20)
-    out, report = b.invent_contrast(trees, layers(speed_south=0.6), np.ones(SHAPE, np.uint8))
+    out, report = b.invent_contrast(
+        trees, layers(speed_south=0.6), np.ones(SHAPE, np.uint8)
+    )
     assert (report.lacking, report.stretches) == (5, 5)
     assert (report.young, report.lowered) == (1, 0)
     # No tall trees left near the line on the slower south side; young ones instead.
@@ -119,7 +122,7 @@ def test_otherwise_the_lower_side_is_lowered_to_half_its_height() -> None:
 
 def test_a_young_stand_where_the_other_side_is_low_forest() -> None:
     b = VegetationBoundaries.find([LINE], EXTENT, SHAPE)
-    out, report = b.invent_contrast(forest(9, 8), layers(), np.ones(SHAPE, np.uint8))
+    _, report = b.invent_contrast(forest(9, 8), layers(), np.ones(SHAPE, np.uint8))
     assert (report.young, report.lowered) == (1, 0)
 
 

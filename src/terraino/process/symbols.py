@@ -75,6 +75,7 @@ FEATURES = frozenset(
         "power_line",
         "pylon_line",
         "tower",
+        "lamp_post",
         "cairn",
         "fodder_rack",
         "ruin",

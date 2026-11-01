@@ -31,6 +31,7 @@ from terraino.ingest.georef import Extent
 from terraino.process.geometry import to_geometry
 from terraino.process.layers import GroundLayers
 from terraino.process.symbols import Ground, SymbolSet
+from terraino.process.tracks import Track
 
 LINE_STEP_M = 2.0
 CLIFF_STEP_M = 1.5
@@ -79,6 +80,13 @@ POLE_SNAP_M = 3.0
 POLE_END_GAP_M = 20.0
 MAX_GAP_SPACINGS = 2.5
 POLE_SPACING_M = {"power_line": 60.0, "pylon_line": 250.0}
+# Lamp posts stand this far from the edge of the road or path they light, if one is
+# within LAMP_POST_REACH_M: the map draws them farther out, beside the track's symbol.
+LAMP_POST_EDGE_M = (1.0, 2.0)
+LAMP_POST_REACH_M = 15.0
+_LIT_TRACKS = frozenset(
+    {"paved", "gravel", "vehicle_track", "path", "small_path", "faint_path"}
+)
 BOULDER_FIELD_M2_PER_STONE = 18.0
 
 
@@ -166,6 +174,7 @@ _DEFAULT_SIZE = {
     "fence": 1.2,
     "ruined_fence": 1.0,
     "tower": 4.0,
+    "lamp_post": 6.0,
     "cairn": 1.2,
     "fodder_rack": 2.0,
     "ruin": 0.6,
@@ -844,6 +853,68 @@ def raise_earth_walls(
         for wall in lines
         if wall.kind == "earth_wall"
     )
+
+
+def stand_lamp_posts(features: Features, tracks: Sequence[Track]) -> int:
+    """Move each lamp post beside the road or path it lights.
+
+    The map draws lamp posts a few metres out from the track, so the symbols do not
+    cover it. Each one with a road or path within LAMP_POST_REACH_M moves straight
+    across to stand LAMP_POST_EDGE_M from its edge (a distance of its own, the same in
+    every build), on the side the map draws it, and faces the track: its angle points
+    from the post to the track.
+
+    Returns:
+        The number of lamp posts moved.
+
+    Examples:
+        >>> path = Track("path", 2.0, [(0.0, 0.0), (100.0, 0.0)])
+        >>> features = Features(points=[PointFeature("lamp_post", 40, 7, 6.0),
+        ...                             PointFeature("lamp_post", 60, 40, 6.0)])
+        >>> stand_lamp_posts(features, [path])
+        1
+        >>> near, far = features.points
+        >>> near.x, 2.0 <= near.y <= 3.0, round(math.degrees(near.angle))
+        (40.0, True, -90)
+        >>> far.y  # no path within 15 m
+        40
+    """
+    lit = [LineString(t.coords) for t in tracks if t.kind in _LIT_TRACKS]
+    widths = [t.width for t in tracks if t.kind in _LIT_TRACKS]
+    lit_tracks = [
+        (line, width)
+        for line, width in zip(lit, widths, strict=True)
+        if line.length > 0
+    ]
+    if not lit_tracks:
+        return 0
+    tree = STRtree([line for line, _ in lit_tracks])
+    moved = 0
+    for i, p in enumerate(features.points):
+        if p.kind != "lamp_post":
+            continue
+        here = Point(p.x, p.y)
+        found = tree.query_nearest(here, max_distance=LAMP_POST_REACH_M)
+        if not len(found):
+            continue
+        line, width = lit_tracks[int(found[0])]
+        along = line.project(here)
+        foot = line.interpolate(along)
+        ahead = line.interpolate(min(along + 0.5, line.length))
+        behind = line.interpolate(max(along - 0.5, 0))
+        tx, ty = ahead.x - behind.x, ahead.y - behind.y
+        norm = math.hypot(tx, ty) or 1.0
+        # The left of the track, looking along it; the side the map draws the post.
+        nx, ny = -ty / norm, tx / norm
+        side = 1.0 if (p.x - foot.x) * nx + (p.y - foot.y) * ny >= 0 else -1.0
+        lo, hi = LAMP_POST_EDGE_M
+        out = width / 2 + lo + (hi - lo) * _rand(p.x + p.y, 11)
+        x, y = foot.x + side * nx * out, foot.y + side * ny * out
+        features.points[i] = replace(
+            p, x=x, y=y, angle=math.atan2(-side * ny, -side * nx)
+        )
+        moved += 1
+    return moved
 
 
 def place_poles(

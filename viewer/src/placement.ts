@@ -43,6 +43,7 @@ const POINT_KINDS: Record<string, string[]> = {
   '5.15': ['tower'],
   '5.17': ['cairn'],
   '5.18': ['fodder_rack'],
+  '6.2': ['lamp_post'],
 }
 // Half the base width of an earth wall (EARTH_WALL_WIDTH_M in process/features.py): the
 // flag stands on top of it, or at its foot on the side column G names.
@@ -151,7 +152,8 @@ function findFeature(ref: string | undefined, centre: XZ, data: PlacementData): 
         bestD = d
         // Boulders are drawn about 1.3–1.7 times as wide as they are high.
         const kind = data.kinds[k] ?? ''
-        const radius = kind === 'boulder' ? size * 0.8 : Math.max(size / 2, 0.5)
+        // A lamp post's size is its height; the pole is thin.
+        const radius = kind === 'boulder' ? size * 0.8 : kind === 'lamp_post' ? 0.15 : Math.max(size / 2, 0.5)
         best = { type: 'circle', centre: [x, z], radius, hollow: HOLLOWS.has(kind) }
       }
     }

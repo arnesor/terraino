@@ -108,6 +108,15 @@ describe('control flag placement', () => {
     expect(sz).toBeCloseTo(0.6)
   })
 
+  it('puts the flag beside a lamp post described as a special item (ring)', () => {
+    const data = world({ kinds: ['lamp_post'], points: [[0, 5, 2, 6, 0]] })
+    // "West side": west of the pole, clear of it.
+    const [x, z] = placeFlag({ d: '6.002', g: '12.102' }, [3, 1], data)
+    expect(x).toBeLessThan(5)
+    expect(x).toBeGreaterThan(3)
+    expect(z).toBeCloseTo(2)
+  })
+
   it('puts the flag at the foot of a cliff by default', () => {
     const data = world({
       cliffs: [
