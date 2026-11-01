@@ -149,6 +149,8 @@ name = "ISOM 2000"
 # Small and very small ruins, drawn as points: too small to draw to scale.
 "530.1" = { feature = "ruin", size = 0.6, width = 5 }
 "530.2" = { feature = "ruin", size = 0.5, width = 3 }
+# Some maps (Magnor) draw ruin outlines with a local variant of 531.
+"531.3" = { feature = "ruin", size = 0.6 }
 "535" = { feature = "tower", size = 10 }
 "536" = { feature = "tower", size = 4 }
 "537" = { feature = "cairn", size = 1.2 }
