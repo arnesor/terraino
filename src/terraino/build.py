@@ -95,6 +95,7 @@ class BuildOptions:
     """Settings for a world build.
 
     Attributes:
+        name: Name of the world, shown in the viewer, or None for the map's file name.
         margin: Metres of terrain to include around the mapped area.
         offset: Shift ``(dx, dy)`` in metres applied to the map's georeference.
         cache_dir: Folder for downloaded data, shared between builds.
@@ -110,6 +111,7 @@ class BuildOptions:
             from grid north.
     """
 
+    name: str | None = None
     margin: float = 300.0
     offset: tuple[float, float] = (0.0, 0.0)
     cache_dir: Path = Path("data-cache")
@@ -354,7 +356,7 @@ def build_world(map_path: Path, out_dir: Path, options: BuildOptions) -> Path:
     cache = options.cache_dir
     dtm = fill_missing(kartverket.fetch_height_model("dtm", source.epsg, extent, cache))
     world = WorldData(
-        name=map_path.stem,
+        name=options.name or map_path.stem,
         epsg=source.epsg,
         extent=extent,
         dtm=dtm,

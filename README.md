@@ -83,7 +83,8 @@ npm run dev --prefix viewer
 ```
 
 Open <http://localhost:5173/> and click to start.
-The world is written to `worlds/<map name>/`; use `--out` to choose another folder.
+The world is named after the map file and written to `worlds/<name>/`.
+`--name` gives it another name, and `--out` another folder.
 A build of a 5 x 5 km map takes about a minute once the data is downloaded.
 
 Image maps need their georeferencing: a KMZ overlay or GeoTIFF has it,
@@ -366,11 +367,11 @@ The races in `races/<world>/` and the results online belong to that name,
 so build an updated map into the same folder:
 
 1. Build the world.
-   `--out` keeps the folder name even when the map file is named differently;
+   `--name` keeps the name even when the map file is named differently;
    `--spawn` and `--heading` set where runners stand and look when it opens (see [Usage](#usage)):
 
    ```console
-   uv run terraino build path/to/Langvatnet_261025.ocd --out worlds/Langvatnet
+   uv run terraino build path/to/Langvatnet_261025.ocd --name Langvatnet
    ```
 
 2. Try it locally (see [Locally](#locally)): `npm run dev --prefix viewer`,

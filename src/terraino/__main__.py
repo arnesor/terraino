@@ -23,6 +23,19 @@ def main(verbose: bool) -> None:
     )
 
 
+def _check_name(
+    _ctx: click.Context, _param: click.Parameter, value: str | None
+) -> str | None:
+    """Accept a world name that can also be a folder name."""
+    if value is None:
+        return None
+    name = value.strip()
+    if not name or any(c in name for c in '/\\:*?"<>|') or name in {".", ".."}:
+        msg = 'must be a non-empty folder name, without / \\ : * ? " < > |'
+        raise click.BadParameter(msg)
+    return name
+
+
 @main.command()
 @click.argument(
     "map_path", type=click.Path(exists=True, dir_okay=False, path_type=Path)
@@ -31,7 +44,15 @@ def main(verbose: bool) -> None:
     "--out",
     "out_dir",
     type=click.Path(file_okay=False, path_type=Path),
-    help="World folder to write. Default: worlds/<map name>.",
+    help="World folder to write. Default: worlds/<name>.",
+)
+@click.option(
+    "--name",
+    callback=_check_name,
+    help=(
+        "Name of the world: the viewer shows it, and it names the world folder unless"
+        " --out is given. Default: the map's file name."
+    ),
 )
 @click.option(
     "--margin", default=300.0, show_default=True, help="Metres around the map."
@@ -106,6 +127,7 @@ def main(verbose: bool) -> None:
 def build(
     map_path: Path,
     out_dir: Path | None,
+    name: str | None,
     margin: float,
     offset: tuple[float, float],
     cache_dir: Path,
@@ -122,8 +144,10 @@ def build(
     MAP_PATH is an OCAD map (.ocd), or an image map: a KMZ overlay, a GeoTIFF, or a
     JPG/PNG with a world file (.jgw/.pgw, together with --epsg).
     """
-    out = out_dir or Path("worlds") / map_path.stem
+    name = name or map_path.stem
+    out = out_dir or Path("worlds") / name
     options = BuildOptions(
+        name=name,
         margin=margin,
         offset=offset,
         cache_dir=cache_dir,
