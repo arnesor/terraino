@@ -521,10 +521,9 @@ If you encounter any problems, please [file an issue] along with a detailed desc
 This project was generated with the [Python uv project template].
 
 The procedural textures and the tree,
-bush and rock models in `viewer/src/vendor` come from [Orienteering 3D]
-(MIT licence, see `viewer/src/vendor/LICENSE`).
+bush and rock models in `viewer/src/vendor` come from [O-kart 3D] by Jacob Børs Lind.
 
-[orienteering 3d]: https://claude.ai/artifact/A8dqe89rvxzyN29Az3W29D
+[o-kart 3d]: https://claude.ai/artifact/A8dqe89rvxzyN29Az3W29D
 
 [python uv project template]: https://github.com/arnesor/uv-template
 [file an issue]: https://github.com/arnesor/terraino/issues

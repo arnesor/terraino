@@ -1,9 +1,10 @@
-The files textures.js and models.js in this folder come from "Orienteering 3D"
-(https://claude.ai/artifact/A8dqe89rvxzyN29Az3W29D) and are used under the MIT license:
+The files textures.js and models.js in this folder come from "O-kart 3D"
+(https://claude.ai/artifact/A8dqe89rvxzyN29Az3W29D, formerly called "Orienteering 3D")
+and are used under the MIT license:
 
 MIT License
 
-Copyright (c) the authors of Orienteering 3D
+Copyright (c) the authors of O-kart 3D
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
