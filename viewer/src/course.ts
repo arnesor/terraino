@@ -436,7 +436,8 @@ export class CourseRun {
     }
     if (now - this.startTime >= this.route.length * ROUTE_STEP) this.route.push(this.world.toProjected(pos.x, pos.z))
     if (flat(this.scenePosition(this.next)) < PUNCH_DISTANCE) {
-      this.splits.push(now - this.startTime)
+      // Whole seconds, as a punch records them.
+      this.splits.push(Math.floor(now - this.startTime))
       const punched = this.next++
       if (this.next >= n) {
         this.state = 'finished'

@@ -11,7 +11,7 @@ describe('results table', () => {
   const kari = result('Kari', [70, 180, 290])
   const per = result('Per', [65, 190, 300])
 
-  it('is sorted by run time, with places per leg and split, and the best bold', () => {
+  it('is sorted by run time, with places per leg and split', () => {
     const rows = resultsTable([ola, kari, per])
     expect(rows.map(r => [r.label, r.place, r.behind])).toEqual([
       ['Kari', 1, 0],
@@ -22,14 +22,34 @@ describe('results table', () => {
     expect(kariRow.legs).toEqual([70, 110, 110])
     expect(kariRow.legPlaces).toEqual([3, 1, 2])
     expect(kariRow.splitPlaces).toEqual([3, 1, 1])
-    expect(kariRow.bestLegs).toEqual([false, true, false])
     // Ola's last leg (100) is the best; Ola has the fastest first leg too.
-    expect(rows[1]!.bestLegs).toEqual([true, false, true])
+    expect(rows[1]!.legPlaces).toEqual([1, 3, 1])
   })
 
   it('sorts by a leg time or a split time', () => {
     expect(resultsTable([ola, kari, per], { sort: { by: 'leg', index: 1 } }).map(r => r.label)).toEqual(['Kari', 'Per', 'Ola'])
     expect(resultsTable([ola, kari, per], { sort: { by: 'split', index: 0 } }).map(r => r.label)).toEqual(['Ola', 'Per', 'Kari'])
+  })
+
+  it('counts split times in whole seconds, as punched, so equal leg times share a place', () => {
+    // Both legs to the finish show as 1:08; unrounded they are 68.6 and 68.2 s.
+    const a = result('A', [60.3, 128.9])
+    const b = result('B', [61.7, 129.9])
+    const rows = resultsTable([a, b])
+    expect(rows.map(r => r.result.splits)).toEqual([
+      [60, 128],
+      [61, 129],
+    ])
+    expect(rows.map(r => r.legs)).toEqual([
+      [60, 68],
+      [61, 68],
+    ])
+    expect(rows.map(r => r.legPlaces[1])).toEqual([1, 1])
+    expect(rows.map(r => r.behind)).toEqual([0, 1])
+  })
+
+  it('sorts by name', () => {
+    expect(resultsTable([ola, kari, per], { sort: { by: 'name' } }).map(r => r.label)).toEqual(['Kari', 'Ola', 'Per'])
   })
 
   it("shows each name's best run, or every run numbered by date", () => {
@@ -50,7 +70,6 @@ describe('results table', () => {
       ['Ola', 2],
     ])
     expect(rows[0]!.legPlaces).toEqual([null, null, null])
-    expect(rows[0]!.bestLegs).toEqual([false, false, false])
     expect(rows[0]!.behind).toBe(-40)
   })
 })

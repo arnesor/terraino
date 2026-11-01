@@ -91,4 +91,12 @@ describe('results Worker', () => {
     expect((await call('POST', list, ok)).status).toBe(409)
     expect((await call('POST', list, 'x'.repeat(5 * 1024 * 1024))).status).toBe(413)
   })
+
+  it('keeps split times in whole seconds, and takes two punches in the same second', async () => {
+    const saved = await call('POST', list, { course, result: result('Liv', [60.7, 60.9, 300.2]) })
+    expect(saved.status).toBe(200)
+    const liv = ((await saved.json()) as ResultsFile).results.find(r => r.name === 'Liv')!
+    expect(liv.splits).toEqual([60, 60, 300])
+    expect((await call('POST', list, { course, result: result('Eva', [60, 60, 300]) })).status).toBe(200)
+  })
 })

@@ -36,7 +36,9 @@ _Avoid_: track (roads and paths are tracks)
 Runners choose a race on the start screen instead of opening a course file.
 _Avoid_: event (OCAD's word for it), competition (see competition mode)
 
-**Split time**: The run time when a control is punched, counted from the start.
+**Split time**: The run time when a control is punched, counted from the start,
+in whole seconds as orienteering timing records it.
+Leg times are the differences between split times, so they are whole seconds too.
 _Avoid_: intermediate time
 
 **Leg time**: The time from one control to the next.

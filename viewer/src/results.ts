@@ -1,12 +1,12 @@
 import type { Course } from './course'
-import type { Result, ResultsCourse, ResultsFile, SavedResults } from '../worker/results'
+import { type Result, type ResultsCourse, type ResultsFile, runTime, type SavedResults } from '../worker/results'
 
 // Results lists, one per course. The results Worker keeps them in D1
 // (docs/adr/0003-results-stored-in-d1-by-a-worker.md); this module is what the viewer
 // needs to read, write and rank them.
 
 export type { Result, ResultsCourse, ResultsFile } from '../worker/results'
-export { MAX_NAME_LENGTH } from '../worker/results'
+export { MAX_NAME_LENGTH, runTime } from '../worker/results'
 
 /**
  * The results list's key for a course: a hash of its control positions in order, rounded
@@ -42,29 +42,33 @@ export interface Row {
   /** Places per leg and per split, among the placed rows; null for an unplaced row. */
   legPlaces: (number | null)[]
   splitPlaces: (number | null)[]
-  /** True where this row has the best leg or split time of the placed rows. */
-  bestLegs: boolean[]
-  bestSplits: boolean[]
 }
 
-/** How the table is sorted: by run time, or by one leg's leg time or split time. */
-export type Sort = { by: 'time' } | { by: 'leg' | 'split'; index: number }
-
-export const runTime = (result: Result): number => result.splits[result.splits.length - 1]!
+/** How the table is sorted: by run time, by name, or by one leg's leg time or split time. */
+export type Sort = { by: 'time' | 'name' } | { by: 'leg' | 'split'; index: number }
 
 const legTimes = (result: Result): number[] => result.splits.map((t, i) => t - (result.splits[i - 1] ?? 0))
 
 const sameName = (name: string) => name.trim().toLocaleLowerCase()
 
 /**
+ * A result with its split times in whole seconds, as a punch records them. Every time in
+ * the table is then whole seconds, so times that look the same are the same.
+ */
+const punched = (result: Result): Result => ({ ...result, splits: result.splits.map(Math.floor) })
+
+/**
  * The results table: each name's best result (or every result with `allRuns`), plus an
  * unplaced `extra` run that is not on the list, sorted by `sort`. Places count only
  * the placed rows; equal times share a place.
+ * Each row's result has its split times in whole seconds.
  */
 export function resultsTable(
   results: Result[],
   { allRuns = false, extra = null, sort = { by: 'time' } }: { allRuns?: boolean; extra?: Result | null; sort?: Sort } = {},
 ): Row[] {
+  results = results.map(punched)
+  extra = extra && punched(extra)
   // Each name's runs by date, to number them.
   const byName = new Map<string, Result[]>()
   for (const r of [...results].sort((a, b) => a.date.localeCompare(b.date))) {
@@ -97,15 +101,16 @@ export function resultsTable(
       legs,
       legPlaces: legs.map((t, i) => (placed ? placeOf(legColumns[i] ?? [], t) : null)),
       splitPlaces: result.splits.map((t, i) => (placed ? placeOf(splitColumns[i] ?? [], t) : null)),
-      bestLegs: legs.map((t, i) => placed && t === Math.min(...(legColumns[i] ?? []))),
-      bestSplits: result.splits.map((t, i) => placed && t === Math.min(...(splitColumns[i] ?? []))),
     }
   }
   const rows = shown.map(r => row(r, true))
   if (extra) rows.push(row(extra, false))
   const key = (r: Row): number =>
-    sort.by === 'time' ? runTime(r.result) : ((sort.by === 'leg' ? r.legs : r.result.splits)[sort.index] ?? Infinity)
-  return rows.sort((a, b) => key(a) - key(b) || (a.place === null ? 1 : 0) - (b.place === null ? 1 : 0))
+    sort.by === 'leg' || sort.by === 'split'
+      ? ((sort.by === 'leg' ? r.legs : r.result.splits)[sort.index] ?? Infinity)
+      : runTime(r.result)
+  const byLabel = (a: Row, b: Row) => (sort.by === 'name' ? a.label.localeCompare(b.label) : 0)
+  return rows.sort((a, b) => byLabel(a, b) || key(a) - key(b) || (a.place === null ? 1 : 0) - (b.place === null ? 1 : 0))
 }
 
 // ------------------------------------------------------------------ the server
