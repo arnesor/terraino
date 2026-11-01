@@ -14,11 +14,13 @@ from terraino.process.features import (
     carve_pits,
     collect_features,
     contour_rings,
+    dig_small_depressions,
     drop_rocks_in_buildings,
     drop_ruins_in_buildings,
     measure_cliffs,
     paint_cliffs,
     place_poles,
+    raise_earth_walls,
     raise_knolls,
 )
 from terraino.process.layers import GroundLayers
@@ -292,6 +294,91 @@ def test_knolls_stand_1_m_above_the_slope(key: str, knoll: str, elongated: str) 
     east, north = offsets(80.5, 80.5)
     near = np.hypot(east, north) < 10
     np.testing.assert_array_equal(dtm[near], before[near])
+
+
+@pytest.mark.parametrize(
+    ("key", "depression"), [("isom2000", "115"), ("isom2017", "111")]
+)
+def test_small_depressions_are_1_m_deep_with_gentle_sides(
+    key: str, depression: str
+) -> None:
+    found, _ = collect_features(
+        [
+            feature(0, f"{depression}.0", point(50.5, 50.5), ang=1.0),
+            feature(1, f"{depression}.0", point(80.5, 80.5)),
+        ],
+        SymbolSet.load(key),
+    )
+    assert [(p.kind, p.size) for p in found.points] == [
+        ("small_depression", 8.0),
+        ("small_depression", 8.0),
+    ]
+    dtm = slope()
+    # The terrain model already shows the second one, 2 m deep.
+    east, north = offsets(80.5, 80.5)
+    d = np.hypot(east, north)
+    dtm -= np.where(d < 4, 1 + np.cos(np.pi * d / 4), 0).astype(np.float32)
+    before = dtm.copy()
+
+    assert dig_small_depressions(dtm, found.points, EXTENT) == 1
+    drop = before - dtm
+    # On the slope, 1 m below the ground around it, not below its downhill side.
+    assert drop[int(EXTENT.y1 - 50.5), 50] == pytest.approx(1.0, abs=0.01)
+    # Round and 8 m across, whatever the symbol's angle; the ground is never raised.
+    east, north = offsets(50.5, 50.5)
+    d = np.hypot(east, north)
+    lowered = drop > 0.01
+    assert lowered[d < 3.5].all()
+    assert not lowered[d > 4].any()
+    assert drop.min() >= 0
+    # No steep sides: its walls are under 25 degrees steeper than the slope around it.
+    hollow = drop[40:61, 40:61]
+    steepest = max(
+        np.abs(np.diff(hollow, axis=0)).max(), np.abs(np.diff(hollow, axis=1)).max()
+    )
+    assert steepest < math.tan(math.radians(25))
+    # The one the terrain model shows deep enough is left as it is.
+    east, north = offsets(80.5, 80.5)
+    near = np.hypot(east, north) < 10
+    np.testing.assert_array_equal(dtm[near], before[near])
+
+
+@pytest.mark.parametrize(
+    ("key", "wall", "small", "other"),
+    [("isom2000", "107.1", "108.1", "106.0"), ("isom2017", "105.1", "106.0", "105.2")],
+)
+def test_earth_walls_stand_their_height_above_the_slope(
+    key: str, wall: str, small: str, other: str
+) -> None:
+    found, _ = collect_features(
+        [
+            feature(0, wall, line((20, 30.5), (80, 30.5))),  # down the slope
+            feature(1, small, line((50.5, 50), (50.5, 90))),  # across the slope
+            feature(2, other, line((10, 70), (40, 70))),  # earth bank or retaining wall
+        ],
+        SymbolSet.load(key),
+    )
+    assert [(w.kind, w.size) for w in found.lines] == [
+        ("earth_wall", 1.0),
+        ("earth_wall", 0.5),
+    ]
+    dtm = slope()
+    before = dtm.copy()
+
+    assert raise_earth_walls(dtm, found.lines, EXTENT) == 2
+    rise = dtm - before
+    # Its size above the line between both sides: on the slope, above the middle.
+    assert rise[int(EXTENT.y1 - 30.5), 50] == pytest.approx(1.0, abs=0.03)
+    assert rise[int(EXTENT.y1 - 70.5), 50] == pytest.approx(0.5, abs=0.03)
+    # 4 m wide, with rounded ends.
+    east, north = offsets(50.0, 30.5)
+    raised = rise > 0.01
+    assert raised[(abs(north) < 1.5) & (abs(east) < 25)].all()
+    assert not raised[(abs(north) > 2) & (abs(north) < 10) & (abs(east) < 25)].any()
+    east, north = offsets(80.0, 30.5)
+    assert raised[np.hypot(east, north) < 1.5].all()
+    assert not raised[(east > 2) & (abs(north) < 3)].any()
+    assert rise.min() >= 0
 
 
 def test_knolls_drawn_with_contour_rings() -> None:

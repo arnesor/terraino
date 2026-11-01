@@ -35,6 +35,57 @@ describe('control flag placement', () => {
     expect(sz).toBeCloseTo(-0.6)
   })
 
+  it('puts the flag at the bottom of a pit or small depression, or on its rim', () => {
+    // A pit 2 m across at (0, 0) and a small depression 8 m across at (20, 0).
+    const data = world({
+      kinds: ['pit', 'small_depression'],
+      points: [
+        [0, 0.3, -0.2, 2, 0],
+        [1, 20, 0, 8, 0],
+      ],
+    })
+    // No column G, "east part" or "top": the bottom, whichever side the runner comes from.
+    expect(placeFlag({ d: '1.014' }, [1, 1], data, [30, 30])).toEqual([0.3, -0.2])
+    expect(placeFlag({ d: '1.013', g: '12.304' }, [21, 1], data)).toEqual([20, 0])
+    expect(placeFlag({ d: '1.013', g: '12.010' }, [21, 1], data)).toEqual([20, 0])
+    // "North side": on the rim, the radius north of the centre (scene north is -z).
+    const [x, z] = placeFlag({ d: '1.014', g: '12.101' }, [1, 1], data)
+    expect(x).toBeCloseTo(0.3)
+    expect(z).toBeCloseTo(-1.2)
+    const [wx, wz] = placeFlag({ d: '1.013', g: '12.122' }, [21, 1], data)
+    expect(wx).toBeCloseTo(16)
+    expect(wz).toBeCloseTo(0)
+  })
+
+  it('puts the flag on top of an earth wall, or at its foot on the named side', () => {
+    // An earth wall running east from (0, 0) to (20, 0).
+    const data = world({
+      lines: [
+        {
+          kind: 'earth_wall',
+          points: [
+            [0, 0],
+            [10, 0],
+            [20, 0],
+          ],
+        },
+      ],
+    })
+    // No column G: on top, nearest the circle centre, whichever side the runner comes from.
+    expect(placeFlag({ d: '1.006' }, [8, 3], data, [8, 30])).toEqual([8, 0])
+    // "North side" and "south foot": at the foot, 2 m out (scene north is -z).
+    const [nx, nz] = placeFlag({ d: '1.006', g: '12.101' }, [8, 3], data)
+    expect(nx).toBeCloseTo(8)
+    expect(nz).toBeCloseTo(-2)
+    const [sx, sz] = placeFlag({ d: '1.006', g: '12.123' }, [8, 3], data)
+    expect(sx).toBeCloseTo(8)
+    expect(sz).toBeCloseTo(2)
+    // "East end": beyond the east end, at the foot of the rounded end.
+    const [ex, ez] = placeFlag({ d: '1.006', g: '12.704' }, [8, 3], data)
+    expect(ex).toBeCloseTo(22)
+    expect(ez).toBeCloseTo(0)
+  })
+
   it('puts the flag at the foot of a cliff by default', () => {
     const data = world({
       cliffs: [

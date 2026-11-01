@@ -73,3 +73,18 @@ _Avoid_: shrub
 **Undergrowth**: Low vegetation on the forest floor that slows the runner
 but leaves good visibility.
 _Avoid_: understorey, ground vegetation
+
+### Landforms
+
+**Earth wall**: A distinct ridge of earth along a line, at least 1 m high.
+_Avoid_: embankment, dyke, bank
+
+**Earth bank**: A steep step in the ground, such as the edge of a road cutting.
+_Avoid_: earth wall
+
+**Pit**: A hole with steep sides, at least 1 m deep.
+_Avoid_: hole, small depression
+
+**Small depression**: A shallow hollow without steep sides, at least 1 m deep,
+too small to be shown with contours.
+_Avoid_: hollow, dip, pit

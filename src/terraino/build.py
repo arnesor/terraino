@@ -37,11 +37,13 @@ from terraino.process.features import (
     carve_waterholes,
     collect_features,
     contour_rings,
+    dig_small_depressions,
     drop_rocks_in_buildings,
     drop_ruins_in_buildings,
     measure_cliffs,
     paint_cliffs,
     place_poles,
+    raise_earth_walls,
     raise_knolls,
 )
 from terraino.process.fuse import (
@@ -456,6 +458,12 @@ def _add_nature_and_buildings(
             ring_knolls,
             len(rings),
         )
+        walls = raise_earth_walls(dtm, objects.lines, extent)
+        log.info(
+            "Raised %d of %d earth walls",
+            walls,
+            sum(line.kind == "earth_wall" for line in objects.lines),
+        )
         objects.cliffs = measure_cliffs(source.cliff_lines, dtm, extent)
         if any(line.kind in POLE_SPACING_M for line in objects.lines):
             masts = fetch_masts(source.epsg, extent, cache)
@@ -477,6 +485,12 @@ def _add_nature_and_buildings(
         carve_cliffs(dtm, objects.cliffs, extent)
         carve_waterholes(dtm, layers, objects.points, extent)
         carve_pits(dtm, layers, objects.points, extent)
+        depressions = dig_small_depressions(dtm, objects.points, extent)
+        log.info(
+            "Dug %d of %d small depressions",
+            depressions,
+            sum(p.kind == "small_depression" for p in objects.points),
+        )
         paint_cliffs(layers, objects.cliffs, extent)
         world.features = objects
         log.info(

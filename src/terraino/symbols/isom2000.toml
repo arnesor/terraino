@@ -21,12 +21,14 @@
 #   clear   width in metres of a tree-free strip along a line symbol
 #   order   drawing order; higher values are painted on top
 #   feature 3D object placed for the symbol: boulder, boulder_cluster, boulder_field,
-#           stones, waterhole, pit, knoll, elongated_knoll, cliff, rock_face, stone_wall,
-#           ruined_wall, fence, ruined_fence, power_line, pylon_line, tower, cairn,
-#           fodder_rack, ruin, footbridge; or "contour" for contours and form lines, whose
-#           small closed rings around higher ground are raised as knolls
-#   size    size of the feature in metres (boulder height, tower height, wall height;
-#           waterhole, pit and knoll diameter, elongated knoll width)
+#           stones, waterhole, pit, small_depression, knoll, elongated_knoll,
+#           earth_wall, cliff, rock_face, stone_wall, ruined_wall, fence, ruined_fence,
+#           power_line, pylon_line, tower, cairn, fodder_rack, ruin, footbridge; or
+#           "contour" for contours and form lines, whose small closed rings around
+#           higher ground are raised as knolls
+#   size    size of the feature in metres (boulder height, tower height, wall and
+#           earth wall height; waterhole, pit, small depression and knoll diameter,
+#           elongated knoll width)
 #   track   roads and paths drawn as their own strip on the terrain, with sharp edges:
 #           paved, gravel, vehicle_track, path, small_path, faint_path, or for water
 #           lines stream, small_stream and water_channel
@@ -46,14 +48,20 @@ name = "ISOM 2000"
 
 [symbols]
 # Landforms
-# Knolls are raised to at least 1 m above the ground around them: a knoll drawn with a
-# contour ring above its line in the middle, a small knoll as a round bump of its size
-# across, an elongated knoll as an oval twice as long as its size.
 "101" = { feature = "contour" }
 "102" = { feature = "contour" }
 "103" = { feature = "contour" }
+# Earth walls: a rounded ridge 4 m wide, its size above the ground on both sides.
+"107" = { feature = "earth_wall", size = 1.0 }
+# Small earth wall.
+"108" = { feature = "earth_wall", size = 0.5 }
+# Knolls are raised to at least 1 m above the ground around them: a knoll drawn with a
+# contour ring above its line in the middle, a small knoll as a round bump of its size
+# across, an elongated knoll as an oval twice as long as its size.
 "112" = { feature = "knoll", size = 10 }
 "113" = { feature = "elongated_knoll", size = 8 }
+# Small depression: dug at least 1 m deep, a bowl without steep sides; size is its width.
+"115" = { feature = "small_depression", size = 8 }
 # Pit: dug 1 m deep into the terrain with steep sides; size is its width.
 "116" = { feature = "pit", size = 2 }
 
