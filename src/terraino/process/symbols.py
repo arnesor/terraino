@@ -62,6 +62,7 @@ FEATURES = frozenset(
         "knoll",
         "elongated_knoll",
         "earth_wall",
+        "vegetation_boundary",
         "contour",
         "boulder_field",
         "stones",

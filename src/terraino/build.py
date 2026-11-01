@@ -26,6 +26,7 @@ from terraino.ingest.image import ImageMap, read_image_map
 from terraino.ingest.lidar import ATTRIBUTION as LIDAR_ATTRIBUTION
 from terraino.ingest.lidar import coarse_canopy, filled_canopy, load_lidar
 from terraino.ingest.ocad import AREA_SYMBOL, TEXT_SYMBOL, export_ocad
+from terraino.process.boundaries import STRETCH_M, VegetationBoundaries
 from terraino.process.buildings import collect_footprints, measure_buildings
 from terraino.process.classify import classify_map
 from terraino.process.features import (
@@ -374,6 +375,20 @@ def build_world(map_path: Path, out_dir: Path, options: BuildOptions) -> Path:
     return write_world(out_dir, world)
 
 
+def _vegetation_boundaries(
+    features: Features | None, extent: Extent, shape: tuple[int, ...]
+) -> VegetationBoundaries | None:
+    """The map's distinct vegetation boundaries, or None if it has none."""
+    lines = [
+        LineString(line.coords)
+        for line in (features.lines if features is not None else [])
+        if line.kind == "vegetation_boundary" and len(line.coords) >= 2
+    ]
+    if not lines:
+        return None
+    return VegetationBoundaries.find(lines, extent, (shape[0], shape[1]))
+
+
 def _add_nature_and_buildings(
     world: WorldData,
     source: MapSource,
@@ -514,15 +529,34 @@ def _add_nature_and_buildings(
         tops = understorey = None
 
     forest = nibio.fetch_forest(source.epsg, extent, cache, options.sr16_dir)
+    seed = int(extent.x0 + extent.y0) % 2**32
+    boundaries = _vegetation_boundaries(source.features, extent, layers.ground.shape)
+    species = forest.species
+    if boundaries is not None:
+        species = boundaries.species(species)
     trees = place_trees(
         chm,
         layers,
-        forest.species,
+        species,
         forest.trees_per_ha,
-        seed=int(extent.x0 + extent.y0) % 2**32,
+        seed=seed,
         tops=tops,
         understorey_weight=understorey,
+        sides=None if boundaries is None else boundaries.sides(),
     )
+    if boundaries is not None:
+        trees, report = boundaries.invent_contrast(trees, layers, species, seed)
+        log.info(
+            "Vegetation boundaries: %d of %d stretches of %.0f m had alike trees on "
+            "both sides; made a young stand along %d boundaries and lowered the trees "
+            "along %d (%d trees)",
+            report.lacking,
+            report.stretches,
+            STRETCH_M,
+            report.young,
+            report.lowered,
+            report.trees,
+        )
     stump_rows, stump_cols, stump_heights = scattered_stumps(chm, layers, tops)
     if len(stump_rows):
         if world.features is None:

@@ -53,6 +53,7 @@ const HOLLOWS = new Set(['pit', 'small_depression'])
 const BOTTOM = new Set(['part', 'top', 'beneath', 'lowerPart'])
 const LINE_KINDS: Record<string, string[]> = {
   '1.6': ['earth_wall'],
+  '4.7': ['vegetation_boundary'],
   '5.8': ['stone_wall', 'ruined_wall'],
   '5.9': ['fence', 'ruined_fence'],
   '5.13': ['ruin'],

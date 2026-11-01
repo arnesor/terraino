@@ -112,6 +112,8 @@ class Trees:
             laser point cloud); NaN where unknown, None if unknown for all.
         thicket: True for thickets: dense clumps of young trees or brush, not single
             trees. None means none are.
+        laser: True for trees found in the laser data, as opposed to those added below
+            the canopy or where the map shows young forest. None means none are.
     """
 
     col: npt.NDArray[np.float32]
@@ -122,10 +124,59 @@ class Trees:
     stand_grown: npt.NDArray[np.bool_] | None = None
     crown_base: npt.NDArray[np.float32] | None = None
     thicket: npt.NDArray[np.bool_] | None = None
+    laser: npt.NDArray[np.bool_] | None = None
 
     def __len__(self) -> int:
         """Number of trees."""
         return len(self.col)
+
+    def flags(self, name: str) -> npt.NDArray[np.bool_]:
+        """One of the optional flags (stand_grown, thicket, laser), all False if None."""
+        value: npt.NDArray[np.bool_] | None = getattr(self, name)
+        return np.zeros(len(self), dtype=bool) if value is None else value
+
+    def take(self, mask: npt.NDArray[np.bool_]) -> Trees:
+        """The trees where ``mask`` is True."""
+
+        def part(a: npt.NDArray[Any] | None) -> npt.NDArray[Any] | None:
+            return None if a is None else a[mask]
+
+        return Trees(
+            col=self.col[mask],
+            row=self.row[mask],
+            height=self.height[mask],
+            crown=self.crown[mask],
+            species=self.species[mask],
+            stand_grown=part(self.stand_grown),
+            crown_base=part(self.crown_base),
+            thicket=part(self.thicket),
+            laser=part(self.laser),
+        )
+
+    def join(self, other: Trees) -> Trees:
+        """These trees and ``other``'s together."""
+
+        def both(name: str, fill: float) -> npt.NDArray[Any] | None:
+            a, b = getattr(self, name), getattr(other, name)
+            if a is None and b is None:
+                return None
+            if name == "crown_base":
+                a = np.full(len(self), fill, np.float32) if a is None else a
+                b = np.full(len(other), fill, np.float32) if b is None else b
+                return np.concatenate([a, b])
+            return np.concatenate([self.flags(name), other.flags(name)])
+
+        return Trees(
+            col=np.concatenate([self.col, other.col]),
+            row=np.concatenate([self.row, other.row]),
+            height=np.concatenate([self.height, other.height]),
+            crown=np.concatenate([self.crown, other.crown]),
+            species=np.concatenate([self.species, other.species]),
+            stand_grown=both("stand_grown", 0),
+            crown_base=both("crown_base", np.nan),
+            thicket=both("thicket", 0),
+            laser=both("laser", 0),
+        )
 
 
 @dataclass
@@ -314,13 +365,15 @@ def understorey_cells(
     trees_per_ha: npt.NDArray[np.float32] | None,
     rng: np.random.Generator,
     weight: npt.NDArray[np.float32] | None = None,
+    parts: npt.NDArray[np.int32] | None = None,
 ) -> tuple[npt.NDArray[np.intp], npt.NDArray[np.intp]]:
     """Pick cells for trees below the canopy, so each 16 m block reaches its target.
 
     The target is SR16's trees per hectare (or DEFAULT_TREES_PER_HA) times the block's
     canopy share, capped at one tree per MIN_AREA_PER_TREE_M2 of canopy. Within a block
     the cells are drawn at random, more likely where ``weight`` is high (the laser hit
-    vegetation below the canopy there).
+    vegetation below the canopy there). Cells with different non-zero ``parts`` (the
+    sides of vegetation boundaries) count as blocks of their own.
 
     Returns:
         Rows and columns of the new trees.
@@ -331,6 +384,13 @@ def understorey_cells(
     nbc = int(bcol[-1]) + 1
     block = brow[:, None] * nbc + bcol[None, :]
     nblocks = int(block.max()) + 1
+    if parts is not None:
+        split = np.flatnonzero(parts.ravel())
+        keys = block.ravel()[split] * (int(parts.max()) + 1) + parts.ravel()[split]
+        unique, inverse = np.unique(keys, return_inverse=True)
+        block = block.copy()
+        block.ravel()[split] = nblocks + inverse
+        nblocks += len(unique)
 
     canopy = (chm >= CANOPY_M) & allowed
     canopy_cells = np.bincount(block[canopy], minlength=nblocks)
@@ -362,7 +422,7 @@ def understorey_cells(
     return r.astype(np.intp), c.astype(np.intp)
 
 
-def _pick_species(
+def pick_species(
     dominant: npt.NDArray[np.uint8],
     ground: npt.NDArray[np.uint8],
     rng: np.random.Generator,
@@ -405,9 +465,10 @@ def _birch(
     return birch
 
 
-def _crowns(
+def crown_radius(
     height: npt.NDArray[np.float32], species: npt.NDArray[np.uint8]
 ) -> npt.NDArray[np.float32]:
+    """Typical crown radius of trees of these heights and species."""
     crown = np.empty_like(height)
     for sp, (a, b) in _CROWN.items():
         m = species == sp
@@ -415,7 +476,7 @@ def _crowns(
     return np.clip(crown, 0.4, 7.0).astype(np.float32)
 
 
-def _allowed(layers: GroundLayers) -> npt.NDArray[np.bool_]:
+def allowed_tree_cells(layers: GroundLayers) -> npt.NDArray[np.bool_]:
     """Cells where trees may stand according to the map."""
     allowed: npt.NDArray[np.bool_] = (
         (layers.tree_rule != TREES_NONE)
@@ -470,6 +531,7 @@ def place_trees(
     seed: int = 0,
     tops: TreeTops | None = None,
     understorey_weight: npt.NDArray[np.float32] | None = None,
+    sides: npt.NDArray[np.int32] | None = None,
 ) -> Trees:
     """Combine laser tree tops and the map into the final set of trees.
 
@@ -482,12 +544,15 @@ def place_trees(
         tops: Tree tops from the laser point cloud; found in ``chm`` if not given.
         understorey_weight: Where to prefer trees below the canopy (see
             understorey_cells).
+        sides: The sides of the vegetation boundaries (see
+            terraino.process.boundaries); each side gets its own trees below the
+            canopy.
 
     Returns:
         All trees.
     """
     rng = np.random.default_rng(seed)
-    allowed_cells = _allowed(layers)
+    allowed_cells = allowed_tree_cells(layers)
     found, scattered, keep = _laser_tops(chm, layers, allowed_cells, tops)
     seed_trees = scattered[keep]
     laser = found.take(keep)
@@ -501,6 +566,7 @@ def place_trees(
         trees_per_ha,
         rng,
         understorey_weight,
+        sides,
     )
     uh = chm[ur, uc] * rng.uniform(*UNDERSTOREY_HEIGHT, size=len(ur)).astype(np.float32)
     rows = np.concatenate([rows, ur])
@@ -518,7 +584,7 @@ def place_trees(
     n = len(all_rows)
     stand_grown = np.zeros(n, dtype=bool)
     stand_grown[: len(seed_trees)] = seed_trees
-    species = _pick_species(species_map[ir, ic], layers.ground[ir, ic], rng)
+    species = pick_species(species_map[ir, ic], layers.ground[ir, ic], rng)
     species[_birch(species_map, layers.ground, ir, ic, stand_grown)] = Species.DECIDUOUS
 
     # Tops sit on cell centres; jitter so the forest does not look gridded. The laser
@@ -529,7 +595,7 @@ def place_trees(
     col = all_cols + 0.5
     row[: len(laser)] = laser.row
     col[: len(laser)] = laser.col
-    crown = _crowns(all_heights, species)
+    crown = crown_radius(all_heights, species)
     measured = np.isfinite(laser.crown)
     crown[: len(laser)][measured] = laser.crown[measured]
     crown_base = np.full(n, np.nan, dtype=np.float32)
@@ -542,6 +608,7 @@ def place_trees(
         species=species,
         stand_grown=stand_grown,
         crown_base=crown_base,
+        laser=np.arange(n) < len(laser),
     )
     return _add_thickets(trees, layers, species_map, seed)
 
@@ -561,31 +628,24 @@ def _add_thickets(
     rows, cols = _draw_cells(layers.thicket, layers.clear, rng)
     n = len(rows)
     height = rng.uniform(*THICKET_HEIGHT_M, size=n).astype(np.float32)
-    species = _pick_species(species_map[rows, cols], layers.ground[rows, cols], rng)
+    species = pick_species(species_map[rows, cols], layers.ground[rows, cols], rng)
     no_seed_trees = np.zeros(n, dtype=bool)
     birch = _birch(species_map, layers.ground, rows, cols, no_seed_trees)
     species[birch] = Species.DECIDUOUS
     species[species == Species.PINE] = Species.SPRUCE
     jitter = rng.uniform(-0.45, 0.45, size=(2, n)).astype(np.float32)
     crown = rng.uniform(*THICKET_RADIUS_M, size=n).astype(np.float32)
-    k = len(trees)
-
-    def both(
-        a: npt.NDArray[Any] | None, b: npt.NDArray[Any], fill: float | bool
-    ) -> npt.NDArray[Any]:
-        first = np.full(k, fill, dtype=b.dtype) if a is None else a
-        return np.concatenate([first, b]).astype(b.dtype)
-
-    return Trees(
-        col=both(trees.col, cols + 0.5 + jitter[0], 0),
-        row=both(trees.row, rows + 0.5 + jitter[1], 0),
-        height=both(trees.height, height, 0),
-        crown=both(trees.crown, crown, 0),
-        species=both(trees.species, species, 0),
-        stand_grown=both(trees.stand_grown, no_seed_trees, False),
-        crown_base=both(trees.crown_base, np.full(n, np.nan, np.float32), np.nan),
-        thicket=both(None, np.ones(n, dtype=bool), False),
+    thickets = Trees(
+        col=(cols + 0.5 + jitter[0]).astype(np.float32),
+        row=(rows + 0.5 + jitter[1]).astype(np.float32),
+        height=height,
+        crown=crown,
+        species=species,
+        stand_grown=no_seed_trees,
+        crown_base=np.full(n, np.nan, np.float32),
+        thicket=np.ones(n, dtype=bool),
     )
+    return trees.join(thickets)
 
 
 def _draw_cells(
@@ -645,7 +705,7 @@ def scattered_stumps(
         Rows and columns (fractional, cell centres at .5) and heights of the felled
         trees.
     """
-    found, scattered, keep = _laser_tops(chm, layers, _allowed(layers), tops)
+    found, scattered, keep = _laser_tops(chm, layers, allowed_tree_cells(layers), tops)
     cut = scattered & ~keep
     return found.row[cut], found.col[cut], found.height[cut]
 

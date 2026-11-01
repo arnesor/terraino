@@ -74,6 +74,8 @@ name = "ISOM 2017-2"
 "414" = { ground = "field", trees = "lidar", speed = 0.7, order = 15 }
 
 "415" = { field_edge = true }  # distinct cultivation boundary
+# Distinct vegetation boundary (see isom2000.toml).
+"416" = { feature = "vegetation_boundary", clear = 2 }
 
 # Roads, paths and other man-made features
 "501" = { ground = "paved", trees = "none", speed = 1.25, order = 85 }

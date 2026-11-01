@@ -22,10 +22,10 @@
 #   order   drawing order; higher values are painted on top
 #   feature 3D object placed for the symbol: boulder, boulder_cluster, boulder_field,
 #           stones, waterhole, pit, small_depression, knoll, elongated_knoll,
-#           earth_wall, cliff, rock_face, stone_wall, ruined_wall, fence, ruined_fence,
-#           power_line, pylon_line, tower, cairn, fodder_rack, ruin, footbridge; or
-#           "contour" for contours and form lines, whose small closed rings around
-#           higher ground are raised as knolls
+#           earth_wall, vegetation_boundary, cliff, rock_face, stone_wall, ruined_wall,
+#           fence, ruined_fence, power_line, pylon_line, tower, cairn, fodder_rack, ruin,
+#           footbridge; or "contour" for contours and form lines, whose small closed
+#           rings around higher ground are raised as knolls
 #   size    size of the feature in metres (boulder height, tower height, wall and
 #           earth wall height; waterhole, pit, small depression and knoll diameter,
 #           elongated knoll width)
@@ -117,6 +117,10 @@ name = "ISOM 2000"
 "415" = { ground = "grain", grass_share = 0.1, grass_speed = 0.7, trees = "lidar", speed = 0.5, order = 15 }
 
 "414" = { field_edge = true }  # distinct cultivation boundary
+# Distinct vegetation boundary: a 2 m strip without trees along it, the species and
+# trees below the canopy kept apart on its two sides, and a stand invented where the
+# trees on both sides are alike (terraino.process.boundaries).
+"416" = { feature = "vegetation_boundary", clear = 2 }
 
 # Roads, paths and other man-made features
 "501" = { ground = "paved", trees = "none", width = 12, clear = 13, order = 82, speed = 1.25, track = "paved" }

@@ -70,6 +70,13 @@ _Avoid_: dense bush, scrub, brush
 **Bush**: A single low plant, about 1–2 m tall, that the runner can see over.
 _Avoid_: shrub
 
+**Stand**: A patch of forest whose trees are of about the same age and species.
+_Avoid_: plot, compartment
+
+**Vegetation boundary**: A line where the forest changes sharply
+(in tree height, age or species) or where the forest ends.
+_Avoid_: stand boundary, forest edge (a forest edge is one kind of vegetation boundary)
+
 **Undergrowth**: Low vegetation on the forest floor that slows the runner
 but leaves good visibility.
 _Avoid_: understorey, ground vegetation

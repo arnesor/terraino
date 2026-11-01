@@ -86,6 +86,28 @@ describe('control flag placement', () => {
     expect(ez).toBeCloseTo(0)
   })
 
+  it('puts the flag beside a vegetation boundary, on the side the runner comes from', () => {
+    const data = world({
+      lines: [
+        {
+          kind: 'vegetation_boundary',
+          points: [
+            [0, 0],
+            [20, 0],
+          ],
+        },
+      ],
+    })
+    // The circle is 4 m south of the boundary; the runner comes from the north.
+    const [x, z] = placeFlag({ d: '4.007' }, [8, 4], data, [8, -30])
+    expect(x).toBeCloseTo(8)
+    expect(z).toBeCloseTo(-0.6)
+    // "South side": south of it, whichever way the runner comes.
+    const [sx, sz] = placeFlag({ d: '4.007', g: '12.103' }, [8, -4], data, [8, -30])
+    expect(sx).toBeCloseTo(8)
+    expect(sz).toBeCloseTo(0.6)
+  })
+
   it('puts the flag at the foot of a cliff by default', () => {
     const data = world({
       cliffs: [

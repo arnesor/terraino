@@ -158,6 +158,7 @@ _DEFAULT_SIZE = {
     "knoll": 10.0,
     "elongated_knoll": 8.0,
     "earth_wall": 1.0,
+    "vegetation_boundary": 0.0,
     "boulder_field": 0.7,
     "stones": 0.3,
     "stone_wall": 0.9,
@@ -173,6 +174,7 @@ _DEFAULT_SIZE = {
 }
 _LINE_KINDS = {
     "earth_wall",
+    "vegetation_boundary",
     "stone_wall",
     "ruined_wall",
     "fence",

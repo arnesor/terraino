@@ -65,6 +65,8 @@ npm test --prefix viewer            # vitest
   Tests do not hit the network unless they are marked `network`.
 - `process/`: turns the inputs into world content: ground layers, trees, buildings and roofs,
   map features, tracks, the map area, and fusion of buildings from several sources.
+  `boundaries.py` makes distinct vegetation boundaries (416) visible in the trees
+  (see `docs/adr/0004-map-wins-over-laser-at-vegetation-boundaries.md`).
 - `build.py` hides the map format behind a `MapSource`:
   `_ocad_source` and `_image_source` both produce one,
   and the rest of the build (`_add_nature_and_buildings`) does not care which it came from.
