@@ -34,12 +34,15 @@ const FALLBACK_RADIUS = 1
 
 /** An ant hill's base radius per metre of height: it is 2.5 times as wide as it is high. */
 export const ANT_HILL_RADIUS = 1.25
+/** Half the diagonal of a picnic table 1.8 m long, benches included. */
+export const PICNIC_TABLE_RADIUS = 1.2
 
 /** The radius of a solid point feature that a flag stand must keep out of, or null. */
 function solidRadius(kind: string | undefined, size: number): number | null {
   // Boulders are drawn about 1.3–1.7 times as wide as they are high.
   if (kind === 'boulder') return size * 0.8
   if (kind === 'ant_hill') return size * ANT_HILL_RADIUS
+  if (kind === 'picnic_table') return (size / 1.8) * PICNIC_TABLE_RADIUS
   return null
 }
 
@@ -55,6 +58,7 @@ const POINT_KINDS: Record<string, string[]> = {
   '5.15': ['tower'],
   '5.17': ['cairn'],
   '5.18': ['fodder_rack'],
+  '6.1': ['picnic_table'],
   '6.2': ['lamp_post'],
 }
 // Half the base width of an earth wall (EARTH_WALL_WIDTH_M in process/features.py): the

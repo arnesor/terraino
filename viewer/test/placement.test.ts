@@ -70,6 +70,16 @@ describe('control flag placement', () => {
     expect(rz).toBeGreaterThan(0)
   })
 
+  it('puts the flag beside a picnic table, outside its benches', () => {
+    // A special item (cross) at (0, 0): a picnic table 1.8 m long.
+    const data = world({ kinds: ['picnic_table'], points: [[0, 0, 0, 1.8, 0]] })
+    const [x, z] = placeFlag({ d: '6.001', g: '12.102' }, [1, 1], data)
+    expect(x).toBeLessThanOrEqual(-1.2)
+    expect(z).toBeCloseTo(0)
+    const [rx, rz] = placeFlag({ d: '6.001' }, [0, 0], data, [0, 30])
+    expect(Math.hypot(rx, rz)).toBeGreaterThanOrEqual(1.2)
+  })
+
   it('puts the flag on top of an earth wall, or at its foot on the named side', () => {
     // An earth wall running east from (0, 0) to (20, 0).
     const data = world({

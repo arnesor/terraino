@@ -125,3 +125,6 @@ _Avoid_: anthill, ant heap, mound
 
 **Lamp post**: A post with a lamp along a lit trail.
 _Avoid_: light pole, street light
+
+**Picnic table**: A wooden table with a bench fixed along each side (Norwegian _benkebord_).
+_Avoid_: bench, table

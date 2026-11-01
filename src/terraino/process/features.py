@@ -178,6 +178,7 @@ _DEFAULT_SIZE = {
     "cairn": 1.2,
     "fodder_rack": 2.0,
     "ant_hill": 1.0,
+    "picnic_table": 1.8,
     "ruin": 0.6,
     "power_line": 10.0,
     "pylon_line": 25.0,
@@ -236,6 +237,9 @@ def _expand_point(
         # Its height: the symbol's, give or take a fifth.
         s = size * (0.8 + 0.4 * _rand(x + y, 5))
         return [PointFeature("ant_hill", x, y, s, _rand(x, 6) * 2 * math.pi)]
+    if kind == "picnic_table":
+        # The map's symbol is a cross, whose angle says nothing about the table's.
+        return [PointFeature(kind, x, y, size, _rand(x + y, 8) * 2 * math.pi)]
     return [PointFeature(kind, x, y, size, angle)]
 
 

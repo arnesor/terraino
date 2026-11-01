@@ -81,6 +81,7 @@ FEATURES = frozenset(
         "ruin",
         "footbridge",
         "ant_hill",
+        "picnic_table",
     }
 )
 

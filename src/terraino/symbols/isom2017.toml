@@ -106,3 +106,5 @@ name = "ISOM 2017-2"
 "525" = { feature = "tower", size = 4 }
 "526" = { feature = "cairn", size = 1.2 }
 "527" = { feature = "fodder_rack", size = 2 }
+# Prominent man-made feature, x: a picnic table, as for ISOM 2000 540.
+"531" = { feature = "picnic_table", size = 1.8 }
