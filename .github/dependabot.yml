@@ -34,3 +34,22 @@ updates:
       python-dependencies:
         patterns:
           - "*"
+  # The viewer and the OCAD exporter pin exact versions, so Dependabot raises the
+  # pins in package.json along with package-lock.json.
+  - package-ecosystem: "npm"
+    directories:
+      - "/viewer"
+      - "/tools/ocad-export"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 99
+    ignore:
+      # @types/node follows the Node major version in .node-version.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+    groups:
+      npm-dependencies:
+        patterns:
+          - "*"
