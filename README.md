@@ -1,5 +1,7 @@
 # Terrain-O
 
+<img src="viewer/public/logo.svg" align="right" width="120" alt="">
+
 _Real terrain.
 Real trees.
 Just you, the map and the compass._
@@ -19,6 +21,10 @@ Just you, the map and the compass._
 
 Build a walkable 3D world from a Norwegian orienteering map,
 and run through it in the browser like in a first-person game.
+
+## Try the game
+
+Try the game at <https://terraino.arnesor.workers.dev>.
 
 ## Features
 
