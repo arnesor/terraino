@@ -20,6 +20,10 @@ Just you, the map and the compass._
 Build a walkable 3D world from a Norwegian orienteering map,
 and run through it in the browser like in a first-person game.
 
+## Try the game
+
+Try the game at <https://terraino.arnesor.workers.dev>.
+
 ## Features
 
 - Reads OCAD maps (version 10–2018, ISOM 2000 and ISOM 2017) with their georeferencing,
