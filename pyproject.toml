@@ -90,6 +90,10 @@ reflow-length-exemptions = true
 reflow-mode = "semantic-line-breaks"
 tables = false
 
+# The README shows the logo with an <img> beside the heading.
+[tool.rumdl.MD033]
+allowed-elements = ["img"]
+
 [tool.ruff]
 force-exclude = true  # Apply excludes to pre-commit
 show-fixes = true

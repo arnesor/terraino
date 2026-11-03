@@ -1,5 +1,7 @@
 # Terrain-O
 
+<img src="viewer/public/logo.svg" align="right" width="120" alt="">
+
 _Real terrain.
 Real trees.
 Just you, the map and the compass._
