@@ -471,7 +471,7 @@ def test_small_ruins_drawn_as_points_become_square_ruins() -> None:
         square = Polygon(ruin.coords)
         assert ruin.coords[0] == ruin.coords[-1]  # closed, like an area ruin
         assert square.area == pytest.approx(side * side)
-        assert (square.centroid.x, square.centroid.y) == pytest.approx(centre)
+        assert square.centroid.coords[0] == pytest.approx(centre)
     # The small ruin's first side runs at 30° from east.
     (x0, y0), (x1, y1) = small.coords[0], small.coords[1]
     assert math.degrees(math.atan2(y1 - y0, x1 - x0)) % 90 == pytest.approx(30)
