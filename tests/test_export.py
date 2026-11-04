@@ -105,7 +105,8 @@ def test_manifest_describes_grid(world: World) -> None:
     h = manifest["height"]
     assert manifest["crs"] == "EPSG:25832"
     assert h["origin"] == [1000.5, 5519.5]
-    assert (h["rows"], h["cols"]) == dtm.shape
+    assert h["rows"] == dtm.shape[0]
+    assert h["cols"] == dtm.shape[1]
     assert (h["chunksX"], h["chunksY"]) == (2, 3)
     assert manifest["drape"]["tilePx"] == 2 * CHUNK
     assert manifest["map"]["offset"] == [0.0, 0.0]

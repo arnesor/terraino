@@ -214,7 +214,7 @@ def export_ocad(
     if not render_png:
         args.append("--no-png")
 
-    result = subprocess.run(  # noqa: S603 - fixed program, arguments are not shell-parsed
+    result = subprocess.run(  # noqa: S603 - fixed program and no shell
         args, capture_output=True, text=True, check=False
     )
     if result.returncode != 0:

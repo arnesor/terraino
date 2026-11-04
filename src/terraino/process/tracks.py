@@ -91,8 +91,9 @@ def snap_ends(
             candidates = [j for j in tree.query(point.buffer(distance)) if j != i]
             if not candidates:
                 continue
-            j = min(candidates, key=lambda k: lines[k].distance(point))
-            if lines[j].distance(point) >= distance:
+            gaps = {k: lines[k].distance(point) for k in candidates}
+            j = min(gaps, key=gaps.__getitem__)
+            if gaps[j] >= distance:
                 continue
             target = nearest_points(lines[j], point)[0]
             if end == 0:

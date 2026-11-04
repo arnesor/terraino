@@ -140,8 +140,11 @@ def utm_epsg_for_longitude(lon: float) -> int:
         (25832, 25833, 25835)
     """
     zone = math.floor((lon + 180) / 6) + 1
-    zone = 32 if zone <= 32 else 33 if zone <= 34 else 35
-    return 25800 + zone
+    if zone <= 32:
+        return 25832
+    if zone <= 34:
+        return 25833
+    return 25835
 
 
 def _load_rgb(data: bytes | Path) -> npt.NDArray[np.uint8]:

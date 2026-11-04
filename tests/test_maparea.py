@@ -50,8 +50,9 @@ def test_degenerate_geometries_are_skipped() -> None:
 
 
 def test_no_terrain_raises() -> None:
+    shapes = [square(0, 0, sym="900.0")]
     with pytest.raises(ValueError, match="no terrain"):
-        find_map_area([square(0, 0, sym="900.0")], is_terrain)
+        find_map_area(shapes, is_terrain)
 
 
 def test_to_geometry_repairs_bow_tie() -> None:
