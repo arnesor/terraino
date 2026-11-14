@@ -907,6 +907,7 @@ export class Hud {
     this.drawCourse(ctx, local, zoom)
     this.drawRoutes(ctx, local)
 
+    // The position arrow: its tip on the runner's position, so it hides none of the map ahead.
     if (this.positionBox.checked && !this.restricted) {
       const [px, py] = local(...this.runnerPosition())
       ctx.save()
@@ -915,11 +916,12 @@ export class Hud {
       ctx.fillStyle = '#e8222a'
       ctx.strokeStyle = '#fff'
       ctx.lineWidth = 2.5
+      ctx.lineJoin = 'round'
       ctx.beginPath()
-      ctx.moveTo(0, -13)
-      ctx.lineTo(8, 9)
-      ctx.lineTo(0, 4.5)
-      ctx.lineTo(-8, 9)
+      ctx.moveTo(0, 0)
+      ctx.lineTo(8, 22)
+      ctx.lineTo(0, 17.5)
+      ctx.lineTo(-8, 22)
       ctx.closePath()
       ctx.stroke()
       ctx.fill()
