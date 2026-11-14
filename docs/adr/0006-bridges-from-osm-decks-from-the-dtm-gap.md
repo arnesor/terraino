@@ -29,8 +29,8 @@ and the gap that mappers leave in the lower road is closed.
 
 - **Fill the terrain under the bridge**: one change to the height grid,
   but it walls off the lower road or the river.
-- **NVDB (Statens vegvesen's bridge register) or Elveg's `MEDIUM` flag**:
-  authoritative, but a new download, and NVDB covers only public roads.
+- **NVDB (Statens vegvesen's bridge register) or Elveg's `MEDIUM` flag**: authoritative,
+  but a new download, and NVDB covers only public roads.
 - **Detect bridges from the lidar alone**: finds bridges OSM lacks,
   but trees over a road also raise the DOM above the DTM.
   Crossings that look like bridges without an OSM tag are logged during the build instead,

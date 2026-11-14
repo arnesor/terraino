@@ -6,8 +6,8 @@ Terrain-O builds a walkable 3D world from a Norwegian orienteering map
 (OCAD or georeferenced image) and lets you run through it in a browser.
 There are three parts:
 
-- `src/terraino/`: Python pipeline (`uv run terraino build <map>`) that writes a world package
-  to `worlds/<map name>/`.
+- `src/terraino/`: Python pipeline
+  (`uv run terraino build <map>`) that writes a world package to `worlds/<map name>/`.
 - `viewer/`: TypeScript + Three.js + Vite app that renders a world package.
 - `tools/ocad-export/`: Node script
   (AGPL, wraps `ocad2geojson`) that turns `.ocd` files into GeoJSON/SVG/PNG.
@@ -87,8 +87,8 @@ binary formats and layer channel encoding are documented in the module docstring
 `viewer/src/world.ts` reads the package.
 The two sides must agree on several things:
 
-- When the package format changes, bump `FORMAT_VERSION` in `export.py`
-  and update `SUPPORTED_FORMATS` in `viewer/src/world.ts`.
+- When the package format changes,
+  bump `FORMAT_VERSION` in `export.py` and update `SUPPORTED_FORMATS` in `viewer/src/world.ts`.
 - The `Ground` enum in `process/symbols.py` is copied in `viewer/src/layers.ts`
   and used by the terrain shader.
   Keep both copies in sync.
@@ -152,8 +152,8 @@ only competition runs can be saved.
 - Python ≥ 3.12, strict mypy, ruff with Google-style docstrings
   (`D` rules), and an `S` (bandit) rule set.
   Subprocess calls carry an `# noqa: S603` with a reason.
-- Markdown is checked by rumdl with semantic line breaks (one sentence or clause per line)
-  and a 100-character line length.
+- Markdown is checked by rumdl with semantic line breaks
+  (one sentence or clause per line) and a 100-character line length.
 - Maps must be in UTM zone 32, 33 or 35 (ETRS89/WGS 84).
   The build works in the map's projected EPSG throughout.
 

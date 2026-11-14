@@ -34,20 +34,22 @@ Try the game at <https://terraino.arnesor.workers.dev>.
   instead of heights interpolated from contour lines.
 - Individual trees from the laser surface model, with species from NIBIO SR16,
   thinned on open land and made denser where the map shows green.
-- With a laser point cloud: sharper tree positions and true heights, each tree's crown
-  size and how far down its live branches reach, undergrowth where the laser hits it,
-  and roofs split into their planes, giving wings with gable, hipped, shed and flat
-  roofs (cross gables, L- and T-shaped houses) and their eave and ridge heights.
+- With a laser point cloud: sharper tree positions and true heights,
+  each tree's crown size and how far down its live branches reach,
+  undergrowth where the laser hits it, and roofs split into their planes, giving wings with gable,
+  hipped, shed and flat roofs (cross gables, L- and T-shaped houses) and their eave
+  and ridge heights.
 - Building outlines and roof lines traced from Kartverket's topographic map
   (the same buildings as on norgeskart.no), with OSM and the orienteering map where it has none.
   Roofs come from the laser where it saw a roof, otherwise from the map's roof lines.
-- Buildings with textured walls (cladding with windows, boards, logs) and roof tiles,
-  their kind, colours and floors from the building type registered in Matrikkelen
+- Buildings with textured walls
+  (cladding with windows, boards, logs)
+  and roof tiles, their kind, colours and floors from the building type registered in Matrikkelen
   (white farmhouses, red barns, dark cabins, garages matching the house they belong to).
 - Ground from the map (forest floor, open land, marsh, fields, paths, roads, water),
   and from NIBIO AR5 land cover outside the map.
-- Buildings from OpenStreetMap and the map, with heights and gable roofs
-  measured from the laser data.
+- Buildings from OpenStreetMap and the map,
+  with heights and gable roofs measured from the laser data.
 - Boulders (at least 1 m high, large ones 2 m), waterholes with water, cliffs, stone walls, fences,
   power lines and towers from the map,
   with power line poles on the masts registered in Kartverket's topographic map.
@@ -55,16 +57,16 @@ Try the game at <https://terraino.arnesor.workers.dev>.
 - Roads and paths drawn as their own soft-edged strips on the terrain,
   with distinct junctions joined and nothing growing on them.
   Footpaths show roots and stones; footbridges and log crossings carry them over streams.
-- Browser viewer (Three.js): walk, run and fly, with shadows, runnability,
-  a compass, the orienteering map with your position, and courses with timing.
-- Courses from OCAD course setting files, with the IOF control description table
-  on the map and on screen, each flag placed where its description says
-  (north side of the boulder, west foot of the hill),
-  and start and finish banners.
+- Browser viewer (Three.js): walk, run and fly, with shadows, runnability, a compass,
+  the orienteering map with your position, and courses with timing.
+- Courses from OCAD course setting files,
+  with the IOF control description table on the map and on screen,
+  each flag placed where its description says
+  (north side of the boulder, west foot of the hill), and start and finish banners.
 - English and Norwegian user interface.
 - Textured spruce, pine and birch that sway in the wind, with impostors for distant trees,
-  ground textures by ground type, and ground cover (blueberry, heather, fern, grass, sedge),
-  bushes, fallen logs and twigs near the player.
+  ground textures by ground type, and ground cover
+  (blueberry, heather, fern, grass, sedge), bushes, fallen logs and twigs near the player.
 
 ## Requirements
 
@@ -113,7 +115,8 @@ Useful build options (see `uv run terraino build --help`):
 - `--margin` sets how much terrain to include around the map (default 300 m).
   Terrain more than 100 m from the map is stored at 4 m instead of 1 m,
   which halves what the viewer downloads before it starts.
-- `--sr16-dir` points to SR16 GeoTIFFs downloaded from Geonorge (or set `TERRAINO_SR16_DIR`);
+- `--sr16-dir` points to SR16 GeoTIFFs downloaded from Geonorge
+  (or set `TERRAINO_SR16_DIR`);
   they add the number of trees per hectare to the species from the SR16 web map.
 - `--symbols` sets the symbol standard of an OCAD map if the guess is wrong.
 - `--spawn E N` and `--heading DEG` set where you stand and look when the world opens:
@@ -324,10 +327,10 @@ npm run deploy --prefix viewer -- Langvatnet
 It:
 
 1. type-checks and builds the viewer (`viewer/dist/`);
-2. copies the worlds named on the command line from `worlds/` (without `_work/`)
-   and their races from `races/` into the build, and writes the list of worlds;
-3. stops if there are more than 20,000 files, or a file larger than 25 MiB:
-   the free plan's limits, enough for about 12 worlds the size of Langvatnet;
+2. copies the worlds named on the command line from `worlds/`
+   (without `_work/`) and their races from `races/` into the build, and writes the list of worlds;
+3. stops if there are more than 20,000 files, or a file larger than 25 MiB: the free plan's limits,
+   enough for about 12 worlds the size of Langvatnet;
 4. applies new database migrations (`viewer/worker/migrations/`) to the online database;
 5. uploads the Worker and the files, and switches the site to them.
 
@@ -446,8 +449,10 @@ with three differences:
   To copy results lists kept as files by earlier versions (`results/`) to it,
   run `npm run import-results --prefix viewer -- http://localhost:5173` while it runs;
   with the online address, the same command copies them online.
-- There is no admin key unless `viewer/.dev.vars` (not in git) holds a line `ADMIN_KEY=<key>`;
-  restart `npm run dev` after adding it, and open the viewer once with `?admin=<key>`.
+- There is no admin key unless `viewer/.dev.vars`
+  (not in git)
+  holds a line `ADMIN_KEY=<key>`; restart `npm run dev` after adding it,
+  and open the viewer once with `?admin=<key>`.
 
 `npm run preview --prefix viewer` serves the last `npm run build` the same way,
 to try the production build before deploying.
