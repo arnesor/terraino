@@ -11,6 +11,7 @@ Layout of a world folder::
     buildings.json              building footprints, heights, roofs and colours
     features.json               rocks, cliffs, walls, fences and other map features
     tracks.json                 roads and paths as lines with a style and width
+    bridges.json                road bridge decks: centre line with heights, width, pillars
     drape/{cx}_{cy}.jpg         orienteering map texture for one chunk
     drape_overview.jpg          low-resolution map texture of the whole world
     map.jpg                     the orienteering map, for the in-game map view
@@ -32,6 +33,12 @@ Layer pixels match the height samples one to one. Their channels are:
 Tree positions are relative to the chunk's north-west sample, in scene axes
 (x east, z south), sorted from tallest to smallest. Building outlines are in scene
 coordinates: x east and z south of the north-west height sample.
+
+Each bridge in ``bridges.json`` has the ``kind`` and ``width`` of the track on its deck
+(the deck is wider by its rails), the running ``speed`` on it, its centre line as
+``[x, z, height]`` points (scene coordinates, height in metres above sea level, straight
+between the ends) and its ``pillars`` as distances in metres along the centre line.
+Tracks in ``tracks.json`` stop at the ends of the decks.
 """
 
 from __future__ import annotations
@@ -49,6 +56,7 @@ from PIL import Image
 from shapely import Polygon, box
 
 from terraino.ingest.georef import Extent
+from terraino.process.bridges import Bridge
 from terraino.process.buildings import Building
 from terraino.process.features import Features
 from terraino.process.layers import GroundLayers
@@ -56,7 +64,7 @@ from terraino.process.symbols import Ground
 from terraino.process.tracks import Track
 from terraino.process.trees import Trees
 
-FORMAT_VERSION = 7
+FORMAT_VERSION = 8
 CHUNK = 256
 HEIGHT_STEP_M = 1.0
 # Height chunks this far from the map keep full detail; the others every COARSE_STEP-th sample.
@@ -142,6 +150,7 @@ class WorldData:
         buildings: Buildings to raise, or None.
         features: Rocks, cliffs, walls and other map features, or None.
         tracks: Roads and paths, or None.
+        bridges: Road bridges, or None.
         lidar: True if a laser point cloud shaped the trees, undergrowth and roofs.
     """
 
@@ -163,6 +172,7 @@ class WorldData:
     buildings: Sequence[Building] | None = None
     features: Features | None = None
     tracks: Sequence[Track] | None = None
+    bridges: Sequence[Bridge] | None = None
     lidar: bool = False
     map_offset: tuple[float, float] = (0.0, 0.0)
     spawn_heading: float = 0.0
@@ -422,6 +432,25 @@ def _write_tracks(out_dir: Path, tracks: Sequence[Track], extent: Extent) -> Non
     (out_dir / "tracks.json").write_text(json.dumps(data), encoding="utf-8")
 
 
+def _write_bridges(out_dir: Path, bridges: Sequence[Bridge], extent: Extent) -> None:
+    ox = extent.x0 + HEIGHT_STEP_M / 2
+    oz = extent.y1 - HEIGHT_STEP_M / 2
+    data = [
+        {
+            "kind": b.kind,
+            "width": b.width,
+            "speed": b.speed,
+            "points": [
+                [round(x - ox, 2), round(oz - y, 2), round(h, 2)]
+                for x, y, h in b.coords
+            ],
+            "pillars": list(b.pillars),
+        }
+        for b in bridges
+    ]
+    (out_dir / "bridges.json").write_text(json.dumps(data), encoding="utf-8")
+
+
 def _write_drape(
     out_dir: Path, drape_png: Path, px_per_m: float, chunks: tuple[int, int]
 ) -> int:
@@ -559,6 +588,9 @@ def write_world(out_dir: Path, world: WorldData) -> Path:
     if world.tracks is not None:
         _write_tracks(out_dir, world.tracks, extent)
         manifest["tracks"] = {"path": "tracks.json", "count": len(world.tracks)}
+    if world.bridges:
+        _write_bridges(out_dir, world.bridges, extent)
+        manifest["bridges"] = {"path": "bridges.json", "count": len(world.bridges)}
     if world.features is not None:
         _write_features(out_dir, world.features, extent)
         manifest["features"] = {

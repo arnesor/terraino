@@ -128,3 +128,15 @@ _Avoid_: light pole, street light
 
 **Picnic table**: A wooden table with a bench fixed along each side (Norwegian _benkebord_).
 _Avoid_: bench, table
+
+**Bridge**: A structure that carries a road, track or railway over a road, a railway or water,
+so that a runner can pass both over it and under it.
+Whether a road "goes over" or "goes under" is the same bridge,
+seen from the road on it or from the underpass.
+_Avoid_: overpass, viaduct
+
+**Footbridge**: A small bridge on a path, usually over a stream.
+_Avoid_: bridge (on its own), plank
+
+**Underpass**: The way under a bridge: the road, track, railway or water it crosses.
+_Avoid_: tunnel (a tunnel goes through the ground, not under a bridge)

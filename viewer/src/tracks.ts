@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { type Bridges, type Deck, RAIL_M } from './bridges'
 import { type Gfx, GROUND_TEX_GLSL, type QualitySettings } from './gfx'
 import type { HeightField } from './heightfield'
 import type { World } from './world'
@@ -27,6 +28,9 @@ const STYLES: Record<string, { id: number; margin: number; order: number }> = {
   paved: { id: 0, margin: 0.6, order: 9 },
 }
 const FOOTPATHS = new Set(['path', 'small_path', 'faint_path'])
+// A track end this close to the end of a deck meets the deck.
+const DECK_END_M = 0.5
+const UP = new THREE.Vector3(0, 1, 0)
 const BRIDGED_WATER = new Set(['stream', 'small_stream', 'water_channel'])
 const SAMPLE_M = 1.0
 const LIFT_M = 0.06
@@ -356,14 +360,14 @@ export class Tracks {
     this.group.name = 'tracks'
   }
 
-  static async load(world: World, heights: HeightField, gfx: Gfx): Promise<Tracks | null> {
+  static async load(world: World, heights: HeightField, gfx: Gfx, bridges: Bridges | null = null): Promise<Tracks | null> {
     const info = world.manifest.tracks
     if (!info) return null
     const response = await fetch(world.url(info.path))
     if (!response.ok) return null
     const tracks = new Tracks(heights, gfx)
     const records = (await response.json()) as TrackRecord[]
-    tracks.build(records)
+    tracks.build(records, bridges)
     tracks.buildBridges(records)
     return tracks
   }
@@ -383,25 +387,41 @@ export class Tracks {
     }
   }
 
-  /** Add a vertex on the ground at (x, z), lit like the terrain there. */
-  private ground(b: StripBuilder, x: number, z: number, across: number, along: number, half: number): number {
+  /** Add a vertex on the ground at (x, z), lit like the terrain there; or on a deck. */
+  private ground(b: StripBuilder, x: number, z: number, across: number, along: number, half: number, deck?: Deck): number {
+    if (deck) return b.vertex(x, deck.locate(x, z).height + LIFT_M, z, UP, across, along, half)
     const h = this.heights
     const y = h.heightAt(x, z) + LIFT_M
     this.normal.set(h.heightAt(x - 1, z) - h.heightAt(x + 1, z), 2, h.heightAt(x, z - 1) - h.heightAt(x, z + 1)).normalize()
     return b.vertex(x, y, z, this.normal, across, along, half)
   }
 
-  private build(records: TrackRecord[]) {
+  private build(records: TrackRecord[], bridges: Bridges | null) {
     // One mesh per kind and tile, so tracks out of view are culled.
     const builders = new Map<string, { kind: string; builder: StripBuilder }>()
+    const entry = (kind: string, [x, z]: [number, number]) => {
+      const key = `${kind}:${Math.floor(x / TILE_M)}_${Math.floor(z / TILE_M)}`
+      let found = builders.get(key)
+      if (!found) builders.set(key, (found = { kind, builder: new StripBuilder() }))
+      return found.builder
+    }
+    // A road stops square where it meets a deck, which carries on its surface.
+    const deckEnds = bridges?.ends() ?? []
+    const atDeck = ([x, z]: [number, number]) => deckEnds.some(([ex, ez]) => Math.hypot(ex - x, ez - z) < DECK_END_M)
     for (const record of records) {
       if (record.points.length < 2) continue
-      const [x, z] = record.points[Math.floor(record.points.length / 2)]!
-      const key = `${record.kind}:${Math.floor(x / TILE_M)}_${Math.floor(z / TILE_M)}`
-      let entry = builders.get(key)
-      if (!entry) builders.set(key, (entry = { kind: record.kind, builder: new StripBuilder() }))
-      this.addStrip(entry.builder, record)
+      const builder = entry(record.kind, record.points[Math.floor(record.points.length / 2)]!)
+      this.addStrip(builder, record, {
+        capStart: !atDeck(record.points[0]!),
+        capEnd: !atDeck(record.points[record.points.length - 1]!),
+      })
       this.addToIndex(record)
+    }
+    for (const deck of bridges?.decks ?? []) {
+      const r = deck.record
+      const record: TrackRecord = { kind: r.kind, width: r.width, points: r.points.map(([x, z]) => [x, z]) }
+      const builder = entry(r.kind, record.points[0]!)
+      this.addStrip(builder, record, { deck, capStart: false, capEnd: false })
     }
     const materials = new Map<string, THREE.Material>()
     for (const { kind, builder } of builders.values()) {
@@ -416,9 +436,15 @@ export class Tracks {
     }
   }
 
-  private addStrip(b: StripBuilder, record: TrackRecord) {
+  private addStrip(
+    b: StripBuilder,
+    record: TrackRecord,
+    { deck, capStart = true, capEnd = true }: { deck?: Deck; capStart?: boolean; capEnd?: boolean } = {},
+  ) {
     const half = record.width / 2
-    const outer = half + (STYLES[record.kind] ?? STYLES['path']!).margin
+    const margin = (STYLES[record.kind] ?? STYLES['path']!).margin
+    // On a deck the shoulder stops short of the rails.
+    const outer = half + (deck ? Math.min(margin, RAIL_M - 0.15) : margin)
     const samples = resample(record.points)
     if (samples[samples.length - 1]!.d <= 0) return // no length
     const columns = Math.max(2, 2 * Math.ceil(outer / ACROSS_M))
@@ -445,7 +471,7 @@ export class Tracks {
       const row: number[] = []
       for (let k = 0; k <= columns; k++) {
         const u = -1 + (2 * k) / columns
-        row.push(this.ground(b, s.x - nx * w * u, s.z - nz * w * u, u * outer, s.d, half))
+        row.push(this.ground(b, s.x - nx * w * u, s.z - nz * w * u, u * outer, s.d, half, deck))
       }
       if (previous) {
         for (let k = 0; k < columns; k++) {
@@ -456,8 +482,8 @@ export class Tracks {
       previous = row
     })
     // Rounded ends (half discs beyond the end only, so nothing is drawn twice).
-    this.addCap(b, samples[0]!, samples[1]!, outer, half)
-    this.addCap(b, samples[samples.length - 1]!, samples[samples.length - 2]!, outer, half)
+    if (capStart) this.addCap(b, samples[0]!, samples[1]!, outer, half)
+    if (capEnd) this.addCap(b, samples[samples.length - 1]!, samples[samples.length - 2]!, outer, half)
   }
 
   private segmentNormal(a: { x: number; z: number }, b: { x: number; z: number }): [number, number] | null {
