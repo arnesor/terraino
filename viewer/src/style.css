@@ -113,6 +113,13 @@ body {
   white-space: nowrap;
 }
 
+.panel .version {
+  margin: 8px 0 0;
+  text-align: right;
+  font-size: 11px;
+  color: #6b6658;
+}
+
 .hud-info {
   position: fixed;
   top: 10px;
