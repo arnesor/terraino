@@ -99,6 +99,24 @@ function applyViewParams(player: Player, world: World) {
 }
 
 /**
+ * Test settings for how runners veer, from the address, in place of the Player's defaults:
+ * `veer` (scale of the random veering and the downhill pull), `glance` (turn from a bump,
+ * 1 ≈ 10° head-on), `stumble` (speed lost in a bump, 0 to 1) and `legs` (metres over which a
+ * turn of the legs passes into the view). Returns whether any was given.
+ */
+function applyVeerParams(player: Player): boolean {
+  const params = new URLSearchParams(location.search)
+  let any = false
+  for (const name of ['veer', 'glance', 'stumble', 'legs'] as const) {
+    const value = Number(params.get(name) ?? Number.NaN)
+    if (!Number.isFinite(value) || value < 0) continue
+    player[name] = name === 'stumble' ? Math.min(value, 1) : value
+    any = true
+  }
+  return any
+}
+
+/**
  * A course from an OCAD file, with each flag placed by its control description, and the
  * file's other controls (`all`), which stand in the terrain too.
  */
@@ -310,6 +328,7 @@ async function main() {
   player.placeAt(sx, sz)
   face(player, world.manifest.spawnHeading ?? 0)
   applyViewParams(player, world)
+  const testSettings = applyVeerParams(player)
   const placement: PlacementData = {
     ...(features?.data ?? { kinds: [], points: [], lines: [], cliffs: [] }),
     buildings: buildings?.outlines ?? [],
@@ -334,6 +353,7 @@ async function main() {
   hud.showDescriptions(true)
   // Results lists are kept per world folder (the map's name may differ between builds).
   const resultsView = new ResultsView(document.getElementById('hud')!, name, run, hud)
+  resultsView.testSettings = testSettings
   run.punchListener = () => {
     beep()
     if (run.state === 'finished') resultsView.finished()

@@ -339,6 +339,10 @@ const STRINGS = {
   saveResult: { en: 'Save result', nb: 'Lagre resultatet' },
   dontSave: { en: "Don't save", nb: 'Ikke lagre' },
   saveFailed: { en: 'Could not save: {message}', nb: 'Kunne ikke lagre: {message}' },
+  notSavedTrial: {
+    en: 'Not saved: the run was made with test settings for veering in the address.',
+    nb: 'Ikke lagret: løpet ble gjort med testinnstillinger for avdrift i adressen.',
+  },
   notSaved: {
     en: 'Not saved: competition mode was off. Turn it on under the map before the start to get on the results list.',
     nb: 'Ikke lagret: konkurransemodus var av. Slå den på under kartet før start for å komme på resultatlista.',

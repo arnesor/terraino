@@ -39,6 +39,12 @@ const VEER_RUNNABILITY = 0.3
 // 100 m on a slope of 1 in 5), up to a side slope of VEER_SLOPE.
 const DOWNHILL_PULL = 0.0044
 const VEER_SLOPE = 0.5
+// Glancing off a trunk or a boulder turns the runner by about this much (rad) at `glance` = 1
+// in a head-on bump, less in a graze, made over about this time (s).
+const GLANCE_TURN = 0.17
+const GLANCE_TIME = 0.3
+// After a bump the runner gets back to speed over about this time (s).
+const STUMBLE_TIME = 0.6
 
 /** A normally distributed random number, from uniform ones in [0, 1). */
 function gaussian(random: () => number): number {
@@ -103,9 +109,27 @@ export class Player {
   keysWithoutLock = false
   /** How much the runner veers off a straight line (1 = as set by VEER_TURN, 0 = not at all). */
   veer = 1
+  /**
+   * How much a bump into a trunk or a boulder turns the runner (1 = about GLANCE_TURN head-on,
+   * 0 = not at all). The defaults of this, `stumble` and `legs` were found by trying them out.
+   */
+  glance = 2
+  /** How much of the running speed a bump takes away at first (0 to 1). */
+  stumble = 0.6
+  /**
+   * Distance (m) over which a turn of the legs (veering, bumps) passes into the view; until
+   * then the runner runs off where they look, which is hard to notice. 0 turns the view at once.
+   */
+  legs = 40
   /** Uniform random numbers in [0, 1) for veering. */
   random: () => number = Math.random
   private turnRate = 0
+  // How far (rad, positive to the left) the legs run off the view, the turn from a bump still to
+  // make, the speed still lost to it, and whether the runner was against an obstacle last step.
+  private legYaw = 0
+  private glanceLeft = 0
+  private slowdown = 0
+  private touching = false
   /** Whether the runner stands on a deck rather than the ground. */
   onDeck = false
 
@@ -141,6 +165,10 @@ export class Player {
     this.verticalSpeed = 0
     this.eyeSpeed = 0
     this.turnRate = 0
+    this.legYaw = 0
+    this.glanceLeft = 0
+    this.slowdown = 0
+    this.touching = false
     this.onDeck = false
   }
 
@@ -167,12 +195,17 @@ export class Player {
     return (deg + 360) % 360
   }
 
+  /** Compass heading (degrees) the legs run in, which is off the view's by `legs`. */
+  get runHeading(): number {
+    return (this.heading - THREE.MathUtils.radToDeg(this.legYaw) + 360) % 360
+  }
+
   /**
-   * Turn the view a little for `move`, made on foot from the camera's position: the runner
+   * Turn the legs a little for `move`, made on foot from the camera's position: the runner
    * veers, more in thick forest and downhill across a slope. It goes by the distance run, not
    * the time, so it is the same at any time factor and nothing while standing still.
    */
-  private turnFor(move: THREE.Vector3) {
+  private veerFor(move: THREE.Vector3) {
     const dist = move.length()
     if (dist === 0 || this.veer === 0) return
     const pos = this.camera.position
@@ -184,8 +217,42 @@ export class Player {
     // A deck is level across.
     const side = this.onDeck ? 0 : this.heights.slopeAlong(pos.x, pos.z, -move.z, move.x)
     const pull = DOWNHILL_PULL * THREE.MathUtils.clamp(side, -VEER_SLOPE, VEER_SLOPE)
+    this.legYaw += (this.turnRate + pull) * dist * this.veer
+  }
+
+  /**
+   * A bump: the runner was moving by `move` and the obstacles pushed them by (px, pz). They
+   * glance off to the side they were pushed (either way when head-on), more the more head-on.
+   */
+  private bump(move: THREE.Vector3, px: number, pz: number) {
+    this.slowdown = this.stumble
+    if (this.glance === 0) return
+    const step = move.length()
+    const push = Math.hypot(px, pz)
+    if (step === 0 || push === 0) return
+    // The cosine between the push and straight back, and the push to the right of the move.
+    const headOn = THREE.MathUtils.clamp(-(px * move.x + pz * move.z) / (push * step), 0, 1)
+    const right = (px * -move.z + pz * move.x) / step
+    const sign = Math.abs(right) > 0.2 * push ? Math.sign(right) : this.random() < 0.5 ? -1 : 1
+    const size = this.glance * GLANCE_TURN * (0.25 + 0.75 * headOn) * Math.abs(gaussian(this.random))
+    // Turning right is a smaller yaw.
+    this.glanceLeft -= sign * size
+  }
+
+  /**
+   * Make what is left of a bump's turn over `dt` s, and pass the legs' turn into the view
+   * over `dist` m run.
+   */
+  private settle(dt: number, dist: number) {
+    const glance = this.glanceLeft * (1 - Math.exp(-dt / GLANCE_TIME))
+    this.glanceLeft -= glance
+    this.legYaw += glance
+    const share = this.legs > 0 ? 1 - Math.exp(-dist / this.legs) : 1
+    const turn = this.legYaw * share
+    if (turn === 0) return
+    this.legYaw -= turn
     const euler = new THREE.Euler(0, 0, 0, 'YXZ').setFromQuaternion(this.camera.quaternion)
-    euler.y += (this.turnRate + pull) * dist * this.veer
+    euler.y += turn
     this.camera.quaternion.setFromEuler(euler)
   }
 
@@ -217,9 +284,11 @@ export class Player {
       this.bodyY = pos.y
       this.speed = move.length() / Math.max(dt, 1e-6)
     } else {
-      let speed = JOG_SPEED
+      let speed = JOG_SPEED * (1 - this.slowdown)
+      this.slowdown *= Math.exp(-dt / STUMBLE_TIME)
       if (move.lengthSq() > 0) {
-        move.normalize()
+        // The legs may run off where the runner looks.
+        move.normalize().applyAxisAngle(this.camera.up, this.legYaw)
         // Uphill is slow, gentle downhill a little faster, steep downhill careful. Decks are
         // gentle; the ground under them is not what the runner climbs.
         const slope = this.onDeck ? 0 : this.heights.slopeAlong(pos.x, pos.z, move.x, move.z)
@@ -232,7 +301,11 @@ export class Player {
         let nx = pos.x + move.x
         let nz = pos.z + move.z
         if (this.surroundings) {
+          const [fx, fz] = [nx, nz]
           ;[nx, nz] = this.surroundings.collide(nx, nz, BODY_RADIUS, this.onDeck)
+          const touching = Math.hypot(nx - fx, nz - fz) > 1e-6
+          if (touching && !this.touching) this.bump(move, nx - fx, nz - fz)
+          this.touching = touching
           // Lakes and buildings stop you (speed 0); you can still step back out.
           const ahead = this.surroundings.speedAt(nx, nz, this.onDeck)
           if (ahead === 0 && (here ?? 1) > 0) {
@@ -241,10 +314,11 @@ export class Player {
           }
         }
         move.set(nx - pos.x, 0, nz - pos.z)
-        this.turnFor(move)
+        this.veerFor(move)
         pos.x = nx
         pos.z = nz
       }
+      this.settle(dt, move.length())
       this.speed = move.length() / Math.max(dt, 1e-6)
 
       const terrain = this.heights.heightAt(pos.x, pos.z)
