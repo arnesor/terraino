@@ -120,6 +120,15 @@ body {
   color: #6b6658;
 }
 
+.panel .version a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.panel .version a:hover {
+  text-decoration: underline;
+}
+
 .hud-info {
   position: fixed;
   top: 10px;
