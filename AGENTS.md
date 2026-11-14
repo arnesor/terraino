@@ -67,6 +67,10 @@ npm test --prefix viewer            # vitest
   map features, tracks, the map area, and fusion of buildings from several sources.
   `boundaries.py` makes distinct vegetation boundaries (416) visible in the trees
   (see `docs/adr/0004-map-wins-over-laser-at-vegetation-boundaries.md`).
+  `bridges.py` takes road bridge decks out of the tracks, from OSM and the gap in the DTM
+  (see `docs/adr/0006-bridges-from-osm-decks-from-the-dtm-gap.md`).
+  `alignment.py` checks the map's georeference against Kartverket's buildings
+  and suggests an `--offset`.
 - `build.py` hides the map format behind a `MapSource`:
   `_ocad_source` and `_image_source` both produce one,
   and the rest of the build (`_add_nature_and_buildings`) does not care which it came from.
@@ -115,8 +119,8 @@ the tests use `vitest.config.ts`, without that plugin.
 
 `main.ts` starts the app.
 `world.ts` loads chunks, and `terrain.ts`/`heightfield.ts` build the ground from them.
-`forest.ts`, `undergrowth.ts`, `grain.ts`, `buildings.ts`,
-`features.ts` and `tracks.ts` render content.
+`forest.ts`, `undergrowth.ts`, `grain.ts`, `buildings.ts`, `features.ts`,
+`tracks.ts` and `bridges.ts` render content.
 `player.ts` handles movement, and `hud.ts`/`mapview.ts` the UI and in-game map.
 `clock.ts` keeps game time, which runs at the time factor (E/Q) and measures the run;
 the game loop moves the player and the run on in its short steps.

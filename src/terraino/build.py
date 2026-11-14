@@ -14,7 +14,7 @@ import numpy.typing as npt
 from PIL import Image
 from rasterio.transform import Affine
 from rasterio.warp import Resampling
-from shapely import LineString, Point, Polygon
+from shapely import LineString, MultiPolygon, Point, Polygon
 from shapely.geometry import mapping
 from shapely.geometry.base import BaseGeometry
 
@@ -26,7 +26,19 @@ from terraino.ingest.image import ImageMap, read_image_map
 from terraino.ingest.lidar import ATTRIBUTION as LIDAR_ATTRIBUTION
 from terraino.ingest.lidar import coarse_canopy, filled_canopy, load_lidar
 from terraino.ingest.ocad import AREA_SYMBOL, TEXT_SYMBOL, export_ocad
+from terraino.process.alignment import align, worth_shifting
 from terraino.process.boundaries import STRETCH_M, VegetationBoundaries
+from terraino.process.bridges import (
+    Bridge,
+    close_underpasses,
+    cut_tracks,
+    deck_mask,
+    find_decks,
+    open_underpasses,
+    osm_bridges,
+    place_pillars,
+    suspected_bridges,
+)
 from terraino.process.buildings import collect_footprints, measure_buildings
 from terraino.process.classify import classify_map
 from terraino.process.features import (
@@ -65,7 +77,7 @@ from terraino.process.symbols import (
     detect_symbol_set,
     is_helper_symbol,
 )
-from terraino.process.tracks import collect_tracks
+from terraino.process.tracks import Track, collect_tracks
 from terraino.process.trees import (
     TreeTops,
     canopy_height,
@@ -391,6 +403,85 @@ def build_world(map_path: Path, out_dir: Path, options: BuildOptions) -> Path:
     return write_world(out_dir, world)
 
 
+def _report_alignment(
+    map_buildings: Sequence[dict[str, Any]],
+    symbols: SymbolSet,
+    topo: Sequence[topo_buildings.TopoBuilding],
+    osm_features: Sequence[osm.OsmFeature],
+    options: BuildOptions,
+) -> None:
+    """Log how far the map's buildings lie from Kartverket's (or OSM's), and the fix."""
+    outlines = []
+    for feature in map_buildings:
+        rule = symbols.rule(feature["properties"]["sym"])
+        if rule is None or rule.ground is not Ground.BUILDING:
+            continue
+        geometry = to_geometry(feature.get("geometry"))
+        if isinstance(geometry, Polygon | MultiPolygon):
+            outlines.append(geometry)
+    if topo:
+        reference: list[BaseGeometry] = [b.footprint for b in topo]
+        source = "Kartverket's"
+    else:
+        reference = [
+            f.geometry
+            for f in osm_features
+            if "building" in f.tags and isinstance(f.geometry, Polygon)
+        ]
+        source = "OpenStreetMap's"
+    found = align(outlines, reference)
+    if found is None:
+        log.info("Too few buildings to check where the map lies against %s", source)
+        return
+    dx, dy = found.shift
+    total = (options.offset[0] + dx, options.offset[1] + dy)
+    message = (
+        "The map's buildings lie %.1f m from %s on average (%d matched); "
+        "shifting the map %.1f m %s and %.1f m %s (--offset %.1f %.1f) "
+        "would bring them to %.1f m"
+    )
+    args = (
+        found.before,
+        source,
+        found.matched,
+        abs(dx),
+        "east" if dx >= 0 else "west",
+        abs(dy),
+        "north" if dy >= 0 else "south",
+        *total,
+        found.after,
+    )
+    if worth_shifting(found):
+        log.warning(message, *args)
+    else:
+        log.info(message, *args)
+
+
+def _find_bridges(
+    source: MapSource,
+    osm_features: Sequence[osm.OsmFeature],
+    dtm: npt.NDArray[np.float32],
+    dom: npt.NDArray[np.float32],
+) -> tuple[list[Track], list[Bridge]]:
+    """Collect the roads and paths, and take the road bridges' decks out of them."""
+    extent = source.extent
+    tracks = collect_tracks(source.omap, source.symbols, osm_features, source.map_area)
+    tagged = osm_bridges(osm_features)
+    decks = find_decks(tracks, tagged, dtm, dom, extent, source.map_area)
+    tracks, bridges = cut_tracks(tracks, decks)
+    for x, y, dip in suspected_bridges(
+        tracks, bridges, [b.line for b in tagged], dtm, dom, extent, source.map_area
+    ):
+        log.warning(
+            "The ground drops %.1f m under the road at E %.0f N %.0f as under a "
+            "bridge, but OpenStreetMap has no bridge there; leaving the road on the ground",
+            dip,
+            x,
+            y,
+        )
+    return tracks, bridges
+
+
 def _vegetation_boundaries(
     features: Features | None, extent: Extent, shape: tuple[int, ...]
 ) -> VegetationBoundaries | None:
@@ -416,7 +507,6 @@ def _add_nature_and_buildings(
     cache = options.cache_dir
     dom = kartverket.fetch_height_model("dom", source.epsg, extent, cache)
     chm = canopy_height(dom, dtm)
-    del dom
     layers = source.layers
 
     lidar = None
@@ -435,11 +525,15 @@ def _add_nature_and_buildings(
         apply_land_cover(layers, land_cover)
         world.attribution = [*world.attribution, ar5.ATTRIBUTION]
     osm_features = osm.fetch_osm(source.epsg, extent, cache)
+    # Before the terrain is shaped, while the surface model is at hand.
+    tracks, bridges = _find_bridges(source, osm_features, dtm, dom)
+    del dom
     map_buildings = source.omap + _as_map_buildings(source.buildings, source.symbols)
     topo = topo_buildings.fetch_topo_buildings(source.epsg, extent, cache)
     if topo:
         world.attribution = [*world.attribution, topo_buildings.ATTRIBUTION]
     footprints = collect_footprints(osm_features, map_buildings, source.symbols, topo)
+    _report_alignment(map_buildings, source.symbols, topo, osm_features, options)
     log.info(
         "Building outlines: %s",
         ", ".join(
@@ -472,9 +566,27 @@ def _add_nature_and_buildings(
         ", ".join(f"{n} {kind}" for kind, n in roofs.most_common()),
     )
     world.buildings = buildings
-    world.tracks = collect_tracks(
-        source.omap, source.symbols, osm_features, source.map_area
-    )
+    tracks, under = close_underpasses(tracks, bridges)
+    if source.omap:
+        bridges = open_underpasses(
+            layers, source.omap, source.symbols, bridges, under, extent
+        )
+    bridges = place_pillars(bridges, tracks, layers, dtm, extent)
+    if bridges:
+        log.info(
+            "Built %d bridges (%d pillars); joined %d roads under them",
+            len(bridges),
+            sum(len(b.pillars) for b in bridges),
+            len(under),
+        )
+        # The surface model's deck is not vegetation.
+        decks = deck_mask(bridges, extent, chm.shape)
+        chm[decks] = 0
+        if surface is not None:
+            fine = surface.shape[0] // chm.shape[0]
+            surface[decks.repeat(fine, axis=0).repeat(fine, axis=1)] = 0
+    world.tracks = tracks
+    world.bridges = bridges
     log.info("Drew %d roads and paths", len(world.tracks))
     if osm_features:
         world.attribution = [*world.attribution, osm.ATTRIBUTION]

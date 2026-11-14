@@ -73,11 +73,13 @@ export interface Manifest {
   buildings?: { path: string; count: number }
   features?: { path: string; points: number; lines: number; cliffs: number }
   tracks?: { path: string; count: number }
+  /** Road bridge decks (format 8); the tracks stop at their ends. */
+  bridges?: { path: string; count: number }
 }
 
 // Format 5 added the grain ground class; format 4 worlds have none and still work.
 // Format 6 added the spawn heading; older worlds open looking north.
-export const SUPPORTED_FORMATS = [4, 5, 6, 7]
+export const SUPPORTED_FORMATS = [4, 5, 6, 7, 8]
 
 export class World {
   readonly base: string

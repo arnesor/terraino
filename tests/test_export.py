@@ -11,6 +11,7 @@ from shapely import Polygon
 from terraino.export import (
     CHUNK,
     COARSE_STEP,
+    FORMAT_VERSION,
     TREE_DTYPE,
     HeightEncoding,
     WorldData,
@@ -225,7 +226,7 @@ def test_coarse_chunks_hold_every_fourth_sample(tmp_path: Path) -> None:
     out = tmp_path / "world"
     manifest = json.loads(write_world(out, data).read_text())
     h = manifest["height"]
-    assert manifest["format"] == 7
+    assert manifest["format"] == FORMAT_VERSION
     assert manifest["spawn"] == [50.0, 100.0]
     assert manifest["spawnHeading"] == 135.0
     assert h["coarse"] == {"step": COARSE_STEP, "chunks": [1]}

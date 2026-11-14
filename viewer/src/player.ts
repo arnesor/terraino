@@ -8,6 +8,12 @@ export const JOG_SPEED = 3.2 // m/s, a steady orienteering pace
 const FLY_SPEED = 40
 const GRAVITY = 9.81
 const BODY_RADIUS = 0.3
+// A runner steps onto a deck whose surface is at most this far (m) above their feet, as at
+// its ends; under a higher deck they stay on the ground and pass beneath it.
+const STEP_UP = 0.5
+// Under a deck this high (m) above the ground or less (slab and runner) there is no room to
+// pass: the runner is on it, as on a footbridge over a stream.
+const DECK_HEADROOM = 2.6
 const DRAG_LOOK_SPEED = 0.004 // radians per pixel when looking by dragging
 // The eye follows the ground under a footprint, as legs absorb bumps: the ground under the
 // player and 8 points this far (m) around it, each cut off this far (m) above or below the
@@ -53,12 +59,24 @@ function spring(y: number, v: number, target: number, dt: number, tau: number): 
 
 /** What the ground and the forest allow at a position. */
 export interface Surroundings {
-  /** Running speed factor (1 = easy forest, 0 = impassable), or null if unknown. */
-  speedAt(x: number, z: number): number | null
-  /** Push a position of a body with `radius` out of obstacles. */
-  collide(x: number, z: number, radius: number): [number, number]
+  /**
+   * Running speed factor (1 = easy forest, 0 = impassable), or null if unknown; `onDeck`
+   * when the runner is on a deck rather than the ground below it.
+   */
+  speedAt(x: number, z: number, onDeck?: boolean): number | null
+  /** Push a position of a body with `radius` out of obstacles (on a deck: its rails). */
+  collide(x: number, z: number, radius: number, onDeck?: boolean): [number, number]
   /** Height of something to walk on above the terrain (a bridge deck), or null. */
   deckAt?(x: number, z: number): number | null
+}
+
+/**
+ * True if a runner with feet at `feet` stands on a deck at `deck` over ground at `terrain`:
+ * they step up onto it at its ends, and pass under it elsewhere where there is room.
+ */
+export function standsOnDeck(deck: number | null, terrain: number, feet: number): boolean {
+  if (deck === null || deck < terrain) return false
+  return feet >= deck - STEP_UP || deck - terrain < DECK_HEADROOM
 }
 
 /** First-person walking (or flying) on the terrain, with mouse look. */
@@ -88,6 +106,8 @@ export class Player {
   /** Uniform random numbers in [0, 1) for veering. */
   random: () => number = Math.random
   private turnRate = 0
+  /** Whether the runner stands on a deck rather than the ground. */
+  onDeck = false
 
   constructor(camera: THREE.PerspectiveCamera, dom: HTMLElement, heights: HeightField, bounds: [number, number]) {
     this.camera = camera
@@ -121,6 +141,7 @@ export class Player {
     this.verticalSpeed = 0
     this.eyeSpeed = 0
     this.turnRate = 0
+    this.onDeck = false
   }
 
   toggleFlying() {
@@ -160,7 +181,8 @@ export class Player {
     const spread = VEER_TURN / Math.max(this.runnability, VEER_RUNNABILITY)
     this.turnRate = this.turnRate * decay + spread * Math.sqrt(1 - decay * decay) * gaussian(this.random)
     // The rise of the ground to the right; turning left (a larger yaw) is downhill then.
-    const side = this.heights.slopeAlong(pos.x, pos.z, -move.z, move.x)
+    // A deck is level across.
+    const side = this.onDeck ? 0 : this.heights.slopeAlong(pos.x, pos.z, -move.z, move.x)
     const pull = DOWNHILL_PULL * THREE.MathUtils.clamp(side, -VEER_SLOPE, VEER_SLOPE)
     const euler = new THREE.Euler(0, 0, 0, 'YXZ').setFromQuaternion(this.camera.quaternion)
     euler.y += (this.turnRate + pull) * dist * this.veer
@@ -198,20 +220,21 @@ export class Player {
       let speed = JOG_SPEED
       if (move.lengthSq() > 0) {
         move.normalize()
-        // Uphill is slow, gentle downhill a little faster, steep downhill careful.
-        const slope = this.heights.slopeAlong(pos.x, pos.z, move.x, move.z)
+        // Uphill is slow, gentle downhill a little faster, steep downhill careful. Decks are
+        // gentle; the ground under them is not what the runner climbs.
+        const slope = this.onDeck ? 0 : this.heights.slopeAlong(pos.x, pos.z, move.x, move.z)
         const factor = slope > 0 ? 1 / (1 + slope * 4) : slope > -0.25 ? 1 - slope * 0.4 : 1.1 + (slope + 0.25) * 1.5
         speed *= THREE.MathUtils.clamp(factor, 0.25, 1.15)
-        const here = this.surroundings?.speedAt(pos.x, pos.z) ?? null
+        const here = this.surroundings?.speedAt(pos.x, pos.z, this.onDeck) ?? null
         this.runnability = here ?? 1
         speed *= Math.max(this.runnability, 0.15)
         move.multiplyScalar(speed * dt)
         let nx = pos.x + move.x
         let nz = pos.z + move.z
         if (this.surroundings) {
-          ;[nx, nz] = this.surroundings.collide(nx, nz, BODY_RADIUS)
+          ;[nx, nz] = this.surroundings.collide(nx, nz, BODY_RADIUS, this.onDeck)
           // Lakes and buildings stop you (speed 0); you can still step back out.
-          const ahead = this.surroundings.speedAt(nx, nz)
+          const ahead = this.surroundings.speedAt(nx, nz, this.onDeck)
           if (ahead === 0 && (here ?? 1) > 0) {
             nx = pos.x
             nz = pos.z
@@ -226,8 +249,9 @@ export class Player {
 
       const terrain = this.heights.heightAt(pos.x, pos.z)
       const deck = this.surroundings?.deckAt?.(pos.x, pos.z) ?? null
-      const onDeck = deck !== null && deck >= terrain
-      const ground = (onDeck ? deck : terrain) + EYE_HEIGHT
+      const onDeck = standsOnDeck(deck, terrain, this.bodyY - EYE_HEIGHT)
+      this.onDeck = onDeck
+      const ground = (onDeck ? deck! : terrain) + EYE_HEIGHT
       this.verticalSpeed -= GRAVITY * dt
       this.bodyY += this.verticalSpeed * dt
       // Follow the ground when walking downhill instead of falling in small hops; fall

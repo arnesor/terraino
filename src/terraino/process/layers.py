@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
@@ -332,6 +333,43 @@ def _speed(shapes: Sequence[_Shape], extent: Extent) -> npt.NDArray[np.float32]:
         cells = (top >= 0) & (orders[top] >= below_order)
         speed[cells] = np.minimum(speed[cells], speeds[top[cells]])
     return speed
+
+
+def repaint_speed(
+    layers: GroundLayers,
+    features: Iterable[Mapping[str, Any]],
+    symbols: SymbolSet,
+    extent: Extent,
+    area: BaseGeometry,
+) -> None:
+    """Paint the running speed again inside ``area`` (and the map), from ``features`` only.
+
+    Args:
+        layers: Ground layers over ``extent``; their speed is changed in place.
+        features: The map objects to paint, as for rasterize_map.
+        symbols: Meaning of the symbols.
+        extent: Extent of ``layers``.
+        area: Where to paint.
+    """
+    x0, y0, x1, y1 = area.bounds
+    # A window on the layers' own 1 m grid around the area.
+    window = Extent(
+        x0=extent.x0 + math.floor(x0 - extent.x0) - 1,
+        y0=extent.y1 - math.ceil(extent.y1 - y0) - 1,
+        x1=extent.x0 + math.ceil(x1 - extent.x0) + 1,
+        y1=extent.y1 - math.floor(extent.y1 - y1) + 1,
+    ).intersection(extent)
+    if window is None:
+        return
+    shapes, _, _ = _shapes(features, symbols)
+    speed = _speed(shapes, window)
+    inside = _paint([(area, 1)], window, 0, np.uint8).astype(bool)
+    r0 = round(extent.y1 - window.y1)
+    c0 = round(window.x0 - extent.x0)
+    rows, cols = inside.shape
+    target = layers.speed[r0 : r0 + rows, c0 : c0 + cols]
+    inside &= layers.in_map[r0 : r0 + rows, c0 : c0 + cols]
+    target[inside] = speed[inside]
 
 
 def rasterize_map(

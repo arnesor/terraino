@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import './style.css'
 import { loadBuildings } from './buildings'
+import { Bridges } from './bridges'
 import { GameClock } from './clock'
 import { beep, type Control, type Course, CourseRun, loadCourse } from './course'
 import { Environment } from './environment'
@@ -250,7 +251,12 @@ async function main() {
 
   setStatus(t('buildingWorld'))
   await pause()
-  const tracks = await Tracks.load(world, heights, gfx)
+  const bridges = await Bridges.load(world)
+  if (bridges) {
+    bridges.buildMeshes(heights, gfx)
+    scene.add(bridges.group)
+  }
+  const tracks = await Tracks.load(world, heights, gfx, bridges)
   tracks?.setQuality(QUALITY[environment.quality])
   if (tracks) scene.add(tracks.group)
   const treeInfo = world.manifest.trees
@@ -281,18 +287,24 @@ async function main() {
   const player = new Player(camera, renderer.domElement, heights, world.sceneSize)
   const n = heights.chunk
   player.surroundings = {
-    speedAt: (x, z) => {
+    speedAt: (x, z, onDeck) => {
+      // On a road bridge the road's speed, whatever is under it.
+      const deck = onDeck ? (bridges?.speedAt(x, z) ?? null) : null
+      if (deck !== null) return deck
       const cx = Math.floor(x / n)
       const cy = Math.floor(z / n)
       return layers?.get(cx, cy)?.sample(x - cx * n, z - cy * n).speed ?? null
     },
-    collide: (x, z, r) => {
+    collide: (x, z, r, onDeck) => {
+      // On a road bridge only its rails are in the way.
+      if (onDeck && bridges?.heightAt(x, z) != null) return bridges.collideOnDeck(x, z, r)
       let p: [number, number] = [x, z]
       if (forest) p = forest.collide(p[0], p[1], r)
       if (features) p = features.collide(p[0], p[1], r)
+      if (bridges) p = onDeck ? bridges.collideOnDeck(p[0], p[1], r) : bridges.collideBelow(p[0], p[1], r)
       return p
     },
-    deckAt: (x, z) => tracks?.deckAt(x, z) ?? null,
+    deckAt: (x, z) => bridges?.heightAt(x, z) ?? tracks?.deckAt(x, z) ?? null,
   }
   const [sx, sz] = world.toScene(...world.manifest.spawn)
   player.placeAt(sx, sz)
