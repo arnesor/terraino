@@ -23,8 +23,8 @@ Results are still kept by course, not by race or player.
 
 ## Considered Options
 
-- **A small server with the JSON files on disk** (a VPS): the endpoint unchanged,
-  but a machine to keep updated and backed up.
+- **A small server with the JSON files on disk**
+  (a VPS): the endpoint unchanged, but a machine to keep updated and backed up.
 - **Workers KV**: simple, but a save reads the list, adds to it and writes it back,
   and KV's eventual consistency could lose a result when two runners finish together.
 - **Supabase or another hosted database**: also gives user accounts,

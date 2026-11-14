@@ -32,7 +32,7 @@ except those within 8 m of the boundary, which run along it.
 
 ## Considered Options
 
-- **Trust the data and only log boundaries without contrast**:
-  true to the laser, but the runner cannot see boundaries the map relies on.
+- **Trust the data and only log boundaries without contrast**: true to the laser,
+  but the runner cannot see boundaries the map relies on.
 - **Invent a species change**: does not touch the laser heights,
   but puts species in the forest that SR16 says are not there.

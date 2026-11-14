@@ -76,8 +76,14 @@ _Avoid_: race mode, ranked mode
 **Thumb**: The runner's own mark on the map of where they think they are,
 as an orienteer keeps a thumb on the map.
 It moves to each control as it is punched; the game never moves it to the runner's position.
-There is a thumb only in competition mode; otherwise the map can show the runner's position.
+There is a thumb only in competition mode;
+otherwise the map can show the runner's position with the **position arrow**.
 _Avoid_: cursor, marker, pin, position
+
+**Position arrow**: The red arrow on the map that shows where the runner is and which way they look,
+with its tip on the runner's position, so it hides none of the map ahead.
+There is no position arrow in competition mode.
+_Avoid_: position marker, cursor, you-are-here dot
 
 ### Vegetation
 
