@@ -50,6 +50,8 @@ function newId(): string {
 export class ResultsView {
   /** Called when the Finished panel opens or closes; the game pauses while it is open. */
   onFinishPanel: (open: boolean) => void = () => {}
+  /** Runs made with test settings (veering in the address) are not saved. */
+  testSettings = false
   private readonly map: string
   private readonly run: CourseRun
   private readonly hud: Hud
@@ -116,8 +118,8 @@ export class ResultsView {
     this.panel.replaceChildren()
     el('h2', '', this.panel, t('finishTitle', { time: formatTime(runTime(result)) }))
     const buttons = () => el('div', 'finish-buttons', this.panel)
-    if (!this.run.competitionRun) {
-      el('p', 'finish-note', this.panel, t('notSaved'))
+    if (!this.run.competitionRun || this.testSettings) {
+      el('p', 'finish-note', this.panel, t(this.testSettings ? 'notSavedTrial' : 'notSaved'))
       const row = buttons()
       this.button(row, t('showResults'), true, () => this.closeFinish(result))
       this.button(row, t('close'), false, () => this.closeFinish(null, result))

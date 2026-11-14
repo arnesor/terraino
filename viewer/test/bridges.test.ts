@@ -83,6 +83,9 @@ async function setup() {
   const player = new Player(camera, dom, heights, [CHUNK, CHUNK])
   player.keysWithoutLock = true
   player.veer = 0
+  player.glance = 0
+  player.stumble = 0
+  player.legs = 0
   const bridges = new Bridges([DECK])
   const speeds: number[] = []
   player.surroundings = {
