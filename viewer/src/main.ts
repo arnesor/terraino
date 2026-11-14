@@ -38,6 +38,7 @@ const raceSelect = document.getElementById('race-select') as HTMLSelectElement
 const courseFileButton = document.getElementById('course-file-button') as HTMLButtonElement
 const resultsButton = document.getElementById('results-button') as HTMLButtonElement
 const courseFile = document.getElementById('course-file') as HTMLInputElement
+document.getElementById('version')!.textContent = `v${__APP_VERSION__}`
 const courseLabel = document.getElementById('course-label')!
 const courseSelect = document.getElementById('course-select') as HTMLSelectElement
 

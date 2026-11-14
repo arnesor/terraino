@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -68,8 +69,31 @@ function worldsPlugin(): Plugin {
   }
 }
 
+/**
+ * The version shown on the start screen: `git describe` against the release tags, so a build
+ * between releases says how far past the last one it is (`0.8.0-2-g28aae4d`, `-dirty` with
+ * local changes). Without git or the tags, the version in pyproject.toml, which the release
+ * workflow bumps; viewer/package.json is not kept up to date.
+ */
+function appVersion(): string {
+  const root = fileURLToPath(new URL('..', import.meta.url))
+  try {
+    // A fixed command without user input.
+    const described = execFileSync('git', ['describe', '--tags', '--match', 'v*', '--dirty'], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    return described.trim().replace(/^v/, '')
+  } catch {
+    const pyproject = fs.readFileSync(path.join(root, 'pyproject.toml'), 'utf8')
+    return /^version\s*=\s*"([^"]+)"/m.exec(pyproject)?.[1] ?? 'unknown'
+  }
+}
+
 // The Cloudflare plugin runs the results Worker (worker/index.ts) with a local D1 database.
 export default defineConfig({
   plugins: [worldsPlugin(), cloudflare()],
   server: { port: 5173 },
+  define: { __APP_VERSION__: JSON.stringify(appVersion()) },
 })
