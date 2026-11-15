@@ -85,7 +85,6 @@ async function setup() {
   player.veer = 0
   player.glance = 0
   player.stumble = 0
-  player.legs = 0
   const bridges = new Bridges([DECK])
   const speeds: number[] = []
   player.surroundings = {
