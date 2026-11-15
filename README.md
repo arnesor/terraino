@@ -83,6 +83,14 @@ npm ci --prefix viewer
 uv run pre-commit install
 ```
 
+npm 11 runs a dependency's install scripts only if the project allows them.
+`viewer/package.json` allows them for `esbuild` and `workerd` (`allowScripts`),
+whose scripts check that the program for your system is installed.
+If `npm ci` lists another package whose scripts it skipped,
+review it with `npm install-scripts ls` in that folder,
+then allow it with `npm install-scripts approve --no-allow-scripts-pin <package>`
+or block it with `npm install-scripts deny <package>`, and commit `package.json`.
+
 ## Usage
 
 Build a world from a map, then start the viewer:
