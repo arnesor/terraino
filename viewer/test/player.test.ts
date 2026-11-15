@@ -31,7 +31,6 @@ async function setup(f: (col: number, row: number) => number) {
   player.veer = 0
   player.glance = 0
   player.stumble = 0
-  player.legs = 0
   const key = (type: 'keydown' | 'keyup', code: string) => listeners.get(type)?.forEach(l => l({ code }))
   return { player, camera, heights, key }
 }
@@ -376,7 +375,7 @@ describe('veering off a straight line', () => {
   })
 })
 
-describe('bumps and legs', () => {
+describe('bumps', () => {
   /** Push a body of radius `r` out of a trunk of radius 0.2 at (tx, tz). */
   const trunk =
     (tx: number, tz: number) =>
@@ -387,7 +386,7 @@ describe('bumps and legs', () => {
     }
 
   /** Run east for `seconds` from (20, 128) past a trunk at (25, tz). */
-  async function past(tz: number, settings: Partial<Pick<Player, 'glance' | 'stumble' | 'legs'>>, seconds = 3) {
+  async function past(tz: number, settings: Partial<Pick<Player, 'glance' | 'stumble'>>, seconds = 3) {
     const { player, camera, heights, key } = await setup(() => 100)
     Object.assign(player, settings)
     player.surroundings = { speedAt: () => 1, collide: trunk(25, tz) }
@@ -424,40 +423,25 @@ describe('bumps and legs', () => {
     expect(speeds.at(-1)).toBeCloseTo(speeds[0]!, 1)
   })
 
-  it('veers the legs, not the view, when the view follows slowly', async () => {
+  it('runs where it looks while veering and after a bump', async () => {
     const { player, camera, key } = await setup(() => 100)
     player.veer = 1
-    player.legs = 1e9
+    player.glance = 1
     player.random = seeded(3)
-    player.surroundings = { speedAt: () => 1, collide: (x, z) => [x, z] }
+    player.surroundings = { speedAt: () => 1, collide: trunk(25, 127.8) }
     player.placeAt(20, 128)
     faceEast(camera)
     key('keydown', 'KeyW')
     const p = camera.position
-    for (let i = 0; Math.hypot(p.x - 20, p.z - 128) < 200 && i < 1e5; i++) player.update(MAX_STEP)
-    expect(player.heading).toBeCloseTo(90, 3)
-    // Only the legs turned, and took the runner off the line (the same draws as with legs = 0).
-    expect(Math.abs(player.runHeading - 90)).toBeGreaterThan(0.5)
-    expect(Math.abs(128 - p.z)).toBeGreaterThan(5)
-  })
-
-  it("passes the legs' turn into the view over the distance given", async () => {
-    // Downhill to the north of a runner going east, without the random veering (as above):
-    // the legs turn left 0.00088 rad/m, which passes into the view over 50 m, so the legs run
-    // 0.00088 × 50 = 2.5° off the view once settled. Over 200 m they turn 10° in all.
-    const { player, camera, key } = await setup((_, row) => 100 + 0.2 * row)
-    player.veer = 1
-    player.legs = 50
-    player.random = () => 0.25
-    player.surroundings = { speedAt: () => 1, collide: (x, z) => [x, z] }
-    player.placeAt(20, 128)
-    faceEast(camera)
-    key('keydown', 'KeyW')
-    const p = camera.position
-    for (let i = 0; Math.hypot(p.x - 20, p.z - 128) < 200 && i < 1e5; i++) player.update(MAX_STEP)
-    expect(90 - player.runHeading).toBeGreaterThan(9.5)
-    expect(90 - player.runHeading).toBeLessThan(10.5)
-    expect(player.heading - player.runHeading).toBeGreaterThan(2.3)
-    expect(player.heading - player.runHeading).toBeLessThan(2.7)
+    for (let i = 0; Math.hypot(p.x - 20, p.z - 128) < 100 && i < 1e5; i++) {
+      const [x, z, heading] = [p.x, p.z, player.heading]
+      player.update(MAX_STEP)
+      // Away from the trunk, each step goes the way the runner looked at its start.
+      if (Math.hypot(p.x - 25, p.z - 127.8) < 1) continue
+      const step = (THREE.MathUtils.radToDeg(Math.atan2(p.x - x, -(p.z - z))) + 360) % 360
+      expect(Math.abs(((step - heading + 540) % 360) - 180)).toBeLessThan(1e-6)
+    }
+    // It did veer.
+    expect(Math.abs(player.heading - 90)).toBeGreaterThan(0.5)
   })
 })

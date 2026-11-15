@@ -102,13 +102,12 @@ function applyViewParams(player: Player, world: World) {
 /**
  * Test settings for how runners veer, from the address, in place of the Player's defaults:
  * `veer` (scale of the random veering and the downhill pull), `glance` (turn from a bump,
- * 1 ≈ 10° head-on), `stumble` (speed lost in a bump, 0 to 1) and `legs` (metres over which a
- * turn of the legs passes into the view). Returns whether any was given.
+ * 1 ≈ 10° head-on) and `stumble` (speed lost in a bump, 0 to 1). Returns whether any was given.
  */
 function applyVeerParams(player: Player): boolean {
   const params = new URLSearchParams(location.search)
   let any = false
-  for (const name of ['veer', 'glance', 'stumble', 'legs'] as const) {
+  for (const name of ['veer', 'glance', 'stumble'] as const) {
     const value = Number(params.get(name) ?? Number.NaN)
     if (!Number.isFinite(value) || value < 0) continue
     player[name] = name === 'stumble' ? Math.min(value, 1) : value
