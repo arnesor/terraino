@@ -19,7 +19,7 @@ from shapely.geometry import mapping
 from shapely.geometry.base import BaseGeometry
 
 from terraino.export import MapKind, WorldData, write_world
-from terraino.fetch import ar5, kartverket, matrikkel, nibio, osm, topo_buildings
+from terraino.fetch import ar5, kartverket, matrikkel, nibio, nvdb, osm, topo_buildings
 from terraino.fetch.masts import fetch_masts
 from terraino.fetch.topomap import ATTRIBUTION as TOPO_MAP_ATTRIBUTION
 from terraino.fetch.topomap import fetch_topo_map
@@ -543,13 +543,16 @@ def _report_alignment(
 def _find_bridges(
     source: MapSource,
     osm_features: Sequence[osm.OsmFeature],
+    nvdb_lines: Sequence[nvdb.NvdbLine],
     dtm: npt.NDArray[np.float32],
     dom: npt.NDArray[np.float32],
 ) -> tuple[list[Track], list[Bridge]]:
     """Collect the roads and paths, and take the road bridges' decks out of them."""
     extent = source.extent
     mapped = source.mapped_area
-    tracks = collect_tracks(source.omap, source.symbols, osm_features, mapped)
+    tracks = collect_tracks(
+        source.omap, source.symbols, osm_features, mapped, nvdb_lines
+    )
     tagged = osm_bridges(osm_features)
     decks = find_decks(tracks, tagged, dtm, dom, extent, mapped)
     tracks, bridges = cut_tracks(tracks, decks)
@@ -609,8 +612,12 @@ def _add_nature_and_buildings(
         apply_land_cover(layers, land_cover)
         world.attribution = [*world.attribution, ar5.ATTRIBUTION]
     osm_features = osm.fetch_osm(source.epsg, extent, cache)
+    nvdb_lines = nvdb.fetch_paths(source.epsg, extent, cache)
+    mapped = source.mapped_area
+    if any(mapped is None or not mapped.covers(n.line) for n in nvdb_lines):
+        world.attribution = [*world.attribution, nvdb.ATTRIBUTION]
     # Before the terrain is shaped, while the surface model is at hand.
-    tracks, bridges = _find_bridges(source, osm_features, dtm, dom)
+    tracks, bridges = _find_bridges(source, osm_features, nvdb_lines, dtm, dom)
     del dom
     map_buildings = source.omap + _as_map_buildings(source.buildings, source.symbols)
     topo = topo_buildings.fetch_topo_buildings(source.epsg, extent, cache)
@@ -626,7 +633,8 @@ def _add_nature_and_buildings(
         ),
     )
     topo_by_id = {f"kartverket/{i}": b for i, b in enumerate(topo)}
-    apply_osm(layers, osm_features, [fp[0] for fp in footprints], extent)
+    roads = [(LineString(t.coords), t.width) for t in tracks]
+    apply_osm(layers, osm_features, roads, [fp[0] for fp in footprints], extent)
     registry = matrikkel.fetch_building_points(source.epsg, extent, cache)
     if registry:
         world.attribution = [*world.attribution, matrikkel.ATTRIBUTION]

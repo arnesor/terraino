@@ -129,24 +129,21 @@ def test_land_cover_grain_has_verges_and_some_grass_fields() -> None:
     assert layers.speed[50, 10 * grain] == pytest.approx(0.6)
 
 
-def test_osm_roads_through_grain_get_a_verge() -> None:
+def test_roads_through_grain_get_a_verge() -> None:
     layers = empty_layers(np.zeros(EXTENT.raster_shape(1), dtype=bool))
     layers.ground[:] = Ground.GRAIN
-    road = OsmFeature(LineString([(0, 50), (100, 50)]), {"highway": "track"}, "way/1")
-    apply_osm(layers, [road], [], EXTENT)
+    apply_osm(layers, [], [(LineString([(0, 50), (100, 50)]), 3.0)], [], EXTENT)
     assert layers.ground[cell(50, 52.5)] == Ground.FIELD
     assert layers.ground[cell(50, 60)] == Ground.GRAIN
 
 
-def test_osm_roads_outside_map_and_buildings_everywhere() -> None:
+def test_roads_outside_map_and_buildings_everywhere() -> None:
     in_map = np.zeros(EXTENT.raster_shape(1), dtype=bool)
     in_map[:, :50] = True
     layers = empty_layers(in_map)
-    road = OsmFeature(
-        LineString([(0, 50), (100, 50)]), {"highway": "tertiary"}, "way/1"
-    )
+    road = LineString([(0, 50), (100, 50)])
     houses = [box(10, 10, 20, 20), box(70, 10, 80, 20)]
-    apply_osm(layers, [road], houses, EXTENT)
+    apply_osm(layers, [], [(road, 5.5)], houses, EXTENT)
     assert layers.ground[cell(25, 50)] == Ground.UNKNOWN  # inside the map: map decides
     assert layers.ground[cell(75, 50)] == Ground.UNKNOWN  # drawn as a strip
     assert layers.clear[cell(75, 50)]
@@ -154,6 +151,15 @@ def test_osm_roads_outside_map_and_buildings_everywhere() -> None:
         assert layers.ground[cell(x, 15)] == Ground.BUILDING
         assert layers.speed[cell(x, 15)] == 0
         assert layers.clear[cell(x - 5.5, 15)]  # clearance around the building
+
+
+def test_trees_stay_along_osm_ways_not_drawn() -> None:
+    layers = empty_layers(np.zeros(EXTENT.raster_shape(1), dtype=bool))
+    # NVDB draws this path a few metres away, so it is not among the roads drawn.
+    path = OsmFeature(LineString([(0, 50), (100, 50)]), {"highway": "path"}, "way/1")
+    apply_osm(layers, [path], [(LineString([(0, 54), (100, 54)]), 1.2)], [], EXTENT)
+    assert layers.clear[cell(50, 54)]
+    assert not layers.clear[cell(50, 50)]
 
 
 def test_building_kind() -> None:

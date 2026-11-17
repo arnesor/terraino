@@ -56,6 +56,8 @@ Try the game at <https://terraino.arnesor.workers.dev>.
   Cliffs are near-vertical rock faces, at least 1 m high, carved into the terrain.
 - Roads and paths drawn as their own soft-edged strips on the terrain,
   with distinct junctions joined and nothing growing on them.
+  Outside the map, paths and vehicle tracks come from NVDB where it has them
+  (the same lines as on Kartverket's topographic map), and from OSM elsewhere.
   Footpaths show roots and stones; footbridges and log crossings carry them over streams.
 - Browser viewer (Three.js): walk, run and fly, with shadows, runnability, a compass,
   the orienteering map with your position, and courses with timing.
@@ -539,6 +541,7 @@ and directions is in `viewer/src/descriptions/codes.ts`.
 | Tree species and tree count   | NIBIO, SR16 skogressurskart (WMS or GeoTIFF)   | NLOD 2.0    |
 | Land cover outside the map    | NIBIO, AR5 arealressurskart (WMS)              | NLOD 2.0    |
 | Buildings, roads, water       | OpenStreetMap (Overpass API)                   | ODbL        |
+| Paths and vehicle tracks      | Statens vegvesen, NVDB (API Les v4)            | NLOD        |
 | Laser point clouds (optional) | Kartverket, hoydedata.no (downloaded by hand)  | CC BY 4.0   |
 | Building types                | Kartverket, Matrikkelen bygningspunkt (WFS)    | CC BY 4.0   |
 | Building outlines, roof lines | Kartverket, Topografisk Norgeskart (WMS)       | CC BY 4.0   |
@@ -553,7 +556,7 @@ The viewer reads course setting files with its own reader (`viewer/src/ocad`).
 The control description symbols come from [Purple Pen]
 (© Peter Golde, BSD licence, see `viewer/src/descriptions/LICENSE-PurplePen.txt`).
 
-Not used yet: road widths from NVDB.
+Not used yet: car roads and road widths from NVDB.
 
 [ocad2geojson]: https://github.com/perliedman/ocad2geojson
 [Purple Pen]: https://github.com/petergolde/PurplePen
