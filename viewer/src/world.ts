@@ -54,6 +54,8 @@ export interface TreeInfo {
   crownBaseShift?: number
 }
 
+export type MapKind = 'orienteering' | 'topographic'
+
 export interface Manifest {
   format: number
   name: string
@@ -61,9 +63,19 @@ export interface Manifest {
   extent: [number, number, number, number]
   height: HeightInfo
   drape: { path: string; tilePx: number; overview: string }
-  /** offset: shift the map was built with (--offset), applied to courses from OCAD files. */
-  map: { image: string; size: [number, number]; scale: number | null; offset?: [number, number] }
-  mapArea: [number, number][]
+  /**
+   * offset: shift the map was built with (--offset), applied to courses from OCAD files.
+   * kind: the orienteering map, or Kartverket's topographic map in a mapless world (format 9).
+   */
+  map: {
+    image: string
+    size: [number, number]
+    scale: number | null
+    offset?: [number, number]
+    kind: MapKind
+  }
+  /** Where the runner is meant to be: the mapped area, or a mapless world's chosen area. */
+  coreArea: [number, number][]
   spawn: [number, number]
   /** Where the runner looks at the spawn, in degrees clockwise from grid north (format 6). */
   spawnHeading?: number
@@ -79,7 +91,17 @@ export interface Manifest {
 
 // Format 5 added the grain ground class; format 4 worlds have none and still work.
 // Format 6 added the spawn heading; older worlds open looking north.
-export const SUPPORTED_FORMATS = [4, 5, 6, 7, 8]
+// Format 9 renamed mapArea to coreArea and added the map's kind; older worlds have an
+// orienteering map.
+export const SUPPORTED_FORMATS = [4, 5, 6, 7, 8, 9]
+
+/** A manifest of an older format in the current shape. */
+export function upgradeManifest(manifest: Manifest): Manifest {
+  if (manifest.format >= 9) return manifest
+  const old = manifest as Manifest & { mapArea?: [number, number][] }
+  const { mapArea, ...rest } = old
+  return { ...rest, coreArea: mapArea ?? [], map: { ...old.map, kind: 'orienteering' } }
+}
 
 export class World {
   readonly base: string
@@ -98,7 +120,7 @@ export class World {
     if (!SUPPORTED_FORMATS.includes(manifest.format)) {
       throw new Error(`World format ${manifest.format} is not supported; rebuild the world`)
     }
-    return new World(base, manifest)
+    return new World(base, upgradeManifest(manifest))
   }
 
   url(template: string, x?: number, y?: number): string {

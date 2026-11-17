@@ -207,6 +207,14 @@ function setupCourseImport(name: string, world: World, placement: PlacementData,
   })
 }
 
+/** Name the world's kind of map in the key help: an orienteering or a topographic map. */
+function showGroundMapKey(world: World) {
+  const cell = document.querySelector<HTMLElement>('[data-i18n="keyGroundMap"]')
+  if (!cell || world.manifest.map.kind !== 'topographic') return
+  cell.dataset.i18n = 'keyGroundTopoMap'
+  applyTranslations(cell.parentElement ?? document)
+}
+
 async function main() {
   const name = await chooseWorld()
   if (!name) {
@@ -216,6 +224,7 @@ async function main() {
 
   setStatus(t('loadingWorld', { name }))
   const world = await World.load(name)
+  showGroundMapKey(world)
   const heights = await HeightField.load(world, (done, total) =>
     setStatus(t('loadingTerrain', { percent: Math.round((100 * done) / total) })),
   )

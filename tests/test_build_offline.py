@@ -7,9 +7,15 @@ from typing import Any
 import numpy as np
 import pytest
 from PIL import Image
+from pyproj import Transformer
 
 from terraino.process.symbols import Ground
-from tests.fixture_world import NetworkUsedError, build_fixture_world
+from tests.fixture_world import (
+    MAPLESS_AREA,
+    MAPLESS_NAME,
+    NetworkUsedError,
+    build_fixture_world,
+)
 from tests.test_ocad import MAP_BOUNDS, needs_exporter
 
 pytestmark = needs_exporter
@@ -52,6 +58,47 @@ def test_build_fixture_world(tmp_path: Path) -> None:
     assert (out / "height" / "0_0.bin").is_file()
     # The name Rambøls-Ødegarden stands in a hole cut for it in a field: grain there too.
     assert ground_at(out, manifest, 666737, 6646439) == Ground.GRAIN
+
+
+def test_build_mapless_fixture_world(tmp_path: Path) -> None:
+    out = tmp_path / "mapless"
+    manifest = json.loads(build_fixture_world(out, mapless=True).read_text())
+    assert manifest["name"] == MAPLESS_NAME
+    # Chosen in UTM33, built in the zone it lies in, as the fixture map is.
+    assert manifest["crs"] == "EPSG:25832"
+    assert manifest["map"]["kind"] == "topographic"
+    assert manifest["map"]["scale"] is None
+    to_utm33 = Transformer.from_crs(25832, 25833, always_xy=True)
+    corners = [to_utm33.transform(e, n) for e, n in manifest["coreArea"][:4]]
+    for (east, north), expected in zip(
+        sorted(corners),
+        sorted(
+            [
+                (MAPLESS_AREA.x0, MAPLESS_AREA.y0),
+                (MAPLESS_AREA.x0, MAPLESS_AREA.y1),
+                (MAPLESS_AREA.x1, MAPLESS_AREA.y0),
+                (MAPLESS_AREA.x1, MAPLESS_AREA.y1),
+            ]
+        ),
+        strict=True,
+    ):
+        assert east == pytest.approx(expected[0], abs=0.5)
+        assert north == pytest.approx(expected[1], abs=0.5)
+    sources = " ".join(manifest["attribution"])
+    assert "topographic map" in sources
+    assert "Orienteering map" not in sources
+    for source in ("Nasjonal høydemodell", "laser point cloud", "AR5", "SR16"):
+        assert source in sources
+    assert manifest["trees"]["total"] > 1000
+    assert manifest["buildings"]["count"] > 10
+    # Roads and paths come from OpenStreetMap all over, as there is no map to win.
+    assert manifest["tracks"]["count"] > 0
+    assert "features" not in manifest
+    # Every cell has a ground class from the open data.
+    east, north = manifest["spawn"]
+    assert ground_at(out, manifest, east, north) != Ground.UNKNOWN
+    drape = np.asarray(Image.open(out / manifest["drape"]["overview"]))
+    assert drape.std() > 10  # a map, not a blank
 
 
 def test_missing_cache_file_stops_the_build(

@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terrain-O area picker</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
+  integrity="sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw=="
+  crossorigin="anonymous" referrerpolicy="no-referrer">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"
+  integrity="sha512-puJW3E/qXDqYp9IfhAI54BJEaWIfloJ7JWs7OeD5i6ruC9JZL1gERT1wjtwXFlh7CjE7ZJ+/vcRZRkIYIb6p4g=="
+  crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js"
+  integrity="sha512-iJs/hgHOlo6Eo8i+nYtuEPa+CZ6E3C2Z0s1LkSuvLtclMQlqmxPjP6XaXDi0Ki6NsUuQ2Zmo0UeFOLSgjbv5+A=="
+  crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1d2420;
+    --muted: #5b665f;
+    --line: #d5dbd7;
+    --accent: #d2441f;
+    --ok: #1f7a3d;
+    --bad: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1f1d;
+      --fg: #e8ece9;
+      --muted: #a5b0aa;
+      --line: #3a423e;
+      --ok: #6cc98a;
+      --bad: #f08a80;
+    }
+  }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.4 system-ui, sans-serif;
+  }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  h1 { font-size: 16px; margin: 0; }
+  .hint { color: var(--muted); }
+  #map { flex: 1; }
+  #map.drawing { cursor: crosshair; }
+  fieldset {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    border: 0;
+    margin: 0;
+    padding: 0;
+  }
+  label { display: flex; gap: 4px; align-items: center; color: var(--muted); }
+  input {
+    width: 7.5em;
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    padding: 3px 5px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--fg);
+  }
+  button {
+    font: inherit;
+    padding: 5px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--fg);
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button[aria-pressed="true"] { outline: 2px solid var(--accent); }
+  #status { font-variant-numeric: tabular-nums; }
+  #status.ok { color: var(--ok); }
+  #status.bad { color: var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Terrain-O: choose the area</h1>
+  <button id="draw" type="button" aria-pressed="false">Draw rectangle</button>
+  <span class="hint">or hold Shift and drag. Coordinates are EUREF89 UTM33, as on hoydedata.no.</span>
+  <fieldset>
+    <label>xmin <input id="xmin" inputmode="numeric"></label>
+    <label>ymin <input id="ymin" inputmode="numeric"></label>
+    <label>xmax <input id="xmax" inputmode="numeric"></label>
+    <label>ymax <input id="ymax" inputmode="numeric"></label>
+  </fieldset>
+  <span id="status" role="status">Draw a rectangle of at most 25 km².</span>
+  <button id="use" class="primary" type="button" disabled>Use this area</button>
+  <button id="cancel" type="button">Cancel</button>
+</header>
+<div id="map"></div>
+<script>
+'use strict'
+const CONFIG = /*CONFIG*/null
+const UTM33 = '+proj=utm +zone=33 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs'
+const toUtm = proj4('EPSG:4326', UTM33)
+const EDGE_POINTS = 20
+
+// Shift+drag draws the area, so it does not zoom to a box as Leaflet's default.
+const map = L.map('map', { zoomSnap: 0.5, boxZoom: false }).setView([64.5, 12], 5)
+L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', {
+  maxZoom: 18,
+  attribution: '© <a href="https://www.kartverket.no/">Kartverket</a>',
+}).addTo(map)
+
+const fields = ['xmin', 'ymin', 'xmax', 'ymax'].map((id) => document.getElementById(id))
+const status = document.getElementById('status')
+const useButton = document.getElementById('use')
+const drawButton = document.getElementById('draw')
+let area = null // {xmin, ymin, xmax, ymax} in UTM33
+let start = null // first corner while drawing
+let drawing = false
+const outline = L.polygon([], { color: '#d2441f', weight: 2, fillOpacity: 0.12 }).addTo(map)
+const marginOutline = L.polygon([], { color: '#d2441f', weight: 1, dashArray: '4 4', fill: false }).addTo(map)
+
+function utm(latlng) {
+  const [x, y] = toUtm.forward([latlng.lng, latlng.lat])
+  return [Math.round(x), Math.round(y)]
+}
+
+/** The rectangle as lat/lng points, with points along its sides, which curve on this map. */
+function ring(a) {
+  const corners = [[a.xmin, a.ymin], [a.xmax, a.ymin], [a.xmax, a.ymax], [a.xmin, a.ymax]]
+  const points = []
+  for (let i = 0; i < 4; i++) {
+    const [x0, y0] = corners[i]
+    const [x1, y1] = corners[(i + 1) % 4]
+    for (let k = 0; k < EDGE_POINTS; k++) {
+      const t = k / EDGE_POINTS
+      const [lng, lat] = toUtm.inverse([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t])
+      points.push([lat, lng])
+    }
+  }
+  return points
+}
+
+/** Why the area cannot be built, or null. Same checks as terraino.ingest.area. */
+function problem(a) {
+  const w = a.xmax - a.xmin
+  const h = a.ymax - a.ymin
+  if (w < CONFIG.minSideM || h < CONFIG.minSideM) return `each side must be at least ${CONFIG.minSideM} m`
+  if (w * h > CONFIG.maxAreaM2) return `at most ${CONFIG.maxAreaM2 / 1e6} km²`
+  const [x0, y0, x1, y1] = CONFIG.norway
+  if (a.xmin < x0 || a.ymin < y0 || a.xmax > x1 || a.ymax > y1) return 'not inside Norway'
+  return null
+}
+
+function show(a, { fromFields = false } = {}) {
+  area = a
+  if (!a) {
+    outline.setLatLngs([])
+    marginOutline.setLatLngs([])
+    useButton.disabled = true
+    return
+  }
+  if (!fromFields) {
+    fields[0].value = a.xmin
+    fields[1].value = a.ymin
+    fields[2].value = a.xmax
+    fields[3].value = a.ymax
+  }
+  const m = CONFIG.margin
+  outline.setLatLngs(ring(a))
+  marginOutline.setLatLngs(ring({ xmin: a.xmin - m, ymin: a.ymin - m, xmax: a.xmax + m, ymax: a.ymax + m }))
+  const w = a.xmax - a.xmin
+  const h = a.ymax - a.ymin
+  const size = `${((w * h) / 1e6).toFixed(2)} km² (${w} × ${h} m)`
+  const why = problem(a)
+  status.textContent = why ? `${size}: ${why}` : `${size}; dashed: with the ${m} m margin`
+  status.className = why ? 'bad' : 'ok'
+  outline.setStyle({ color: why ? '#b3261e' : '#d2441f' })
+  useButton.disabled = Boolean(why)
+}
+
+function between(p, q) {
+  return {
+    xmin: Math.min(p[0], q[0]),
+    ymin: Math.min(p[1], q[1]),
+    xmax: Math.max(p[0], q[0]),
+    ymax: Math.max(p[1], q[1]),
+  }
+}
+
+function setDrawing(on) {
+  drawing = on
+  drawButton.setAttribute('aria-pressed', String(on))
+  document.getElementById('map').classList.toggle('drawing', on)
+  if (on) map.dragging.disable()
+  else map.dragging.enable()
+}
+
+drawButton.addEventListener('click', () => setDrawing(!drawing))
+map.on('mousedown', (e) => {
+  if (!drawing && !e.originalEvent.shiftKey) return
+  map.dragging.disable()
+  start = utm(e.latlng)
+})
+map.on('mousemove', (e) => {
+  if (start) show(between(start, utm(e.latlng)))
+})
+map.on('mouseup', (e) => {
+  if (!start) return
+  show(between(start, utm(e.latlng)))
+  start = null
+  setDrawing(false)
+})
+
+for (const field of fields) {
+  field.addEventListener('change', () => {
+    const [xmin, ymin, xmax, ymax] = fields.map((f) => Number(f.value))
+    if (fields.some((f) => f.value.trim() === '') || [xmin, ymin, xmax, ymax].some(Number.isNaN)) return
+    if (xmin >= xmax || ymin >= ymax) {
+      status.textContent = 'xmin must be below xmax, and ymin below ymax'
+      status.className = 'bad'
+      useButton.disabled = true
+      return
+    }
+    show({ xmin: Math.round(xmin), ymin: Math.round(ymin), xmax: Math.round(xmax), ymax: Math.round(ymax) }, { fromFields: true })
+    map.fitBounds(outline.getBounds(), { padding: [40, 40] })
+  })
+}
+
+async function post(path, body) {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const reply = await response.json()
+  if (!response.ok) throw new Error(reply.error || response.statusText)
+}
+
+function finish(text) {
+  document.body.innerHTML = ''
+  const p = document.createElement('p')
+  p.style.padding = '16px'
+  p.textContent = text
+  document.body.append(p)
+}
+
+useButton.addEventListener('click', async () => {
+  if (!area) return
+  try {
+    await post('/area', area)
+    finish('Area sent to terraino. You can close this tab; the command line shows what to do next.')
+  } catch (error) {
+    status.textContent = String(error.message)
+    status.className = 'bad'
+  }
+})
+
+document.getElementById('cancel').addEventListener('click', async () => {
+  await post('/cancel', {}).catch(() => {})
+  finish('Cancelled. You can close this tab.')
+})
+</script>
+</body>
+</html>

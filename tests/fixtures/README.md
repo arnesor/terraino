@@ -10,6 +10,8 @@ Data for a small part of the Langvatnet orienteering map
 - `cache/`: every file the build downloads for this map, as a filled build cache (below).
 
 The course `viewer/test/fixtures/TestCourseLangvatnet.ocd` is set on this map.
+The mapless fixture world (`MAPLESS_AREA` in `tests/fixture_world.py`) is a rectangle in UTM33
+inside the map, so the same fixtures cover it.
 
 The lidar and SR16 extracts were made with `scripts/make_lidar_fixture.py`
 and `scripts/make_sr16_fixture.py` in [terraino2](https://github.com/arnesor/terraino2).
@@ -17,10 +19,11 @@ and `scripts/make_sr16_fixture.py` in [terraino2](https://github.com/arnesor/ter
 ## The fixture world
 
 `tests/fixture_world.py` builds the world of this map from the fixtures alone,
-with the settings in its `options()` and every download refused.
-`tests/test_build_offline.py` checks the result,
-and `viewer/test/world.test.ts` builds it with `uv run python -m tests.fixture_world OUT`
-and loads it as the viewer does.
+with the settings in its `options()` and every download refused,
+and the mapless fixture world with `--mapless`.
+`tests/test_build_offline.py` checks the results,
+and `viewer/test/world.test.ts` builds them with
+`uv run python -m tests.fixture_world [--mapless] OUT` and loads them as the viewer does.
 
 The cached file names depend on the world extent
 (the build's `margin`) and, for OpenStreetMap, on the Overpass query.
@@ -31,7 +34,7 @@ Download the files again with:
 uv run python -m tests.fixture_world --refresh-cache
 ```
 
-This keeps only the part of Kartverket's 1 km height model tiles inside the world, compressed,
+This keeps only the part of Kartverket's 1 km height model tiles inside the worlds, compressed,
 since the build reads nothing else of them.
 The pre-commit hooks leave `cache/` alone, so the files stay as the services sent them.
 
@@ -39,6 +42,7 @@ The pre-commit hooks leave `cache/` alone, so the files stay as the services sen
 
 - `kartverket/`: terrain (DTM) and surface (DOM) height models, © Kartverket
   (Nasjonal høydemodell), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- `kartverket/topo_*`: tiles of the topographic map (Topo, WMTS cache), © Kartverket, CC BY 4.0.
 - `topo/`: building outlines (`fkb_bygning`)
   and masts (`ledning_punkt`) from Topografisk Norgeskart, © Kartverket, CC BY 4.0.
 - `matrikkel/`: building points from Matrikkelen, © Kartverket, CC BY 4.0.

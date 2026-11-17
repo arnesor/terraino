@@ -1,4 +1,4 @@
-"""Build a 3D world package from an orienteering map."""
+"""Build a 3D world package from an orienteering map, or for a chosen area without one."""
 
 from __future__ import annotations
 
@@ -18,9 +18,19 @@ from shapely import LineString, MultiPolygon, Point, Polygon
 from shapely.geometry import mapping
 from shapely.geometry.base import BaseGeometry
 
-from terraino.export import WorldData, write_world
+from terraino.export import MapKind, WorldData, write_world
 from terraino.fetch import ar5, kartverket, matrikkel, nibio, osm, topo_buildings
 from terraino.fetch.masts import fetch_masts
+from terraino.fetch.topomap import ATTRIBUTION as TOPO_MAP_ATTRIBUTION
+from terraino.fetch.topomap import fetch_topo_map
+from terraino.ingest.area import (
+    check_area,
+    describe_area,
+    describe_hoydedata_box,
+    hoydedata_box,
+    reproject_area,
+    world_epsg,
+)
 from terraino.ingest.georef import Extent
 from terraino.ingest.image import ImageMap, read_image_map
 from terraino.ingest.lidar import ATTRIBUTION as LIDAR_ATTRIBUTION
@@ -99,6 +109,7 @@ LETTERING_REACH_MM = 1.5
 # density (UNKNOWN_MID where it is unknown).
 UNDERSTOREY_BASE_WEIGHT = 0.15
 UNKNOWN_MID = 0.2
+HOYDEDATA_URL = "https://hoydedata.no/LaserInnsyn2/"
 
 
 def map_attribution(owner: str | None) -> str:
@@ -133,6 +144,8 @@ class BuildOptions:
             or None for a point inside the map.
         heading: Where the runner looks when the world opens, in degrees clockwise
             from grid north.
+        area: The rectangle of a mapless world in EUREF89 / UTM33, or None to build
+            from a map.
     """
 
     name: str | None = None
@@ -147,17 +160,22 @@ class BuildOptions:
     lidar_dirs: tuple[Path, ...] = ()
     spawn: tuple[float, float] | None = None
     heading: float = 0.0
+    area: Extent | None = None
 
 
 @dataclass
 class MapSource:
-    """What an orienteering map contributes to the world, whatever its file format.
+    """What the map contributes to the world, whatever its file format.
+
+    A mapless world has a MapSource too: Kartverket's topographic map, which adds
+    nothing to the ground but the picture.
 
     Attributes:
         epsg: Coordinate system of the world.
         extent: World extent.
-        map_area: Outline of the mapped area.
-        scale: Map scale denominator, or None if unknown (image maps).
+        core_area: Outline of the core area: the mapped area of an orienteering map,
+            or the chosen rectangle of a mapless world.
+        scale: Map scale denominator, or None if unknown (image maps, mapless worlds).
         drape_png: Map texture covering the extent at DRAPE_PX_PER_M.
         map_png: Map image covering the extent at 1 px/m.
         symbols: Meaning of the map's symbols.
@@ -166,11 +184,12 @@ class MapSource:
         buildings: Building outlines found in an image map.
         features: Rocks, walls and other objects (OCAD maps only).
         cliff_lines: Cliff and rock face lines to measure against the terrain.
+        kind: What kind of map it is.
     """
 
     epsg: int
     extent: Extent
-    map_area: Polygon
+    core_area: Polygon
     scale: float | None
     drape_png: Path
     map_png: Path
@@ -180,6 +199,12 @@ class MapSource:
     buildings: list[Polygon] = field(default_factory=list)
     features: Features | None = None
     cliff_lines: list[tuple[str, LineString]] = field(default_factory=list)
+    kind: MapKind = "orienteering"
+
+    @property
+    def mapped_area(self) -> Polygon | None:
+        """Where an orienteering map wins over other data, or None if there is none."""
+        return self.core_area if self.kind == "orienteering" else None
 
 
 def _ocad_source(map_path: Path, work: Path, options: BuildOptions) -> MapSource:
@@ -232,7 +257,7 @@ def _ocad_source(map_path: Path, work: Path, options: BuildOptions) -> MapSource
     return MapSource(
         epsg=final.epsg,
         extent=extent,
-        map_area=area.polygon,
+        core_area=area.polygon,
         scale=final.scale,
         drape_png=final.drape_png,
         map_png=final.map_png,
@@ -270,26 +295,47 @@ def _image_source(map_path: Path, work: Path, options: BuildOptions) -> MapSourc
         symbols,
     )
 
-    work.mkdir(parents=True, exist_ok=True)
-
-    def save(px_per_m: float, name: str) -> Path:
-        rgb = image.resample(extent, px_per_m, Resampling.bilinear)
-        rgb[~image.coverage(extent, px_per_m)] = 255
-        path = work / name
-        Image.fromarray(rgb).save(path)
-        return path
-
     return MapSource(
         epsg=image.epsg,
         extent=extent,
-        map_area=classified.map_area,
+        core_area=classified.map_area,
         scale=None,
-        drape_png=save(DRAPE_PX_PER_M, "drape.png"),
-        map_png=save(1, "map.png"),
+        drape_png=_save_image(image, extent, DRAPE_PX_PER_M, work / "drape.png"),
+        map_png=_save_image(image, extent, 1, work / "map.png"),
         symbols=symbols,
         layers=classified.layers,
         buildings=classified.buildings,
     )
+
+
+def _mapless_source(area: Extent, work: Path, options: BuildOptions) -> MapSource:
+    check_area(area)
+    epsg = world_epsg(area)
+    core = reproject_area(area, epsg)
+    log.info("Mapless world. %s; building it in EPSG:%d", describe_area(area), epsg)
+    extent = Extent(*core.bounds).buffered(options.margin).snapped(EXTENT_ALIGN_M)
+    topo = fetch_topo_map(epsg, extent, options.cache_dir)
+    symbols = SymbolSet.load("isom2017")
+    return MapSource(
+        epsg=epsg,
+        extent=extent,
+        core_area=core,
+        scale=None,
+        drape_png=_save_image(topo, extent, DRAPE_PX_PER_M, work / "drape.png"),
+        map_png=_save_image(topo, extent, 1, work / "map.png"),
+        symbols=symbols,
+        layers=rasterize_map([], symbols, extent, Polygon()),
+        kind="topographic",
+    )
+
+
+def _save_image(image: ImageMap, extent: Extent, px_per_m: float, path: Path) -> Path:
+    """Save ``image`` over ``extent`` at ``px_per_m``, white where it has no pixels."""
+    rgb = image.resample(extent, px_per_m, Resampling.bilinear)
+    rgb[~image.coverage(extent, px_per_m)] = 255
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(rgb).save(path)
+    return path
 
 
 def _as_map_buildings(
@@ -304,18 +350,19 @@ def _as_map_buildings(
 
 
 def choose_spawn(
-    spawn: tuple[float, float] | None, extent: Extent, map_area: Polygon
+    spawn: tuple[float, float] | None, extent: Extent, core_area: Polygon
 ) -> tuple[float, float]:
     """Where the runner stands when the world opens.
 
     Args:
         spawn: The position asked for ``(easting, northing)``, or None.
         extent: World extent; the position must lie inside it.
-        map_area: Outline of the mapped area. A position outside it is allowed,
+        core_area: Outline of the core area. A position outside it is allowed,
             with a warning.
 
     Returns:
-        ``spawn``, or a point inside the map area if it is None.
+        ``spawn``, or if it is None the middle of the core area, or a point inside
+        it when the middle is not.
 
     Raises:
         ValueError: If ``spawn`` is outside the world.
@@ -328,7 +375,9 @@ def choose_spawn(
         (50.0, 50.0)
     """
     if spawn is None:
-        point = map_area.representative_point()
+        point = core_area.centroid
+        if not core_area.contains(point):
+            point = core_area.representative_point()
         return (point.x, point.y)
     east, north = spawn
     if not (extent.x0 <= east <= extent.x1 and extent.y0 <= north <= extent.y1):
@@ -337,37 +386,28 @@ def choose_spawn(
             f" ({extent.x0:.0f}-{extent.x1:.0f} E, {extent.y0:.0f}-{extent.y1:.0f} N)"
         )
         raise ValueError(msg)
-    if not map_area.contains(Point(east, north)):
+    if not core_area.contains(Point(east, north)):
         log.warning("The spawn position %.0f %.0f is outside the map", east, north)
     return spawn
 
 
-def build_world(map_path: Path, out_dir: Path, options: BuildOptions) -> Path:
-    """Build the world package for ``map_path`` in ``out_dir``.
+def build_world(map_path: Path | None, out_dir: Path, options: BuildOptions) -> Path:
+    """Build the world package for ``map_path``, or for ``options.area``, in ``out_dir``.
 
     Args:
-        map_path: An OCAD file (``.ocd``) or a georeferenced image map.
+        map_path: An OCAD file (``.ocd``) or a georeferenced image map, or None for a
+            mapless world of ``options.area``.
         out_dir: World folder to write.
         options: Build settings.
 
     Returns:
         Path of the written ``manifest.json``.
-
-    Raises:
-        ValueError: If the file type is not supported.
     """
-    suffix = map_path.suffix.lower()
-    work = out_dir / "_work"
-    if suffix == ".ocd":
-        source = _ocad_source(map_path, work, options)
-    elif suffix in IMAGE_SUFFIXES:
-        source = _image_source(map_path, work, options)
-    else:
-        msg = (
-            f"Unsupported map file {map_path.name}: "
-            "use OCAD (.ocd) or a georeferenced image"
-        )
+    name = options.name or (map_path.stem if map_path is not None else None)
+    if name is None:
+        msg = "A mapless world needs a name"
         raise ValueError(msg)
+    source = _read_source(map_path, out_dir / "_work", options)
 
     extent = source.extent
     log.info(
@@ -376,12 +416,18 @@ def build_world(map_path: Path, out_dir: Path, options: BuildOptions) -> Path:
         extent.width / 1e3,
         extent.height / 1e3,
     )
+    _tell_hoydedata_box(source, options)
     # Before the downloads, so a mistyped position fails at once.
-    spawn = choose_spawn(options.spawn, extent, source.map_area)
+    spawn = choose_spawn(options.spawn, extent, source.core_area)
     cache = options.cache_dir
     dtm = fill_missing(kartverket.fetch_height_model("dtm", source.epsg, extent, cache))
+    credit = (
+        map_attribution(options.owner)
+        if source.kind == "orienteering"
+        else TOPO_MAP_ATTRIBUTION
+    )
     world = WorldData(
-        name=options.name or map_path.stem,
+        name=name,
         epsg=source.epsg,
         extent=extent,
         dtm=dtm,
@@ -389,11 +435,12 @@ def build_world(map_path: Path, out_dir: Path, options: BuildOptions) -> Path:
         drape_px_per_m=DRAPE_PX_PER_M,
         map_png=source.map_png,
         map_scale=source.scale,
-        map_area=source.map_area,
+        map_kind=source.kind,
+        core_area=source.core_area,
         omap_features=source.omap,
         spawn=spawn,
         spawn_heading=options.heading,
-        attribution=[kartverket.ATTRIBUTION, map_attribution(options.owner)],
+        attribution=[kartverket.ATTRIBUTION, credit],
         map_offset=options.offset,
     )
     if options.forest:
@@ -401,6 +448,42 @@ def build_world(map_path: Path, out_dir: Path, options: BuildOptions) -> Path:
 
     log.info("Writing world package to %s", out_dir)
     return write_world(out_dir, world)
+
+
+def _read_source(map_path: Path | None, work: Path, options: BuildOptions) -> MapSource:
+    """Read the map, or fetch the topographic map of a mapless world's area.
+
+    Raises:
+        ValueError: If there is neither a map nor an area, or the file type is not
+            supported.
+    """
+    if map_path is None:
+        if options.area is None:
+            msg = "Give a map file or an area"
+            raise ValueError(msg)
+        return _mapless_source(options.area, work, options)
+    suffix = map_path.suffix.lower()
+    if suffix == ".ocd":
+        return _ocad_source(map_path, work, options)
+    if suffix in IMAGE_SUFFIXES:
+        return _image_source(map_path, work, options)
+    msg = (
+        f"Unsupported map file {map_path.name}: "
+        "use OCAD (.ocd) or a georeferenced image"
+    )
+    raise ValueError(msg)
+
+
+def _tell_hoydedata_box(source: MapSource, options: BuildOptions) -> None:
+    """Log the box to export laser data for from hoydedata.no."""
+    found = hoydedata_box(source.core_area, source.epsg, options.margin)
+    log.info("%s", describe_hoydedata_box(found, options.margin))
+    if not options.lidar_dirs:
+        log.info(
+            "No laser data given: export the point cloud (Punktsky) of this box from"
+            " %s and pass its folder with --lidar",
+            HOYDEDATA_URL,
+        )
 
 
 def _report_alignment(
@@ -465,12 +548,13 @@ def _find_bridges(
 ) -> tuple[list[Track], list[Bridge]]:
     """Collect the roads and paths, and take the road bridges' decks out of them."""
     extent = source.extent
-    tracks = collect_tracks(source.omap, source.symbols, osm_features, source.map_area)
+    mapped = source.mapped_area
+    tracks = collect_tracks(source.omap, source.symbols, osm_features, mapped)
     tagged = osm_bridges(osm_features)
-    decks = find_decks(tracks, tagged, dtm, dom, extent, source.map_area)
+    decks = find_decks(tracks, tagged, dtm, dom, extent, mapped)
     tracks, bridges = cut_tracks(tracks, decks)
     for x, y, dip in suspected_bridges(
-        tracks, bridges, [b.line for b in tagged], dtm, dom, extent, source.map_area
+        tracks, bridges, [b.line for b in tagged], dtm, dom, extent, mapped
     ):
         log.warning(
             "The ground drops %.1f m under the road at E %.0f N %.0f as under a "
@@ -533,7 +617,8 @@ def _add_nature_and_buildings(
     if topo:
         world.attribution = [*world.attribution, topo_buildings.ATTRIBUTION]
     footprints = collect_footprints(osm_features, map_buildings, source.symbols, topo)
-    _report_alignment(map_buildings, source.symbols, topo, osm_features, options)
+    if source.kind == "orienteering":
+        _report_alignment(map_buildings, source.symbols, topo, osm_features, options)
     log.info(
         "Building outlines: %s",
         ", ".join(

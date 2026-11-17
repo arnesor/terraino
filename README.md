@@ -117,6 +117,36 @@ Image maps are read by their colours, which works well for areas
 (forest, open land, green, water, marsh, fields)
 but cannot find boulders, cliffs and other point features.
 
+### Without an orienteering map
+
+A mapless world is built for a rectangle of up to 25 km² anywhere in Norway,
+from the open data alone.
+Kartverket's topographic map takes the orienteering map's place on the ground and in the map view.
+There are no boulders, cliffs or other features that only an orienteering map has.
+
+Draw the rectangle on a map of Norway in the browser:
+
+```console
+uv run terraino pick-area
+```
+
+It prints the address of the page; open it if no browser opens by itself (as under WSL).
+Drag the rectangle (or hold Shift and drag), or type its corners, and click **Use this area**.
+The command then prints the area, the box to export laser data for from hoydedata.no,
+and the command that builds the world:
+
+```console
+Area: 5.62 km² (2370 × 2370 m), EUREF89 UTM33
+hoydedata.no (UTM33, incl. 300 m margin): xmin=193680 xmax=196660 ymin=6622450 ymax=6625430
+terraino build --area 193986 6622759 196356 6625129 --margin 300 --name <NAME> --lidar <LAZ folder>
+```
+
+`--area XMIN YMIN XMAX YMAX` is in EUREF89 UTM33, as hoydedata.no takes it,
+wherever in Norway the area is.
+The world is built in the UTM zone of the area's middle
+(32, 33 or 35), as an orienteering map of the place would be.
+A mapless world needs `--name`, and has no `--owner`, `--offset`, `--epsg` or `--symbols`.
+
 Useful build options (see `uv run terraino build --help`):
 
 - `--offset DX DY` shifts the map east/north if its georeferencing is off.
@@ -150,10 +180,11 @@ To download the projects covering the map:
    "5pkt" means about 5 points per m², and "2pkt" about 2.
 2. Open **Meny** and choose **Eksport**.
 3. Choose the **Lokal eksport** tab and then **Prosjekt** (not "Nasjonal Høydemodell").
-4. Under **Område**, choose **Hjørnekoordinater** and enter the corners of the map,
-   with about 100 m to spare.
+4. Under **Område**, choose **Hjørnekoordinater** and enter the corners that `terraino build`
+   and `terraino pick-area` print as the `hoydedata.no` box: the map and its margin,
+   rounded out to 10 m.
    The corners are in UTM zone 33 (EPSG:25833), even when the map is in another zone.
-   For example, `xmin` 331428, `ymin` 6646404, `xmax` 333500 and `ymax` 6647686.
+   For example, `xmin` 331430, `ymin` 6646400, `xmax` 333500 and `ymax` 6647690.
    The area is drawn as a rectangle on the map.
 5. Under **Valgte prosjekt**, open **Gjeldende prosjekter** with ⊕ and tick the projects you want,
    for example "NDH Eidskog 5pkt 2016".
@@ -511,6 +542,7 @@ and directions is in `viewer/src/descriptions/codes.ts`.
 | Laser point clouds (optional) | Kartverket, hoydedata.no (downloaded by hand)  | CC BY 4.0   |
 | Building types                | Kartverket, Matrikkelen bygningspunkt (WFS)    | CC BY 4.0   |
 | Building outlines, roof lines | Kartverket, Topografisk Norgeskart (WMS)       | CC BY 4.0   |
+| Topographic map (mapless)     | Kartverket, Topo (WMTS cache)                  | CC BY 4.0   |
 | Orienteering map              | Your map file                                  | Map owner's |
 
 The OCAD reader in `tools/ocad-export` uses [ocad2geojson], which is licensed under AGPL-3.0,
