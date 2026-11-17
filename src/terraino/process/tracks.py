@@ -3,6 +3,10 @@
 Path ends that stop just short of another path are snapped onto it: the mapper meant a
 junction, and in the terrain the paths should meet. Wider gaps are kept; on the map they
 mark indistinct junctions, where the paths do not visibly meet.
+
+Outside the orienteering map, paths and vehicle tracks come from NVDB where it has them,
+and OSM fills in: the parts of OSM paths near an NVDB line are the same path, drawn less
+precisely, and are left out.
 """
 
 from __future__ import annotations
@@ -13,8 +17,9 @@ from typing import Any
 
 from shapely import LineString, MultiLineString, Point, Polygon, STRtree
 from shapely.geometry.base import BaseGeometry
-from shapely.ops import linemerge, nearest_points
+from shapely.ops import linemerge, nearest_points, unary_union
 
+from terraino.fetch.nvdb import NvdbLine
 from terraino.fetch.osm import OsmFeature
 from terraino.process.fuse import road_style
 from terraino.process.geometry import to_geometry
@@ -30,6 +35,12 @@ MIN_WIDTH_M = {
     "small_stream": 1.0,
     "water_channel": 0.8,
 }
+# OSM ways that may be a path or vehicle track NVDB has too.
+COMPARED_HIGHWAYS = frozenset({"path", "footway", "bridleway", "track"})
+# Parts of those within this of an NVDB line are the same path.
+SAME_PATH_M = 10.0
+# What is left of a way after that, in pieces shorter than this, is where it drifts out.
+MIN_PIECE_M = 30.0
 
 
 @dataclass(frozen=True)
@@ -104,13 +115,53 @@ def snap_ends(
     return snapped
 
 
+def thin_out(
+    geometry: BaseGeometry, nvdb: BaseGeometry, band: BaseGeometry
+) -> list[LineString]:
+    """The parts of an OSM path that NVDB does not have, joined onto NVDB's lines.
+
+    Args:
+        geometry: The OSM way.
+        nvdb: NVDB's paths and vehicle tracks, as one geometry.
+        band: ``nvdb`` grown by SAME_PATH_M.
+
+    Examples:
+        >>> nvdb = LineString([(0, 0), (200, 0)])
+        >>> band = nvdb.buffer(SAME_PATH_M)
+        >>> thin_out(LineString([(0, 3), (200, 3)]), nvdb, band)   # the same path
+        []
+        >>> [list(p.coords) for p in thin_out(LineString([(100, 3), (100, 80)]), nvdb, band)]
+        [[(100.0, 0.0), (100.0, 10.0), (100.0, 80.0)]]
+    """
+    lines = _lines(geometry)
+    if not geometry.intersects(band):
+        return lines
+    kept = []
+    for piece in _lines(geometry.difference(band)):
+        if piece.length < MIN_PIECE_M:
+            continue
+        coords = list(piece.coords)
+        for end in (0, -1):
+            point = Point(coords[end])
+            # The buffer's sides are straight segments, a little inside SAME_PATH_M.
+            if nvdb.distance(point) < SAME_PATH_M + 0.05:
+                target = nearest_points(nvdb, point)[0]
+                if end == 0:
+                    coords.insert(0, (target.x, target.y))
+                else:
+                    coords.append((target.x, target.y))
+        kept.append(LineString(coords))
+    return kept
+
+
 def collect_tracks(
     omap_features: Iterable[Mapping[str, Any]],
     symbols: SymbolSet,
     osm: Iterable[OsmFeature],
     map_area: Polygon | None,
+    nvdb: Sequence[NvdbLine] = (),
 ) -> list[Track]:
-    """Roads and paths from the map, and OSM roads outside the mapped area."""
+    """Roads and paths from the map, and from NVDB and OSM outside the mapped area."""
     found: list[tuple[str, float, LineString]] = []
     for feature in omap_features:
         rule = symbols.rule(feature["properties"]["sym"])
@@ -122,15 +173,29 @@ def collect_tracks(
             for line in _lines(to_geometry(feature.get("geometry")))
         )
 
+    def outside(geometry: BaseGeometry) -> list[LineString]:
+        if map_area is None:
+            return _lines(geometry)
+        return [
+            part for g in _lines(geometry) for part in _lines(g.difference(map_area))
+        ]
+
+    drawn = [(n.kind, n.width, line) for n in nvdb for line in outside(n.line)]
+    found.extend(drawn)
+    nvdb_lines = unary_union([line for _, _, line in drawn])
+    band = nvdb_lines.buffer(SAME_PATH_M)
+
     for f in osm:
         style = road_style(f.tags)
         if style is None:
             continue
         width, ground = style
-        outside = f.geometry if map_area is None else f.geometry.difference(map_area)
+        geometry = f.geometry
+        if drawn and f.tags.get("highway") in COMPARED_HIGHWAYS:
+            geometry = MultiLineString(thin_out(geometry, nvdb_lines, band))
         kind = _osm_kind(ground, width)
         width = max(width, MIN_WIDTH_M.get(kind, 0.0))
-        found.extend((kind, width, line) for line in _lines(outside))
+        found.extend((kind, width, line) for line in outside(geometry))
 
     lines = snap_ends([line for _, _, line in found])
     # A road is often drawn as many pieces end to end; join pieces of the same kind into

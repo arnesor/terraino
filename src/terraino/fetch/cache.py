@@ -28,6 +28,7 @@ def cached_download(
     path: Path,
     *,
     expect_content_type: str | None = None,
+    headers: Mapping[str, str] | None = None,
 ) -> Path:
     """Download ``url`` to ``path`` unless the file is already there.
 
@@ -40,6 +41,7 @@ def cached_download(
         path: Cache file to write.
         expect_content_type: If given, a response with another content type (typically an
             HTML or XML error page) is treated as a failure.
+        headers: Request headers the service needs, besides the user agent.
 
     Returns:
         ``path``.
@@ -57,7 +59,7 @@ def cached_download(
                 url,
                 params=params,
                 timeout=TIMEOUT_S,
-                headers={"User-Agent": USER_AGENT},
+                headers={"User-Agent": USER_AGENT, **(headers or {})},
             )
         except requests.RequestException as exc:
             last_error = str(exc)

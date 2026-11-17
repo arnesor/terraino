@@ -66,13 +66,16 @@ the browser.
   (see `docs/adr/0007-mapless-worlds-chosen-in-utm33-built-in-the-local-zone.md`).
 - `fetch/`: downloads from Kartverket
   (DTM/DOM height models, topo buildings, masts, Matrikkelen, the topographic map),
-  NIBIO (SR16 tree species, AR5 land cover) and OSM Overpass.
+  NIBIO (SR16 tree species, AR5 land cover), Statens vegvesen
+  (NVDB paths and vehicle tracks) and OSM Overpass.
   Every download goes through `fetch/cache.py`, which caches files in `data-cache/`.
   Tests do not hit the network unless they are marked `network`.
 - `process/`: turns the inputs into world content: ground layers, trees, buildings and roofs,
   map features, tracks, the map's area, and fusion of buildings from several sources.
   `boundaries.py` makes distinct vegetation boundaries (416) visible in the trees
   (see `docs/adr/0004-map-wins-over-laser-at-vegetation-boundaries.md`).
+  `tracks.py` takes paths and vehicle tracks from NVDB outside the map
+  and leaves out the parts of OSM paths that NVDB has.
   `bridges.py` takes road bridge decks out of the tracks, from OSM and the gap in the DTM
   (see `docs/adr/0006-bridges-from-osm-decks-from-the-dtm-gap.md`).
   `alignment.py` checks the map's georeference against Kartverket's buildings

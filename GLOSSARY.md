@@ -153,5 +153,9 @@ _Avoid_: overpass, viaduct
 **Footbridge**: A small bridge on a path, usually over a stream.
 _Avoid_: bridge (on its own), plank
 
+**Vehicle track**: A track for tractors and forestry machines, not built for cars
+(Norwegian _traktorveg_).
+_Avoid_: tractor road
+
 **Underpass**: The way under a bridge: the road, track, railway or water it crosses.
 _Avoid_: tunnel (a tunnel goes through the ground, not under a bridge)

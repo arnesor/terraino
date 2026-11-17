@@ -206,19 +206,29 @@ def _paint(
 def apply_osm(
     layers: GroundLayers,
     features: Iterable[OsmFeature],
+    roads: Iterable[tuple[LineString, float]],
     footprints: Iterable[Polygon],
     extent: Extent,
 ) -> None:
-    """Clear trees along OSM roads and paint water outside the map, buildings everywhere."""
-    roads: list[tuple[BaseGeometry, float]] = []
+    """Clear trees along roads and paint OSM's water outside the map, buildings everywhere.
+
+    Args:
+        layers: Ground layers to paint.
+        features: OSM features.
+        roads: The roads and paths drawn (terraino.process.tracks), with their widths;
+            along OSM's other ways, which NVDB draws more precisely, nothing is cleared.
+        footprints: Building outlines.
+        extent: The world's extent.
+    """
+    strips: list[tuple[BaseGeometry, float]] = [
+        (line.buffer(max(width, 1.2) / 2), 1.0) for line, width in roads
+    ]
     water: list[tuple[BaseGeometry, float]] = []
     for f in features:
         geometry = f.geometry
-        style = road_style(f.tags)
-        if style is not None and isinstance(geometry, LineString | MultiLineString):
-            width, ground = style
-            roads.append((geometry.buffer(max(width, 1.2) / 2), int(ground)))
-        elif f.tags.get("natural") == "water" and isinstance(
+        if road_style(f.tags) is not None:
+            continue
+        if f.tags.get("natural") == "water" and isinstance(
             geometry, Polygon | MultiPolygon
         ):
             water.append((geometry, int(Ground.WATER)))
@@ -232,12 +242,12 @@ def apply_osm(
     # Roads are drawn as their own strips (terraino.process.tracks), not as ground.
     _paint(layers.ground, water, extent, outside)
     # Grain leaves a grass verge along roads and streams.
-    verges = [(g.buffer(VERGE_M), int(Ground.FIELD)) for g, _ in water + roads]
+    verges = [(g.buffer(VERGE_M), int(Ground.FIELD)) for g, _ in water + strips]
     _paint(layers.ground, verges, extent, outside & (layers.ground == Ground.GRAIN))
     clear = np.zeros_like(layers.clear)
-    _paint(clear, [(g, 1) for g, _ in water + roads], extent, outside)
+    _paint(clear, [(g, 1) for g, _ in water + strips], extent, outside)
     layers.clear |= clear
-    speed = [(g, 0.0) for g, _ in water] + [(g, 1.0) for g, _ in roads]
+    speed = [(g, 0.0) for g, _ in water] + strips
     _paint(layers.speed, speed, extent, outside)
 
     buildings = [(fp, int(Ground.BUILDING)) for fp in footprints]

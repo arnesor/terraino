@@ -8,13 +8,18 @@ import numpy as np
 import pytest
 from PIL import Image
 from pyproj import Transformer
+from shapely import LineString, unary_union
 
+from terraino.fetch import nvdb
+from terraino.ingest.georef import Extent
 from terraino.process.symbols import Ground
 from tests.fixture_world import (
+    CACHE,
     MAPLESS_AREA,
     MAPLESS_NAME,
     NetworkUsedError,
     build_fixture_world,
+    offline,
 )
 from tests.test_ocad import MAP_BOUNDS, needs_exporter
 
@@ -30,6 +35,26 @@ def ground_at(world: Path, manifest: dict[str, Any], east: float, north: float) 
     path = manifest["layers"]["path"].format(x=col // n, y=row // n)
     pixels = np.asarray(Image.open(world / path))
     return int(pixels[row % n, col % n, 0]) & 15
+
+
+def assert_nvdb_drawn(world: Path, manifest: dict[str, Any]) -> None:
+    """Every NVDB path and vehicle track in the world is drawn, where NVDB has it."""
+    with offline():
+        found = nvdb.fetch_paths(25832, Extent(*manifest["extent"]), CACHE)
+    assert len(found) > 5
+    ox, oz = manifest["height"]["origin"]
+    tracks = json.loads((world / "tracks.json").read_text())
+    for kind in ("path", "vehicle_track"):
+        drawn = unary_union(
+            [
+                LineString([(ox + x, oz - z) for x, z in t["points"]])
+                for t in tracks
+                if t["kind"] == kind
+            ]
+        )
+        for n in found:
+            if n.kind == kind:
+                assert drawn.buffer(0.5).covers(n.line)
 
 
 def test_build_fixture_world(tmp_path: Path) -> None:
@@ -91,8 +116,11 @@ def test_build_mapless_fixture_world(tmp_path: Path) -> None:
         assert source in sources
     assert manifest["trees"]["total"] > 1000
     assert manifest["buildings"]["count"] > 10
-    # Roads and paths come from OpenStreetMap all over, as there is no map to win.
+    # Roads and paths come from NVDB and OpenStreetMap all over, as there is no map
+    # to win.
     assert manifest["tracks"]["count"] > 0
+    assert "Statens vegvesen" in sources
+    assert_nvdb_drawn(out, manifest)
     assert "features" not in manifest
     # Every cell has a ground class from the open data.
     east, north = manifest["spawn"]
