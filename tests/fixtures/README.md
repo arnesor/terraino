@@ -47,6 +47,7 @@ The pre-commit hooks leave `cache/` alone, so the files stay as the services sen
   and masts (`ledning_punkt`) from Topografisk Norgeskart, © Kartverket, CC BY 4.0.
 - `matrikkel/`: building points from Matrikkelen, © Kartverket, CC BY 4.0.
 - `nvdb/`: paths and vehicle tracks from NVDB, © Statens vegvesen, [NLOD](https://data.norge.no/nlod/en/2.0).
+- `nve/`: power lines from NVE's grid data (Nettanlegg), © NVE, [NLOD](https://data.norge.no/nlod/en/2.0).
 - `nibio/`: AR5 land cover, © NIBIO, [NLOD 2.0](https://data.norge.no/nlod/en/2.0).
 - `osm/`: roads, paths and buildings from OpenStreetMap, © OpenStreetMap contributors,
   available under the [Open Database License (ODbL)](https://opendatacommons.org/licenses/odbl/).

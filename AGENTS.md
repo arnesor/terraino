@@ -66,8 +66,8 @@ the browser.
   (see `docs/adr/0007-mapless-worlds-chosen-in-utm33-built-in-the-local-zone.md`).
 - `fetch/`: downloads from Kartverket
   (DTM/DOM height models, topo buildings, masts, Matrikkelen, the topographic map),
-  NIBIO (SR16 tree species, AR5 land cover), Statens vegvesen
-  (NVDB paths and vehicle tracks) and OSM Overpass.
+  NIBIO (SR16 tree species, AR5 land cover), Statens vegvesen (NVDB paths and vehicle tracks), NVE
+  (power lines) and OSM Overpass.
   Every download goes through `fetch/cache.py`, which caches files in `data-cache/`.
   Tests do not hit the network unless they are marked `network`.
 - `process/`: turns the inputs into world content: ground layers, trees, buildings and roofs,

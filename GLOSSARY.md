@@ -157,5 +157,8 @@ _Avoid_: bridge (on its own), plank
 (Norwegian _traktorveg_).
 _Avoid_: tractor road
 
+**Power line**: Overhead wires on poles (ISOM 510) or, for a major power line, on pylons (ISOM 511).
+_Avoid_: cable (cables are underground and are not shown)
+
 **Underpass**: The way under a bridge: the road, track, railway or water it crosses.
 _Avoid_: tunnel (a tunnel goes through the ground, not under a bridge)

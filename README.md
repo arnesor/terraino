@@ -53,6 +53,7 @@ Try the game at <https://terraino.arnesor.workers.dev>.
 - Boulders (at least 1 m high, large ones 2 m), waterholes with water, cliffs, stone walls, fences,
   power lines and towers from the map,
   with power line poles on the masts registered in Kartverket's topographic map.
+  Outside the map, power lines come from NVE's grid data, on the same masts.
   Cliffs are near-vertical rock faces, at least 1 m high, carved into the terrain.
 - Roads and paths drawn as their own soft-edged strips on the terrain,
   with distinct junctions joined and nothing growing on them.
@@ -542,6 +543,7 @@ and directions is in `viewer/src/descriptions/codes.ts`.
 | Land cover outside the map    | NIBIO, AR5 arealressurskart (WMS)              | NLOD 2.0    |
 | Buildings, roads, water       | OpenStreetMap (Overpass API)                   | ODbL        |
 | Paths and vehicle tracks      | Statens vegvesen, NVDB (API Les v4)            | NLOD        |
+| Power lines outside the map   | NVE, Nettanlegg (ArcGIS REST)                  | NLOD        |
 | Laser point clouds (optional) | Kartverket, hoydedata.no (downloaded by hand)  | CC BY 4.0   |
 | Building types                | Kartverket, Matrikkelen bygningspunkt (WFS)    | CC BY 4.0   |
 | Building outlines, roof lines | Kartverket, Topografisk Norgeskart (WMS)       | CC BY 4.0   |

@@ -37,6 +37,16 @@ def ground_at(world: Path, manifest: dict[str, Any], east: float, north: float) 
     return int(pixels[row % n, col % n, 0]) & 15
 
 
+def power_lines(world: Path) -> list[dict[str, Any]]:
+    """The power lines in a world's features."""
+    features = json.loads((world / "features.json").read_text())
+    return [
+        line
+        for line in features["lines"]
+        if line["kind"] in ("power_line", "pylon_line")
+    ]
+
+
 def assert_nvdb_drawn(world: Path, manifest: dict[str, Any]) -> None:
     """Every NVDB path and vehicle track in the world is drawn, where NVDB has it."""
     with offline():
@@ -74,12 +84,18 @@ def test_build_fixture_world(tmp_path: Path) -> None:
         "OpenStreetMap",
         "Topografisk Norgeskart",
         "Matrikkelen",
+        "Statens vegvesen",
+        "NVE",
     ):
         assert source in sources
     assert manifest["trees"]["total"] > 1000
     assert manifest["buildings"]["count"] > 50
     assert manifest["tracks"]["count"] > 10
     assert manifest["features"]["points"] > 10
+    # The map's 2 power lines, and NVE's in the margin, all on their masts.
+    lines = power_lines(out)
+    assert len(lines) >= 4
+    assert all(line.get("poles") for line in lines)
     assert (out / "height" / "0_0.bin").is_file()
     # The name Rambøls-Ødegarden stands in a hole cut for it in a field: grain there too.
     assert ground_at(out, manifest, 666737, 6646439) == Ground.GRAIN
@@ -121,7 +137,12 @@ def test_build_mapless_fixture_world(tmp_path: Path) -> None:
     assert manifest["tracks"]["count"] > 0
     assert "Statens vegvesen" in sources
     assert_nvdb_drawn(out, manifest)
-    assert "features" not in manifest
+    # No map features, but NVE's power lines on Kartverket's masts.
+    assert "NVE" in sources
+    assert manifest["features"]["points"] == 0
+    lines = power_lines(out)
+    assert len(lines) == manifest["features"]["lines"] > 0
+    assert all(line.get("poles") for line in lines)
     # Every cell has a ground class from the open data.
     east, north = manifest["spawn"]
     assert ground_at(out, manifest, east, north) != Ground.UNKNOWN
