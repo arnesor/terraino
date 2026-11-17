@@ -73,8 +73,7 @@ def thin(mask: npt.NDArray[np.bool_]) -> npt.NDArray[np.bool_]:
             ]
             b = sum(x.astype(np.int16) for x in n)
             a = sum(
-                ((n[i] == 0) & (n[(i + 1) % 8] == 1)).astype(np.int16)
-                for i in range(8)
+                ((n[i] == 0) & (n[(i + 1) % 8] == 1)).astype(np.int16) for i in range(8)
             )
             if step == 0:
                 c1 = n[0] * n[2] * n[4]
