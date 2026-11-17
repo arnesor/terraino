@@ -48,6 +48,7 @@ Try the game at <https://terraino.arnesor.workers.dev>.
   (white farmhouses, red barns, dark cabins, garages matching the house they belong to).
 - Ground from the map (forest floor, open land, marsh, fields, paths, roads, water),
   and from NIBIO AR5 land cover outside the map.
+  Outside the map, watercourses and ditches are traced from Kartverket's topographic map.
 - Buildings from OpenStreetMap and the map,
   with heights and gable roofs measured from the laser data.
 - Boulders (at least 1 m high, large ones 2 m), waterholes with water, cliffs, stone walls, fences,
@@ -547,6 +548,7 @@ and directions is in `viewer/src/descriptions/codes.ts`.
 | Laser point clouds (optional) | Kartverket, hoydedata.no (downloaded by hand)  | CC BY 4.0   |
 | Building types                | Kartverket, Matrikkelen bygningspunkt (WFS)    | CC BY 4.0   |
 | Building outlines, roof lines | Kartverket, Topografisk Norgeskart (WMS)       | CC BY 4.0   |
+| Watercourses outside the map  | Kartverket, Topografisk Norgeskart (WMS)       | CC BY 4.0   |
 | Topographic map (mapless)     | Kartverket, Topo (WMTS cache)                  | CC BY 4.0   |
 | Orienteering map              | Your map file                                  | Map owner's |
 

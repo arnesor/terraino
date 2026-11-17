@@ -65,7 +65,7 @@ the browser.
   and picks its UTM zone, and gives the box to export laser data for from hoydedata.no
   (see `docs/adr/0007-mapless-worlds-chosen-in-utm33-built-in-the-local-zone.md`).
 - `fetch/`: downloads from Kartverket
-  (DTM/DOM height models, topo buildings, masts, Matrikkelen, the topographic map),
+  (DTM/DOM height models, topo buildings, masts, watercourses, Matrikkelen, the topographic map),
   NIBIO (SR16 tree species, AR5 land cover), Statens vegvesen (NVDB paths and vehicle tracks), NVE
   (power lines) and OSM Overpass.
   Every download goes through `fetch/cache.py`, which caches files in `data-cache/`.
@@ -74,6 +74,8 @@ the browser.
   map features, tracks, the map's area, and fusion of buildings from several sources.
   `boundaries.py` makes distinct vegetation boundaries (416) visible in the trees
   (see `docs/adr/0004-map-wins-over-laser-at-vegetation-boundaries.md`).
+  `watercourses.py` leaves the shores out of the watercourses traced from Kartverket's map
+  and paints the rest as the map's symbols 305 and 306.
   `tracks.py` takes paths and vehicle tracks from NVDB outside the map
   and leaves out the parts of OSM paths that NVDB has.
   `bridges.py` takes road bridge decks out of the tracks, from OSM and the gap in the DTM

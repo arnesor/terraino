@@ -137,6 +137,20 @@ def test_build_mapless_fixture_world(tmp_path: Path) -> None:
     assert manifest["tracks"]["count"] > 0
     assert "Statens vegvesen" in sources
     assert_nvdb_drawn(out, manifest)
+    # Watercourses and ditches traced from Kartverket's map, with water under them.
+    water = [
+        t
+        for t in json.loads((out / "tracks.json").read_text())
+        if t["kind"] in ("small_stream", "water_channel")
+    ]
+    assert {t["kind"] for t in water} == {"small_stream", "water_channel"}
+    ox, oz = manifest["height"]["origin"]
+    stream = max(
+        (t for t in water if t["kind"] == "small_stream"),
+        key=lambda t: len(t["points"]),
+    )
+    x, z = stream["points"][len(stream["points"]) // 2]
+    assert ground_at(out, manifest, ox + x, oz - z) == Ground.WATER
     # No map features, but NVE's power lines on Kartverket's masts.
     assert "NVE" in sources
     assert manifest["features"]["points"] == 0
