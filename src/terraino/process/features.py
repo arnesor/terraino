@@ -26,6 +26,7 @@ from shapely import (
 from shapely import points as shapely_points
 from shapely.affinity import rotate
 from shapely.geometry.base import BaseGeometry
+from shapely.ops import linemerge
 
 from terraino.ingest.georef import Extent
 from terraino.process.geometry import to_geometry
@@ -80,6 +81,9 @@ POLE_SNAP_M = 3.0
 POLE_END_GAP_M = 20.0
 MAX_GAP_SPACINGS = 2.5
 POLE_SPACING_M = {"power_line": 60.0, "pylon_line": 250.0}
+# A power line outside the map, cut at the map's edge, continues one of the map's that
+# ends this close.
+JOIN_AT_MAP_EDGE_M = 40.0
 # Lamp posts stand this far from the edge of the road or path they light, if one is
 # within LAMP_POST_REACH_M: the map draws them farther out, beside the track's symbol.
 LAMP_POST_EDGE_M = (1.0, 2.0)
@@ -976,6 +980,139 @@ def place_poles(
             replace(line, poles=tuple((float(x), float(y)) for x, y in poles))
         )
     return placed
+
+
+def place_power_poles(
+    on_map: Sequence[LineFeature],
+    outside: Sequence[LineFeature],
+    masts: Sequence[tuple[float, float]],
+    map_area: Polygon | None = None,
+) -> list[LineFeature]:
+    """Put the poles of the map's power lines and then of those outside it on masts.
+
+    A line outside that is cut at the map's edge, near the end of one of the map's
+    power lines, is drawn on to that line's end pole and shares it, so the wires run on
+    unbroken; mappers often stop a line a little inside the map's edge.
+
+    Examples:
+        >>> on_map = [LineFeature("power_line", [(0, 0), (90, 0)], 10.0)]
+        >>> outside = [LineFeature("power_line", [(100, 0.5), (200, 0)], 10.0)]
+        >>> lines = place_power_poles(on_map, outside, [(40, 0), (160, 0)], box(-1, -9, 100, 9))
+        >>> [line.poles for line in lines]
+        [((0.0, 0.0), (40.0, 0.0), (90.0, 0.0)), ((90.0, 0.0), (160.0, 0.0), (200.0, 0.0))]
+    """
+    placed = place_poles(on_map, masts)
+    ends = [
+        Point(pole)
+        for line in placed
+        if line.kind in POLE_SPACING_M and line.poles
+        for pole in (line.poles[0], line.poles[-1])
+    ]
+    if map_area is not None and ends:
+        edge = map_area.boundary
+        outside = [_join_at_edge(line, edge, ends) for line in outside]
+    shared = [(p.x, p.y) for p in ends]
+    return [*placed, *place_poles(outside, [*masts, *shared])]
+
+
+def _join_at_edge(
+    line: LineFeature, edge: BaseGeometry, ends: Sequence[Point]
+) -> LineFeature:
+    coords = list(line.coords)
+    for end in (0, -1):
+        point = Point(coords[end])
+        if edge.distance(point) > 0.01:
+            continue  # not where the map's edge cut it
+        nearest = min(ends, key=point.distance)
+        if nearest.distance(point) > JOIN_AT_MAP_EDGE_M:
+            continue
+        if end == 0:
+            coords.insert(0, (nearest.x, nearest.y))
+        else:
+            coords.append((nearest.x, nearest.y))
+    return replace(line, coords=coords)
+
+
+def power_lines_outside(
+    found: Iterable[tuple[str, LineString]], map_area: Polygon | None
+) -> list[LineFeature]:
+    """Power lines registered outside the orienteering map, which draws its own.
+
+    Pieces of a line that meet end to end are joined, so a pole stands at a joint only
+    where a mast is registered.
+
+    Examples:
+        >>> found = [("power_line", LineString([(0, 0), (100, 0)])),
+        ...          ("power_line", LineString([(100, 0), (300, 0)]))]
+        >>> [(f.kind, f.coords, f.size) for f in power_lines_outside(found, box(0, -9, 200, 9))]
+        [('power_line', [(200.0, 0.0), (300.0, 0.0)], 10.0)]
+    """
+    groups: dict[str, list[LineString]] = {}
+    for kind, line in found:
+        outside = line if map_area is None else line.difference(map_area)
+        groups.setdefault(kind, []).extend(_line_parts(outside))
+    lines = []
+    for kind, group in groups.items():
+        for line in _line_parts(linemerge(group)):
+            coords = [(float(x), float(y)) for x, y in line.coords]
+            lines.append(LineFeature(kind, coords, _DEFAULT_SIZE[kind]))
+    return lines
+
+
+def _line_parts(geometry: BaseGeometry) -> list[LineString]:
+    if isinstance(geometry, LineString):
+        return [geometry] if geometry.length > 0 else []
+    return [part for g in getattr(geometry, "geoms", []) for part in _line_parts(g)]
+
+
+def clear_along(
+    layers: GroundLayers,
+    lines: Iterable[LineFeature],
+    widths: Mapping[str, float],
+    extent: Extent,
+) -> None:
+    """Keep trees out of a strip along each line outside the map, ``widths`` wide.
+
+    Examples:
+        >>> from terraino.process.layers import GroundLayers
+        >>> z = np.zeros((20, 20), dtype=np.float32)
+        >>> layers = GroundLayers(
+        ...     ground=np.zeros((20, 20), np.uint8), speed=z + 1, young=z, thicket=z,
+        ...     shrubs=z, tree_rule=np.zeros((20, 20), np.uint8), clear=z > 0, in_map=z > 0)
+        >>> line = LineFeature("power_line", [(0, 10), (20, 10)], 10.0)
+        >>> clear_along(layers, [line], {"power_line": 12.0}, Extent(0, 0, 20, 20))
+        >>> int(layers.clear[:, 5].sum())
+        12
+    """
+    strips = [
+        (LineString(line.coords).buffer(widths[line.kind] / 2), 1)
+        for line in lines
+        if widths.get(line.kind)
+    ]
+    if not strips:
+        return
+    painted = rasterize(
+        strips,
+        out_shape=layers.clear.shape,
+        transform=extent.raster_transform(1),
+        fill=0,
+        dtype=np.uint8,
+    ).astype(bool)
+    layers.clear |= painted & ~layers.in_map
+
+
+def clear_widths(symbols: SymbolSet) -> dict[str, float]:
+    """How wide a tree-free strip the map's symbols keep along each kind of line.
+
+    Examples:
+        >>> clear_widths(SymbolSet.load("isom2017"))["pylon_line"]
+        30.0
+    """
+    return {
+        rule.feature: float(rule.clear)
+        for rule in symbols.rules.values()
+        if rule.feature in _LINE_KINDS and rule.clear
+    }
 
 
 def measure_cliffs(

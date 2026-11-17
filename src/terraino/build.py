@@ -19,7 +19,16 @@ from shapely.geometry import mapping
 from shapely.geometry.base import BaseGeometry
 
 from terraino.export import MapKind, WorldData, write_world
-from terraino.fetch import ar5, kartverket, matrikkel, nibio, nvdb, osm, topo_buildings
+from terraino.fetch import (
+    ar5,
+    kartverket,
+    matrikkel,
+    nibio,
+    nvdb,
+    nve,
+    osm,
+    topo_buildings,
+)
 from terraino.fetch.masts import fetch_masts
 from terraino.fetch.topomap import ATTRIBUTION as TOPO_MAP_ATTRIBUTION
 from terraino.fetch.topomap import fetch_topo_map
@@ -58,6 +67,8 @@ from terraino.process.features import (
     carve_cliffs,
     carve_pits,
     carve_waterholes,
+    clear_along,
+    clear_widths,
     collect_features,
     contour_rings,
     dig_small_depressions,
@@ -65,7 +76,8 @@ from terraino.process.features import (
     drop_ruins_in_buildings,
     measure_cliffs,
     paint_cliffs,
-    place_poles,
+    place_power_poles,
+    power_lines_outside,
     raise_earth_walls,
     raise_knolls,
     stand_lamp_posts,
@@ -583,6 +595,35 @@ def _vegetation_boundaries(
     return VegetationBoundaries.find(lines, extent, (shape[0], shape[1]))
 
 
+def _add_power_lines(world: WorldData, source: MapSource, cache: Path) -> None:
+    """Put the map's power lines on their masts, and add NVE's outside the map."""
+    extent = source.extent
+    on_map = [] if world.features is None else world.features.lines
+    registered = nve.fetch_power_lines(source.epsg, extent, cache)
+    outside = power_lines_outside(
+        ((p.kind, p.line) for p in registered), source.mapped_area
+    )
+    if not outside and not any(line.kind in POLE_SPACING_M for line in on_map):
+        return
+    masts = fetch_masts(source.epsg, extent, cache)
+    if masts and topo_buildings.ATTRIBUTION not in world.attribution:
+        world.attribution = [*world.attribution, topo_buildings.ATTRIBUTION]
+    lines = place_power_poles(on_map, outside, masts, source.mapped_area)
+    poled = [line for line in lines if line.kind in POLE_SPACING_M]
+    log.info(
+        "Power lines: %d of %d with poles on registered masts",
+        sum(bool(line.poles) for line in poled),
+        len(poled),
+    )
+    if outside:
+        log.info("Drew %d power lines from NVE outside the map", len(outside))
+        world.attribution = [*world.attribution, nve.ATTRIBUTION]
+        clear_along(source.layers, outside, clear_widths(source.symbols), extent)
+    if world.features is None:
+        world.features = Features()
+    world.features.lines = lines
+
+
 def _add_nature_and_buildings(
     world: WorldData,
     source: MapSource,
@@ -701,17 +742,6 @@ def _add_nature_and_buildings(
             sum(line.kind == "earth_wall" for line in objects.lines),
         )
         objects.cliffs = measure_cliffs(source.cliff_lines, dtm, extent)
-        if any(line.kind in POLE_SPACING_M for line in objects.lines):
-            masts = fetch_masts(source.epsg, extent, cache)
-            objects.lines = place_poles(objects.lines, masts)
-            poled = [line for line in objects.lines if line.kind in POLE_SPACING_M]
-            log.info(
-                "Power lines: %d of %d with poles on registered masts",
-                sum(bool(line.poles) for line in poled),
-                len(poled),
-            )
-            if masts and topo_buildings.ATTRIBUTION not in world.attribution:
-                world.attribution = [*world.attribution, topo_buildings.ATTRIBUTION]
         dropped = drop_rocks_in_buildings(objects, [fp[0] for fp in footprints])
         if dropped:
             log.info("Left out %d rocks standing in buildings", dropped)
@@ -738,6 +768,8 @@ def _add_nature_and_buildings(
             len(objects.lines),
             len(objects.cliffs),
         )
+    # Before the trees are planted, which keep out of power line corridors.
+    _add_power_lines(world, source, cache)
 
     if lidar is not None and surface is not None:
         add_low_vegetation(layers, low_vegetation(coarse_canopy(surface)))
