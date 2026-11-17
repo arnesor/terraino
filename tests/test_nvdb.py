@@ -21,7 +21,11 @@ def segment(kind: str, coords: str) -> dict[str, Any]:
 
 
 def page(segments: list[dict[str, Any]], size: int, start: str) -> dict[str, Any]:
-    meta = {"returnert": len(segments), "sidestørrelse": size, "neste": {"start": start}}
+    meta = {
+        "returnert": len(segments),
+        "sidestørrelse": size,
+        "neste": {"start": start},
+    }
     return {"objekter": segments, "metadata": meta}
 
 
