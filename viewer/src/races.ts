@@ -46,10 +46,10 @@ export function courseFileProblem(file: CourseFile, manifest: Manifest): CourseF
   return null
 }
 
-/** Whether a course has a control outside the map area (or the extent, for a world without one). */
+/** Whether a course has a control outside the core area (or the extent, for a world without one). */
 export function outsideMap(course: ImportedCourse, manifest: Manifest): boolean {
   const [x0, y0, x1, y1] = manifest.extent
-  const area = manifest.mapArea.length ? manifest.mapArea : null
+  const area = manifest.coreArea.length ? manifest.coreArea : null
   return course.controls.some(({ position: [e, n] }) =>
     area ? !inside([e, n], area) : e < x0 || e > x1 || n < y0 || n > y1,
   )

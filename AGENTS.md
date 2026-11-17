@@ -53,27 +53,37 @@ npm test --prefix viewer            # vitest
 ### Python pipeline (`src/terraino/`)
 
 `__main__.py` (click CLI) → `build.build_world()` → `export.write_world()`.
+`terraino pick-area` (`picker.py`, `picker.html`) lets the user draw the area of a mapless world in
+the browser.
 
 - `ingest/`: reads the map source.
   `ocad.py` runs the Node exporter.
   `image.py`/`georef.py` read image maps with a world file, KMZ or GeoTIFF.
   `lidar.py` reads LAZ point clouds and caches the result in `data-cache/lidar/`.
+  `area.py` checks the chosen area of a mapless world
+  (given in UTM33)
+  and picks its UTM zone, and gives the box to export laser data for from hoydedata.no
+  (see `docs/adr/0007-mapless-worlds-chosen-in-utm33-built-in-the-local-zone.md`).
 - `fetch/`: downloads from Kartverket
-  (DTM/DOM height models, topo buildings, masts, Matrikkelen),
+  (DTM/DOM height models, topo buildings, masts, Matrikkelen, the topographic map),
   NIBIO (SR16 tree species, AR5 land cover) and OSM Overpass.
   Every download goes through `fetch/cache.py`, which caches files in `data-cache/`.
   Tests do not hit the network unless they are marked `network`.
 - `process/`: turns the inputs into world content: ground layers, trees, buildings and roofs,
-  map features, tracks, the map area, and fusion of buildings from several sources.
+  map features, tracks, the map's area, and fusion of buildings from several sources.
   `boundaries.py` makes distinct vegetation boundaries (416) visible in the trees
   (see `docs/adr/0004-map-wins-over-laser-at-vegetation-boundaries.md`).
   `bridges.py` takes road bridge decks out of the tracks, from OSM and the gap in the DTM
   (see `docs/adr/0006-bridges-from-osm-decks-from-the-dtm-gap.md`).
   `alignment.py` checks the map's georeference against Kartverket's buildings
   and suggests an `--offset`.
-- `build.py` hides the map format behind a `MapSource`:
-  `_ocad_source` and `_image_source` both produce one,
-  and the rest of the build (`_add_nature_and_buildings`) does not care which it came from.
+- `build.py` hides the map format behind a `MapSource`: `_ocad_source`,
+  `_image_source` and `_mapless_source`
+  (Kartverket's topographic map for a mapless world)
+  all produce one, and the rest of the build (`_add_nature_and_buildings`) does not care
+  which it came from.
+  `MapSource.mapped_area` is where an orienteering map wins over other data;
+  a mapless world has none.
 - `symbols/isom2000.toml` and `isom2017.toml`, loaded by `process/symbols.py`,
   set what each map symbol becomes in 3D: ground class, running speed, tree density, feature,
   track style, and draw order.

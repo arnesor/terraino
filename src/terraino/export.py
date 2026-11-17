@@ -12,15 +12,19 @@ Layout of a world folder::
     features.json               rocks, cliffs, walls, fences and other map features
     tracks.json                 roads and paths as lines with a style and width
     bridges.json                road bridge decks: centre line with heights, width, pillars
-    drape/{cx}_{cy}.jpg         orienteering map texture for one chunk
+    drape/{cx}_{cy}.jpg         map texture for one chunk
     drape_overview.jpg          low-resolution map texture of the whole world
-    map.jpg                     the orienteering map, for the in-game map view
+    map.jpg                     the map, for the in-game map view
     vectors/omap.geojson        the map's terrain objects in projected coordinates
+
+The map is the orienteering map the world was built from, or for a mapless world
+Kartverket's topographic map (the manifest's ``map.kind``). ``coreArea`` outlines the
+core area: the mapped area of an orienteering map, or a mapless world's chosen area.
 
 Height samples sit at the centres of the 1 m DTM cells. Chunk (cx, cy) holds rows
 ``cy*CHUNK .. cy*CHUNK+CHUNK`` and the same columns, counted from the north-west sample,
 so neighbouring chunks share their edge samples. Samples beyond the grid repeat the edge.
-Chunks more than DETAIL_MARGIN_M from the map's outline keep only every COARSE_STEP-th
+Chunks more than DETAIL_MARGIN_M from the core area keep only every COARSE_STEP-th
 sample in both directions; the manifest lists them (``height.coarse``).
 
 Layer pixels match the height samples one to one. Their channels are:
@@ -48,7 +52,7 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import numpy.typing as npt
@@ -64,7 +68,9 @@ from terraino.process.symbols import Ground
 from terraino.process.tracks import Track
 from terraino.process.trees import Trees
 
-FORMAT_VERSION = 8
+FORMAT_VERSION = 9
+# What the map in a world package is: see the module docstring.
+MapKind = Literal["orienteering", "topographic"]
 CHUNK = 256
 HEIGHT_STEP_M = 1.0
 # Height chunks this far from the map keep full detail; the others every COARSE_STEP-th sample.
@@ -133,13 +139,14 @@ class WorldData:
         epsg: EPSG code of all coordinates in the package.
         extent: World extent; all rasters and images cover it exactly.
         dtm: Bare-ground heights at 1 m, north-up, without NaN.
-        drape_png: Orienteering map texture covering ``extent``.
+        drape_png: Map texture covering ``extent``.
         drape_px_per_m: Resolution of ``drape_png``.
-        map_png: Orienteering map image covering ``extent``.
+        map_png: Map image covering ``extent``.
         map_scale: Map scale denominator, or None if unknown.
+        map_kind: ``"orienteering"``, or ``"topographic"`` for a mapless world.
         map_offset: Shift ``(dx, dy)`` in metres that was applied to the map's
             georeference; the viewer applies it to courses read from OCAD files.
-        map_area: Outline of the mapped area.
+        core_area: Outline of the core area, where the runner is meant to be.
         omap_features: The map's terrain objects (GeoJSON features).
         spawn: Where the runner stands when the world opens ``(easting, northing)``.
         spawn_heading: Where the runner looks then, in degrees clockwise from grid north.
@@ -162,7 +169,7 @@ class WorldData:
     drape_px_per_m: float
     map_png: Path
     map_scale: float | None
-    map_area: Polygon
+    core_area: Polygon
     omap_features: Sequence[dict[str, Any]]
     spawn: tuple[float, float]
     attribution: Sequence[str]
@@ -176,6 +183,7 @@ class WorldData:
     lidar: bool = False
     map_offset: tuple[float, float] = (0.0, 0.0)
     spawn_heading: float = 0.0
+    map_kind: MapKind = "orienteering"
 
 
 def _chunk(grid: npt.NDArray[Any], cx: int, cy: int) -> npt.NDArray[Any]:
@@ -192,15 +200,15 @@ def _chunk_counts(shape: tuple[int, ...]) -> tuple[int, int]:
 
 
 def coarse_chunks(
-    extent: Extent, shape: tuple[int, ...], map_area: Polygon
+    extent: Extent, shape: tuple[int, ...], core_area: Polygon
 ) -> list[int]:
-    """Indices (``cy * chunksX + cx``) of height chunks away from the map.
+    """Indices (``cy * chunksX + cx``) of height chunks away from the core area.
 
-    A chunk keeps full detail if it lies within DETAIL_MARGIN_M of the map's outline:
+    A chunk keeps full detail if it lies within DETAIL_MARGIN_M of the core area:
     that is where the runner goes. The others are only seen from a distance.
     """
     nx, ny = _chunk_counts(shape)
-    near = map_area.buffer(DETAIL_MARGIN_M)
+    near = core_area.buffer(DETAIL_MARGIN_M)
     west = extent.x0 + HEIGHT_STEP_M / 2
     north = extent.y1 - HEIGHT_STEP_M / 2
     size = CHUNK * HEIGHT_STEP_M
@@ -497,7 +505,7 @@ def write_world(out_dir: Path, world: WorldData) -> Path:
 
     low, high = float(dtm.min()), float(dtm.max())
     encoding = HeightEncoding.for_range(low, high)
-    coarse = coarse_chunks(world.extent, dtm.shape, world.map_area)
+    coarse = coarse_chunks(world.extent, dtm.shape, world.core_area)
     chunks = _write_heights(out_dir, dtm, encoding, set(coarse))
     tile_px = _write_drape(out_dir, world.drape_png, world.drape_px_per_m, chunks)
     map_size = _write_map_image(out_dir, world.map_png)
@@ -541,8 +549,9 @@ def write_world(out_dir: Path, world: WorldData) -> Path:
             "size": list(map_size),
             "scale": world.map_scale,
             "offset": list(world.map_offset),
+            "kind": world.map_kind,
         },
-        "mapArea": [list(p) for p in world.map_area.exterior.simplify(5).coords],
+        "coreArea": [list(p) for p in world.core_area.exterior.simplify(5).coords],
         "spawn": list(world.spawn),
         "spawnHeading": world.spawn_heading,
         "attribution": list(world.attribution),

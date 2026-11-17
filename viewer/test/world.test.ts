@@ -226,3 +226,46 @@ describe('fixture world', () => {
     }
   })
 })
+
+describe('mapless fixture world', () => {
+  const MAPLESS = 'LangvatnetMapless'
+  let mapless: World
+
+  beforeAll(async () => {
+    execFileSync('uv', ['run', 'python', '-m', 'tests.fixture_world', '--mapless', path.join(dir, MAPLESS)], {
+      cwd: ROOT,
+      stdio: 'pipe',
+    })
+    mapless = await World.load(MAPLESS)
+  }, 300_000)
+
+  it('has the topographic map and the chosen area in its manifest', () => {
+    const m = mapless.manifest
+    expect(m.format).toBe(9)
+    expect(m.name).toBe(MAPLESS)
+    expect(m.crs).toBe('EPSG:25832')
+    expect(m.map.kind).toBe('topographic')
+    expect(m.map.scale).toBeNull()
+    expect(m.attribution.join(' ')).toContain('topographic map')
+    // The rectangle chosen in UTM33, turned into zone 32: four corners and the first again.
+    expect(m.coreArea).toHaveLength(5)
+    expect(fs.existsSync(path.join(dir, MAPLESS, m.map.image))).toBe(true)
+    expect(fs.existsSync(path.join(dir, MAPLESS, m.drape.overview))).toBe(true)
+  })
+
+  it('opens in the middle of the chosen area', () => {
+    const xs = mapless.manifest.coreArea.slice(0, 4).map(([e]) => e)
+    const ns = mapless.manifest.coreArea.slice(0, 4).map(([, n]) => n)
+    const [e, n] = mapless.manifest.spawn
+    expect(e).toBeCloseTo(xs.reduce((a, b) => a + b) / 4, 0)
+    expect(n).toBeCloseTo(ns.reduce((a, b) => a + b) / 4, 0)
+  })
+
+  it('has trees, buildings and roads from the open data alone', async () => {
+    const m = mapless.manifest
+    expect(m.trees!.total).toBeGreaterThan(1000)
+    expect(m.buildings!.count).toBeGreaterThan(10)
+    expect(m.tracks!.count).toBeGreaterThan(0)
+    expect(m.features?.points ?? 0).toBe(0)
+  })
+})

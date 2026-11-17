@@ -73,6 +73,15 @@ _Avoid_: race mode, ranked mode
 
 ### Map
 
+**Mapless world**: A world built without an orienteering map,
+for a rectangle chosen on the map of Norway.
+_Avoid_: no-o-map world, terrain-only world (terrain only means without forest and buildings)
+
+**Core area**: The part of the world the runner is meant to be in:
+the mapped area of an orienteering map, or the chosen rectangle of a mapless world.
+The world reaches a margin beyond it.
+_Avoid_: map area (a mapless world has no map), area of interest
+
 **Thumb**: The runner's own mark on the map of where they think they are,
 as an orienteer keeps a thumb on the map.
 It moves to each control as it is punched; the game never moves it to the runner's position.

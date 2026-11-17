@@ -7,6 +7,7 @@ from click.testing import CliRunner
 
 from terraino import __main__
 from terraino.build import BuildOptions
+from terraino.ingest.georef import Extent
 
 
 @pytest.fixture
@@ -142,3 +143,89 @@ def test_owner_is_passed_to_the_build(
     assert result.exit_code == 0, result.output
     [(_, options)] = built
     assert options.owner == owner
+
+
+AREA = ["193986", "6622759", "196356", "6625129"]
+
+
+def test_area_builds_a_mapless_world(
+    runner: CliRunner, built: list[tuple[Path, BuildOptions]]
+) -> None:
+    args = ["build", "--area", *AREA, "--name", "Kongsberg"]
+    result = runner.invoke(__main__.main, args)
+    assert result.exit_code == 0, result.output
+    [(out, options)] = built
+    assert out == Path("worlds/Kongsberg")
+    assert options.area == Extent(193986, 6622759, 196356, 6625129)
+    assert options.name == "Kongsberg"
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        ([], "Give either MAP_PATH or --area"),
+        (["--area", *AREA], "needs --name"),
+        (
+            ["--area", *AREA, "--name", "K", "--owner", "Kongsberg OK"],
+            "--owner belongs",
+        ),
+        (["--area", *AREA, "--name", "K", "--offset", "1", "2"], "--offset belongs"),
+        (["--area", *AREA, "--name", "K", "--epsg", "25832"], "--epsg belongs"),
+        (["--area", "193986", "6622759", "205073", "6628020"], "at most 25 km²"),
+        (["--area", "196356", "6622759", "193986", "6625129"], "XMIN < XMAX"),
+    ],
+)
+def test_area_is_checked(
+    runner: CliRunner,
+    built: list[tuple[Path, BuildOptions]],
+    args: list[str],
+    message: str,
+) -> None:
+    result = runner.invoke(__main__.main, ["build", *args])
+    assert result.exit_code == 2
+    assert message in result.output
+    assert not built
+
+
+def test_map_and_area_exclude_each_other(
+    runner: CliRunner, tmp_path: Path, built: list[tuple[Path, BuildOptions]]
+) -> None:
+    ocad = tmp_path / "map.ocd"
+    ocad.write_bytes(b"")
+    args = ["build", str(ocad), "--area", *AREA, "--name", "K"]
+    result = runner.invoke(__main__.main, args)
+    assert result.exit_code == 2
+    assert "either MAP_PATH or --area" in result.output
+    assert not built
+
+
+def test_pick_area_prints_what_to_do_next(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def pick(margin: float, _announce: object) -> Extent:
+        assert margin == 200
+        return Extent(193986, 6622759, 196356, 6625129)
+
+    monkeypatch.setattr(__main__, "pick", pick)
+    result = runner.invoke(__main__.main, ["pick-area", "--margin", "200"])
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines() == [
+        "Area: 5.62 km² (2370 × 2370 m), EUREF89 UTM33",  # noqa: RUF001
+        (
+            "hoydedata.no (UTM33, incl. 200 m margin):"
+            " xmin=193780 xmax=196560 ymin=6622550 ymax=6625330"
+        ),
+        (
+            "terraino build --area 193986 6622759 196356 6625129 --margin 200"
+            " --name <NAME> --lidar <LAZ folder>"
+        ),
+    ]
+
+
+def test_pick_area_says_when_nothing_was_chosen(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(__main__, "pick", lambda _margin, _announce: None)
+    result = runner.invoke(__main__.main, ["pick-area"])
+    assert result.exit_code == 0
+    assert result.output == "No area chosen.\n"

@@ -6,6 +6,17 @@ from pathlib import Path
 import click
 
 from terraino.build import BuildOptions, build_world
+from terraino.ingest.area import (
+    AREA_EPSG,
+    AreaError,
+    check_area,
+    describe_area,
+    describe_hoydedata_box,
+    hoydedata_box,
+    reproject_area,
+)
+from terraino.ingest.georef import Extent
+from terraino.picker import pick
 
 SR16_DIR_ENV = "TERRAINO_SR16_DIR"
 LIDAR_DIRS_ENV = "TERRAINO_LIDAR_DIRS"
@@ -15,7 +26,7 @@ LIDAR_DIRS_ENV = "TERRAINO_LIDAR_DIRS"
 @click.version_option()
 @click.option("-v", "--verbose", is_flag=True, help="Show debug messages.")
 def main(verbose: bool) -> None:
-    """Build walkable 3D worlds from Norwegian orienteering maps."""
+    """Build walkable 3D worlds from Norwegian orienteering maps, or without one."""
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
@@ -36,9 +47,64 @@ def _check_name(
     return name
 
 
+def _check_area(
+    _ctx: click.Context, _param: click.Parameter, value: tuple[float, ...] | None
+) -> Extent | None:
+    """Accept a rectangle that a mapless world can be built for."""
+    if not value:
+        return None
+    xmin, ymin, xmax, ymax = value
+    if xmin >= xmax or ymin >= ymax:
+        msg = "give XMIN YMIN XMAX YMAX, with XMIN < XMAX and YMIN < YMAX"
+        raise click.BadParameter(msg)
+    area = Extent(xmin, ymin, xmax, ymax)
+    try:
+        check_area(area)
+    except AreaError as exc:
+        raise click.BadParameter(str(exc)) from None
+    return area
+
+
+# Options that belong to a map, refused for a mapless world.
+_MAP_OPTIONS = ("owner", "offset", "symbol_set", "epsg")
+
+
+def _check_source(
+    ctx: click.Context, map_path: Path | None, area: Extent | None
+) -> None:
+    """Require a map or an area, not both; a mapless world needs a name."""
+    if (map_path is None) == (area is None):
+        msg = "Give either MAP_PATH or --area."
+        raise click.UsageError(msg, ctx)
+    if area is None:
+        return
+    if ctx.params["name"] is None:
+        msg = "A mapless world (--area) needs --name."
+        raise click.UsageError(msg, ctx)
+    for option in _MAP_OPTIONS:
+        if ctx.get_parameter_source(option) is not click.core.ParameterSource.DEFAULT:
+            flag = next(p.opts[0] for p in ctx.command.params if p.name == option)
+            msg = f"{flag} belongs to a map; a mapless world (--area) has none."
+            raise click.UsageError(msg, ctx)
+
+
 @main.command()
 @click.argument(
-    "map_path", type=click.Path(exists=True, dir_okay=False, path_type=Path)
+    "map_path",
+    required=False,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--area",
+    nargs=4,
+    type=float,
+    callback=_check_area,
+    metavar="XMIN YMIN XMAX YMAX",
+    help=(
+        "Build a mapless world for this rectangle, in EUREF89 UTM33 metres as"
+        " hoydedata.no uses (instead of MAP_PATH; needs --name). At most 25 km²."
+        " Draw it with 'terraino pick-area'."
+    ),
 )
 @click.option(
     "--out",
@@ -131,8 +197,11 @@ def _check_name(
     is_flag=True,
     help="Build terrain only, without ground layers, buildings and trees.",
 )
+@click.pass_context
 def build(
-    map_path: Path,
+    ctx: click.Context,
+    map_path: Path | None,
+    area: Extent | None,
     out_dir: Path | None,
     name: str | None,
     owner: str | None,
@@ -147,12 +216,14 @@ def build(
     heading: float,
     no_forest: bool,
 ) -> None:
-    """Build a 3D world from MAP_PATH.
+    """Build a 3D world from MAP_PATH, or a mapless world for --area.
 
     MAP_PATH is an OCAD map (.ocd), or an image map: a KMZ overlay, a GeoTIFF, or a
     JPG/PNG with a world file (.jgw/.pgw, together with --epsg).
     """
-    name = name or map_path.stem
+    _check_source(ctx, map_path, area)
+    # A mapless world has a --name: _check_source requires it.
+    name = name or (map_path.stem if map_path is not None else "")
     out = out_dir or Path("worlds") / name
     options = BuildOptions(
         name=name,
@@ -167,9 +238,36 @@ def build(
         lidar_dirs=tuple(lidar_dirs),
         spawn=spawn,
         heading=heading,
+        area=area,
     )
     manifest = build_world(map_path, out, options)
     click.echo(f"World written to {manifest.parent}")
+
+
+@main.command("pick-area")
+@click.option(
+    "--margin",
+    default=300.0,
+    show_default=True,
+    help="Metres around the area, as for the build; the laser data box includes them.",
+)
+def pick_area(margin: float) -> None:
+    """Draw the area of a mapless world on a map of Norway, in the browser.
+
+    Prints the area, the box to export laser data for from hoydedata.no, and the
+    command that builds the world.
+    """
+    area = pick(margin, click.echo)
+    if area is None:
+        click.echo("No area chosen.")
+        return
+    found = hoydedata_box(reproject_area(area, AREA_EPSG), AREA_EPSG, margin)
+    click.echo(describe_area(area))
+    click.echo(describe_hoydedata_box(found, margin))
+    click.echo(
+        f"terraino build --area {area.x0:.0f} {area.y0:.0f} {area.x1:.0f} {area.y1:.0f}"
+        f" --margin {margin:g} --name <NAME> --lidar <LAZ folder>"
+    )
 
 
 if __name__ == "__main__":

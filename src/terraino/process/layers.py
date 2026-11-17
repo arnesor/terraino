@@ -292,6 +292,7 @@ def _paint(
     dtype: type[np.generic],
 ) -> npt.NDArray[Any]:
     shape = extent.raster_shape(1)
+    pairs = [(g, v) for g, v in pairs if not g.is_empty]
     if not pairs:
         return np.full(shape, fill, dtype=dtype)
     painted: npt.NDArray[Any] = rasterize(
@@ -386,7 +387,7 @@ def rasterize_map(
         symbols: Meaning of the symbols.
         extent: World extent; the rasters have 1 m cells.
         map_area: Outline of the mapped area. Inside it the white map background
-            means forest with easy running.
+            means forest with easy running. Empty for a mapless world.
         lettering: Where the map's texts are. Holes left for them in areas are filled
             (LETTERING_HOLE_CORNERS).
 

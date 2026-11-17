@@ -59,6 +59,7 @@ const STRINGS = {
   keyStartScreen: { en: 'pause, on the start screen: choose map and course', nb: 'pause, på startsida: velg kart og løype' },
   keyDescriptions: { en: 'control descriptions on/off', nb: 'postbeskrivelse av/på' },
   keyGroundMap: { en: 'orienteering map on the ground on/off', nb: 'o-kartet på bakken av/på' },
+  keyGroundTopoMap: { en: 'topographic map on the ground on/off', nb: 'topografisk kart på bakken av/på' },
   keyQuality: { en: 'graphics quality (shadows)', nb: 'grafikkvalitet (skygger)' },
   keyPause: {
     en: 'pause; while steering with the map open, the first Esc gives the mouse to the map',

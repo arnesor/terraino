@@ -19,8 +19,8 @@ function load(name: string): ArrayBuffer {
 }
 
 /** A world around the O-karusell courses (controls near 664–667 km E, 6644–6648 km N). */
-function manifest(crs = 'EPSG:25832', mapArea: [number, number][] = []): Manifest {
-  return { crs, extent: [663344, 6643456, 668064, 6648688], mapArea } as unknown as Manifest
+function manifest(crs = 'EPSG:25832', coreArea: [number, number][] = []): Manifest {
+  return { crs, extent: [663344, 6643456, 668064, 6648688], coreArea } as unknown as Manifest
 }
 
 const file = readCourseFile(load('trlop_260521.ocd'))
@@ -40,12 +40,12 @@ describe('a course file on a world', () => {
     expect(courseFileProblem({ ...file, courses: [] }, manifest())).toEqual({ kind: 'noCourses' })
   })
 
-  it('finds courses outside the map area, or the extent without one', () => {
+  it('finds courses outside the core area, or the extent without one', () => {
     const lang = file.courses.find(c => c.name === 'Lang')!
     expect(outsideMap(lang, manifest())).toBe(false)
     const around: [number, number][] = [[663344, 6643456], [668064, 6643456], [668064, 6648688], [663344, 6648688]]
     expect(outsideMap(lang, manifest('EPSG:25832', around))).toBe(false)
-    // A map area over the west half only: the extent alone would let the course through.
+    // A core area over the west half only: the extent alone would let the course through.
     const west: [number, number][] = [[663344, 6643456], [664000, 6643456], [664000, 6648688], [663344, 6648688]]
     expect(outsideMap(lang, manifest('EPSG:25832', west))).toBe(true)
   })
