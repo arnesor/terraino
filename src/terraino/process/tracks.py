@@ -24,6 +24,7 @@ from terraino.fetch.osm import OsmFeature
 from terraino.process.fuse import road_style
 from terraino.process.geometry import to_geometry
 from terraino.process.symbols import Ground, SymbolSet
+from terraino.process.watercourses import track_rule
 
 # Path ends closer than this to another path are joined to it.
 SNAP_M = 1.5
@@ -160,8 +161,13 @@ def collect_tracks(
     osm: Iterable[OsmFeature],
     map_area: Polygon | None,
     nvdb: Sequence[NvdbLine] = (),
+    traced: Sequence[tuple[str, LineString]] = (),
 ) -> list[Track]:
-    """Roads and paths from the map, and from NVDB and OSM outside the mapped area."""
+    """Roads, paths and streams from the map, and from others outside the mapped area.
+
+    Outside the map: NVDB's paths, OSM's roads and paths, and the watercourses traced
+    from Kartverket's map (``traced``), drawn as the map's symbol of their kind.
+    """
     found: list[tuple[str, float, LineString]] = []
     for feature in omap_features:
         rule = symbols.rule(feature["properties"]["sym"])
@@ -182,6 +188,12 @@ def collect_tracks(
 
     drawn = [(n.kind, n.width, line) for n in nvdb for line in outside(n.line)]
     found.extend(drawn)
+    for kind, line in traced:
+        rule = track_rule(symbols, kind)
+        if rule is None or rule.width is None:
+            continue
+        width = max(rule.width, MIN_WIDTH_M.get(kind, 0.0))
+        found.extend((kind, width, part) for part in outside(line))
     nvdb_lines = unary_union([line for _, _, line in drawn])
     band = nvdb_lines.buffer(SAME_PATH_M)
 

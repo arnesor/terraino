@@ -209,6 +209,8 @@ def apply_osm(
     roads: Iterable[tuple[LineString, float]],
     footprints: Iterable[Polygon],
     extent: Extent,
+    *,
+    streams: bool = True,
 ) -> None:
     """Clear trees along roads and paint OSM's water outside the map, buildings everywhere.
 
@@ -219,6 +221,8 @@ def apply_osm(
             along OSM's other ways, which NVDB draws more precisely, nothing is cleared.
         footprints: Building outlines.
         extent: The world's extent.
+        streams: Paint OSM's streams and ditches; False where the watercourses
+            traced from Kartverket's map take their place.
     """
     strips: list[tuple[BaseGeometry, float]] = [
         (line.buffer(max(width, 1.2) / 2), 1.0) for line, width in roads
@@ -232,9 +236,9 @@ def apply_osm(
             geometry, Polygon | MultiPolygon
         ):
             water.append((geometry, int(Ground.WATER)))
-        elif f.tags.get("waterway") in {"stream", "river", "ditch"} and isinstance(
-            geometry, LineString | MultiLineString
-        ):
+        elif f.tags.get("waterway") in (
+            {"stream", "river", "ditch"} if streams else {"river"}
+        ) and isinstance(geometry, LineString | MultiLineString):
             width = 6.0 if f.tags["waterway"] == "river" else 1.5
             water.append((geometry.buffer(width / 2), int(Ground.WATER)))
 

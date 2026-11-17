@@ -27,7 +27,9 @@ from terraino.fetch import (
     nvdb,
     nve,
     osm,
+    topo,
     topo_buildings,
+    watercourses,
 )
 from terraino.fetch.masts import fetch_masts
 from terraino.fetch.topomap import ATTRIBUTION as TOPO_MAP_ATTRIBUTION
@@ -109,8 +111,16 @@ from terraino.process.trees import (
     scattered_stumps,
     tops_from_lidar,
 )
+from terraino.process.watercourses import (
+    leave_out_shores,
+    paint_watercourses,
+    water_mask,
+)
 
 log = logging.getLogger(__name__)
+
+# Track styles of water, drawn as water strips rather than roads.
+_WATER_TRACKS = frozenset({"stream", "small_stream", "water_channel"})
 
 EXTENT_ALIGN_M = 16  # SR16's grid, so its cells line up with the world's
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif", ".tif", ".tiff", ".kmz"}
@@ -556,14 +566,15 @@ def _find_bridges(
     source: MapSource,
     osm_features: Sequence[osm.OsmFeature],
     nvdb_lines: Sequence[nvdb.NvdbLine],
+    traced: Sequence[watercourses.Traced],
     dtm: npt.NDArray[np.float32],
     dom: npt.NDArray[np.float32],
 ) -> tuple[list[Track], list[Bridge]]:
-    """Collect the roads and paths, and take the road bridges' decks out of them."""
+    """Collect the roads, paths and streams; take the road bridges' decks out of them."""
     extent = source.extent
     mapped = source.mapped_area
     tracks = collect_tracks(
-        source.omap, source.symbols, osm_features, mapped, nvdb_lines
+        source.omap, source.symbols, osm_features, mapped, nvdb_lines, traced
     )
     tagged = osm_bridges(osm_features)
     decks = find_decks(tracks, tagged, dtm, dom, extent, mapped)
@@ -593,6 +604,41 @@ def _vegetation_boundaries(
     if not lines:
         return None
     return VegetationBoundaries.find(lines, extent, (shape[0], shape[1]))
+
+
+def _traced_watercourses(
+    world: WorldData,
+    source: MapSource,
+    layers: GroundLayers,
+    osm_features: Sequence[osm.OsmFeature],
+    cache: Path,
+) -> list[watercourses.Traced] | None:
+    """Watercourses and water channels traced from Kartverket's map, without shores.
+
+    Returns:
+        The lines, or None if the map could not be read (OSM's streams are used then).
+    """
+    traced = watercourses.fetch_watercourses(source.epsg, source.extent, cache)
+    if traced is None:
+        return None
+    water = water_mask(layers, osm_features, source.extent)
+    kept = leave_out_shores(traced, water, source.extent)
+    mapped = source.mapped_area
+    outside = [line for _, line in kept if mapped is None or not mapped.covers(line)]
+    log.info(
+        "Traced %d watercourses and water channels from Kartverket's map "
+        "(%.1f km outside the map; left out %d shores)",
+        len(kept),
+        sum(
+            (line if mapped is None else line.difference(mapped)).length
+            for line in outside
+        )
+        / 1000,
+        len(traced) - len(kept),
+    )
+    if outside and topo.ATTRIBUTION not in world.attribution:
+        world.attribution = [*world.attribution, topo.ATTRIBUTION]
+    return kept
 
 
 def _add_power_lines(world: WorldData, source: MapSource, cache: Path) -> None:
@@ -657,8 +703,11 @@ def _add_nature_and_buildings(
     mapped = source.mapped_area
     if any(mapped is None or not mapped.covers(n.line) for n in nvdb_lines):
         world.attribution = [*world.attribution, nvdb.ATTRIBUTION]
+    traced = _traced_watercourses(world, source, layers, osm_features, cache)
     # Before the terrain is shaped, while the surface model is at hand.
-    tracks, bridges = _find_bridges(source, osm_features, nvdb_lines, dtm, dom)
+    tracks, bridges = _find_bridges(
+        source, osm_features, nvdb_lines, traced or [], dtm, dom
+    )
     del dom
     map_buildings = source.omap + _as_map_buildings(source.buildings, source.symbols)
     topo = topo_buildings.fetch_topo_buildings(source.epsg, extent, cache)
@@ -674,8 +723,19 @@ def _add_nature_and_buildings(
         ),
     )
     topo_by_id = {f"kartverket/{i}": b for i, b in enumerate(topo)}
-    roads = [(LineString(t.coords), t.width) for t in tracks]
-    apply_osm(layers, osm_features, roads, [fp[0] for fp in footprints], extent)
+    roads = [
+        (LineString(t.coords), t.width) for t in tracks if t.kind not in _WATER_TRACKS
+    ]
+    apply_osm(
+        layers,
+        osm_features,
+        roads,
+        [fp[0] for fp in footprints],
+        extent,
+        streams=traced is None,
+    )
+    if traced:
+        paint_watercourses(layers, traced, source.symbols, extent, mapped)
     registry = matrikkel.fetch_building_points(source.epsg, extent, cache)
     if registry:
         world.attribution = [*world.attribution, matrikkel.ATTRIBUTION]

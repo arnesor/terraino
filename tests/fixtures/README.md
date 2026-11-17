@@ -43,7 +43,7 @@ The pre-commit hooks leave `cache/` alone, so the files stay as the services sen
 - `kartverket/`: terrain (DTM) and surface (DOM) height models, © Kartverket
   (Nasjonal høydemodell), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 - `kartverket/topo_*`: tiles of the topographic map (Topo, WMTS cache), © Kartverket, CC BY 4.0.
-- `topo/`: building outlines (`fkb_bygning`)
+- `topo/`: building outlines (`fkb_bygning`), watercourses (`vannkontur`)
   and masts (`ledning_punkt`) from Topografisk Norgeskart, © Kartverket, CC BY 4.0.
 - `matrikkel/`: building points from Matrikkelen, © Kartverket, CC BY 4.0.
 - `nvdb/`: paths and vehicle tracks from NVDB, © Statens vegvesen, [NLOD](https://data.norge.no/nlod/en/2.0).

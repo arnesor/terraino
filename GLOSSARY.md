@@ -160,5 +160,11 @@ _Avoid_: tractor road
 **Power line**: Overhead wires on poles (ISOM 510) or, for a major power line, on pylons (ISOM 511).
 _Avoid_: cable (cables are underground and are not shown)
 
+**Watercourse**: A stream or brook of running water, narrow enough to jump or wade (ISOM 304, 305).
+_Avoid_: river (wide rivers are water areas)
+
+**Water channel**: A ditch, wet or with a trickle of water (ISOM 306) (Norwegian _grøft_).
+_Avoid_: ditch
+
 **Underpass**: The way under a bridge: the road, track, railway or water it crosses.
 _Avoid_: tunnel (a tunnel goes through the ground, not under a bridge)
