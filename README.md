@@ -26,6 +26,31 @@ and run through it in the browser like in a first-person game.
 
 Try the game at <https://terraino.arnesor.workers.dev>.
 
+## Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Build the terrain](#build-the-terrain)
+    - [Laser point clouds](#laser-point-clouds)
+    - [Without an orienteering map](#without-an-orienteering-map)
+  - [Races](#races)
+  - [In the viewer](#in-the-viewer)
+- [Publishing on Cloudflare](#publishing-on-cloudflare)
+  - [Before the first deploy](#before-the-first-deploy)
+  - [What a deploy does](#what-a-deploy-does)
+  - [1. Deploying new code](#1-deploying-new-code)
+  - [2. Deploying or updating a map](#2-deploying-or-updating-a-map)
+  - [3. Deploying or updating a race](#3-deploying-or-updating-a-race)
+  - [Locally](#locally)
+- [Development](#development)
+- [Data sources and licences](#data-sources-and-licences)
+- [Contributing](#contributing)
+- [License](#license)
+- [Issues](#issues)
+- [Credits](#credits)
+
 ## Features
 
 - Reads OCAD maps (version 10–2018, ISOM 2000 and ISOM 2017) with their georeferencing,
@@ -97,7 +122,9 @@ or block it with `npm install-scripts deny <package>`, and commit `package.json`
 
 ## Usage
 
-Build a world from a map, then start the viewer:
+### Build the terrain
+
+Build a world from an orienteering map in OCAD format, then start the viewer:
 
 ```console
 uv run terraino build path/to/map.ocd
@@ -121,12 +148,52 @@ Image maps are read by their colours, which works well for areas
 (forest, open land, green, water, marsh, fields)
 but cannot find boulders, cliffs and other point features.
 
-### Without an orienteering map
+#### Laser point clouds
+
+Without them, trees and roofs come from Kartverket's 1 m height models.
+Point clouds from [hoydedata.no](https://hoydedata.no/) give much more detail.
+Most laser projects are open data (CC BY 4.0), and you need no user account to download them.
+To download the projects covering the map:
+
+1. Open [LaserInnsyn](https://hoydedata.no/LaserInnsyn2/).
+   In the panel on the right, under **Lidar**,
+   you can turn on each project to see where it covers and how dense it is.
+   "5pkt" means about 5 points per m², and "2pkt" about 2.
+2. Open **Meny** and choose **Eksport**.
+3. Choose the **Lokal eksport** tab and then **Prosjekt** (not "Nasjonal Høydemodell").
+4. Under **Område**, choose **Hjørnekoordinater** and enter the corners that `terraino build`
+   and `terraino pick-area` print as the `hoydedata.no` box: the map and its margin,
+   rounded out to 10 m.
+   The corners are in UTM zone 33 (EPSG:25833), even when the map is in another zone.
+   For example, `xmin` 331430, `ymin` 6646400, `xmax` 333500 and `ymax` 6647690.
+   The area is drawn as a rectangle on the map.
+5. Under **Valgte prosjekt**, open **Gjeldende prosjekter** with ⊕ and tick the projects you want,
+   for example "NDH Eidskog 5pkt 2016".
+   **Andre prosjekter** holds older projects of the same area.
+6. Under **Produkt**, choose **Punktsky**.
+7. Enter your e-mail address and start the export.
+   Kartverket sends a link to the files when the export is ready.
+
+Unpack each project into its own folder.
+Give the folders with `--lidar`, the densest first; each place uses the first one that covers it:
+
+```console
+uv run terraino build map.ocd --lidar ~/hoydedata/5pkt-2016 --lidar ~/hoydedata/2pkt-2016
+```
+
+Or set `TERRAINO_LIDAR_DIRS` to the folders separated by `:`.
+Reading them takes about a minute; the result is cached in `data-cache/lidar/`.
+
+Maps must be georeferenced in UTM zone 32, 33 or 35 (ETRS89 or WGS 84).
+
+#### Without an orienteering map
 
 A mapless world is built for a rectangle of up to 25 km² anywhere in Norway,
 from the open data alone.
 Kartverket's topographic map takes the orienteering map's place on the ground and in the map view.
 There are no boulders, cliffs or other features that only an orienteering map has.
+
+[This video](https://youtu.be/Jm3hXNd15AY) shows how to build a terrain for a custom area, without an orienteering map.
 
 Draw the rectangle on a map of Norway in the browser:
 
@@ -169,45 +236,7 @@ Useful build options (see `uv run terraino build --help`):
 - `--owner NAME` credits the orienteering map to its owner at the bottom of the screen,
   for example `--owner "Eidskog OL"`.
 - `--no-forest` builds the terrain only.
-- `--lidar FOLDER` uses a laser point cloud (see below).
-
-### Laser point clouds
-
-Without them, trees and roofs come from Kartverket's 1 m height models.
-Point clouds from [hoydedata.no](https://hoydedata.no/) give much more detail.
-Most laser projects are open data (CC BY 4.0), and you need no user account to download them.
-To download the projects covering the map:
-
-1. Open [LaserInnsyn](https://hoydedata.no/LaserInnsyn2/).
-   In the panel on the right, under **Lidar**,
-   you can turn on each project to see where it covers and how dense it is.
-   "5pkt" means about 5 points per m², and "2pkt" about 2.
-2. Open **Meny** and choose **Eksport**.
-3. Choose the **Lokal eksport** tab and then **Prosjekt** (not "Nasjonal Høydemodell").
-4. Under **Område**, choose **Hjørnekoordinater** and enter the corners that `terraino build`
-   and `terraino pick-area` print as the `hoydedata.no` box: the map and its margin,
-   rounded out to 10 m.
-   The corners are in UTM zone 33 (EPSG:25833), even when the map is in another zone.
-   For example, `xmin` 331430, `ymin` 6646400, `xmax` 333500 and `ymax` 6647690.
-   The area is drawn as a rectangle on the map.
-5. Under **Valgte prosjekt**, open **Gjeldende prosjekter** with ⊕ and tick the projects you want,
-   for example "NDH Eidskog 5pkt 2016".
-   **Andre prosjekter** holds older projects of the same area.
-6. Under **Produkt**, choose **Punktsky**.
-7. Enter your e-mail address and start the export.
-   Kartverket sends a link to the files when the export is ready.
-
-Unpack each project into its own folder.
-Give the folders with `--lidar`, the densest first; each place uses the first one that covers it:
-
-```console
-uv run terraino build map.ocd --lidar ~/hoydedata/5pkt-2016 --lidar ~/hoydedata/2pkt-2016
-```
-
-Or set `TERRAINO_LIDAR_DIRS` to the folders separated by `:`.
-Reading them takes about a minute; the result is cached in `data-cache/lidar/`.
-
-Maps must be georeferenced in UTM zone 32, 33 or 35 (ETRS89 or WGS 84).
+- `--lidar FOLDER` uses a laser point cloud (see [Laser point clouds](#laser-point-clouds)).
 
 ### Races
 
