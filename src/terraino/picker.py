@@ -102,8 +102,8 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         if self.path == "/cancel":
-            self._json(HTTPStatus.OK, {"ok": True})
             self.server.done.set()
+            self._json(HTTPStatus.OK, {"ok": True})
             return
         if self.path != "/area":
             self._json(HTTPStatus.NOT_FOUND, {"error": "Not found"})
@@ -117,9 +117,10 @@ class _Handler(BaseHTTPRequestHandler):
         except (AreaError, json.JSONDecodeError) as exc:
             self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             return
-        self._json(HTTPStatus.OK, {"ok": True})
+        # Record the area before replying, so whoever gets the reply sees it.
         self.server.chosen = area
         self.server.done.set()
+        self._json(HTTPStatus.OK, {"ok": True})
 
     def _json(self, status: HTTPStatus, data: dict[str, Any]) -> None:
         self._reply(status, json.dumps(data).encode(), "application/json")
